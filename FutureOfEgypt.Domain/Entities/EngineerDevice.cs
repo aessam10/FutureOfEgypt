@@ -7,9 +7,8 @@ namespace FutureOfEgypt.Domain.Entities
     /// </summary>
     public sealed class EngineerDevice : BaseEntity
     {
-        public Guid EngineerId { get; set; }
-
-        public Guid DeviceId { get; set; }
+        public int EngineerId { get; set; }
+        public int DeviceId { get; set; }
 
         public DateTime AssignedAtUtc { get; set; } = DateTime.UtcNow;
 

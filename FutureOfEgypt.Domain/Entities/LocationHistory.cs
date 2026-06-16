@@ -7,15 +7,15 @@ namespace FutureOfEgypt.Domain.Entities
     /// </summary>
     public sealed class LocationHistory : BaseEntity
     {
-        public Guid EngineerId { get; set; }
+        public int EngineerId { get; set; }
 
-        public Guid DeviceId { get; set; }
+        public int DeviceId { get; set; }
 
         public double Latitude { get; set; }
 
         public double Longitude { get; set; }
 
-        public bool IsMocked { get; set; }// in case an Engineer tried to send a fake location, we can detect it.
+        public bool IsMocked { get; set; }
 
         public DateTime RecordedAt { get; set; }
 

@@ -1,0 +1,42 @@
+﻿using FutureOfEgypt.Domain.Common;
+using FutureOfEgypt.Domain.Entities;
+using FutureOfEgypt.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+
+namespace FutureOfEgypt.Infrastructure.Persistence
+{
+    public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
+    {
+        public AppDbContext(DbContextOptions<AppDbContext> options)
+            : base(options)
+        {
+        }
+
+        public DbSet<Engineer> Engineers { get; set; }
+
+        public DbSet<Device> Devices { get; set; }
+
+        public DbSet<EngineerDevice> EngineerDevices { get; set; }
+
+        public DbSet<LocationHistory> LocationHistories { get; set; }
+
+        public DbSet<DeviceLatestLocation> DeviceLatestLocations { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
+                {
+                    modelBuilder.Entity(entityType.ClrType)
+                        .HasIndex(nameof(BaseEntity.PublicId))
+                        .IsUnique();
+                }
+            }
+        }
+    }
+}
