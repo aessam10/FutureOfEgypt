@@ -1,0 +1,33 @@
+﻿using System.Data;
+using System.Data.Common;
+using System.Net.NetworkInformation;
+using System.Reflection.Emit;
+using System.Reflection.PortableExecutable;
+
+namespace FutureOfEgypt.Domain.Entities
+{
+    /// <summary>
+    /// Stores the latest known location for each device.
+    /// Used by the dashboard for fast live tracking.
+    /// </summary>
+    public sealed class DeviceLatestLocation
+    {
+        public Guid EngineerId { get; set; }
+
+        public Guid DeviceId { get; set; }
+
+        public double Latitude { get; set; }
+
+        public double Longitude { get; set; }
+
+        public bool IsMocked { get; set; }
+
+        public DateTime RecordedAt { get; set; }
+
+        public DateTime ReceivedAt { get; set; } = DateTime.UtcNow;
+
+        public Engineer? Engineer { get; set; }
+
+        public Device? Device { get; set; }
+    }
+}

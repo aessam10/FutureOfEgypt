@@ -1,0 +1,6 @@
+@FutureOfEgypt_HostAddress = http://localhost:5151
+
+GET {{FutureOfEgypt_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

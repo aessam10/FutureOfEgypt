@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="FutureOfEgypt.Application/FutureOfEgypt.Application.csproj" />
+  <Project Path="FutureOfEgypt.Domain/FutureOfEgypt.Domain.csproj" />
+  <Project Path="FutureOfEgypt.Infrastructure/FutureOfEgypt.Infrastructure.csproj" />
+  <Project Path="FutureOfEgypt.Shared/FutureOfEgypt.Shared.csproj" />
+  <Project Path="FutureOfEgypt/FutureOfEgypt.csproj" />
+</Solution>

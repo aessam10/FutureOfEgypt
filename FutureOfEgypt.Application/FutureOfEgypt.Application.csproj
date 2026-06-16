@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FutureOfEgypt.Domain\FutureOfEgypt.Domain.csproj" />
+    <ProjectReference Include="..\FutureOfEgypt.Shared\FutureOfEgypt.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Abstractions\" />
+    <Folder Include="DTOs\" />
+    <Folder Include="Common\" />
+    <Folder Include="Features\Devices\" />
+    <Folder Include="Features\Tracking\" />
+  </ItemGroup>
+
+</Project>
