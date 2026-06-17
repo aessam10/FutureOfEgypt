@@ -14,6 +14,8 @@ namespace FutureOfEgypt.Domain.Entities
 
         public string? Imei { get; set; }
 
+        public string? InstallationId { get; set; }
+
         public DevicePlatform Platform { get; set; } = DevicePlatform.Android;
 
         public DeviceStatus Status { get; set; } = DeviceStatus.Active;

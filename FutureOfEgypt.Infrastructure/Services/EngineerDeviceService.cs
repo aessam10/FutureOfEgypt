@@ -1,20 +1,31 @@
-﻿using FutureOfEgypt.Application.Features.EngineerDevices;
+﻿using FutureOfEgypt.Application.Features.AuditLog;
+using FutureOfEgypt.Application.Features.EngineerDevices;
 using FutureOfEgypt.Domain.Entities;
+using FutureOfEgypt.Domain.Enums;
 using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace FutureOfEgypt.Infrastructure.Services
 {
     public sealed class EngineerDeviceService : IEngineerDeviceService
     {
         private readonly AppDbContext _context;
+        private readonly IAuditLogService _auditLogService;
 
-        public EngineerDeviceService(AppDbContext context)
+        public EngineerDeviceService(
+            AppDbContext context,
+            IAuditLogService auditLogService)
         {
             _context = context;
+            _auditLogService = auditLogService;
         }
 
-        public async Task<EngineerDeviceResponse> AssignDeviceAsync(AssignDeviceRequest request, CancellationToken cancellationToken = default)
+        public async Task<EngineerDeviceResponse> AssignDeviceAsync(
+            Guid adminUserId,
+            string adminEmail,
+            AssignDeviceRequest request,
+            CancellationToken cancellationToken = default)
         {
             var engineer = await _context.Engineers
                 .FirstOrDefaultAsync(
@@ -89,7 +100,26 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             await _context.EngineerDevices.AddAsync(newAssignment, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
-
+            await _auditLogService.CreateAsync(
+    new CreateAuditLogRequest
+    {
+        ActionType = AuditActionType.DeviceAssignedToEngineer,
+        PerformedByUserId = adminUserId,
+        PerformedByEmail = adminEmail,
+        EntityName = nameof(EngineerDevice),
+        EntityPublicId = newAssignment.PublicId,
+        Description = $"Admin assigned device '{device.DeviceName}' to engineer '{engineer.FullName}'.",
+        MetadataJson = JsonSerializer.Serialize(new
+        {
+            assignmentPublicId = newAssignment.PublicId,
+            engineerPublicId = engineer.PublicId,
+            engineerName = engineer.FullName,
+            devicePublicId = device.PublicId,
+            deviceName = device.DeviceName,
+            serialNumber = device.SerialNumber
+        })
+    },
+    cancellationToken);
             return new EngineerDeviceResponse
             {
                 PublicId = newAssignment.PublicId,

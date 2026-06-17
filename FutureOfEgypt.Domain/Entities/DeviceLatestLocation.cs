@@ -21,6 +21,10 @@ namespace FutureOfEgypt.Domain.Entities
 
         public double Longitude { get; set; }
 
+        public double? Accuracy { get; set; }
+
+        public double? Speed { get; set; }
+
         public bool IsMocked { get; set; }// in case an Engineer tried to send a fake location, we can detect it.
 
         public DateTime RecordedAt { get; set; }

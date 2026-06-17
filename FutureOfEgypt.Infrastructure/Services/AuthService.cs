@@ -1,7 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using FutureOfEgypt.Application.Common.Security;
+﻿using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.Auth;
 using FutureOfEgypt.Infrastructure.Identity;
 using FutureOfEgypt.Infrastructure.Persistence;
@@ -9,6 +6,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace FutureOfEgypt.Infrastructure.Services
 {
@@ -79,18 +80,7 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            var jwt = GenerateJwtToken(user, engineerPublicId: null, roles);
-
-            return new AuthResponse
-            {
-                UserId = user.Id,
-                EngineerPublicId = null,
-                FullName = user.FullName,
-                Email = user.Email ?? string.Empty,
-                Roles = roles.ToList(),
-                Token = jwt.Token,
-                ExpiresAtUtc = jwt.ExpiresAtUtc
-            };
+            return await BuildAuthResponseAsync(user, cancellationToken);
         }
 
         public async Task<AuthResponse> RegisterEngineerUserAsync(
@@ -152,18 +142,7 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            var jwt = GenerateJwtToken(user, engineer.PublicId, roles);
-
-            return new AuthResponse
-            {
-                UserId = user.Id,
-                EngineerPublicId = engineer.PublicId,
-                FullName = user.FullName,
-                Email = user.Email ?? string.Empty,
-                Roles = roles.ToList(),
-                Token = jwt.Token,
-                ExpiresAtUtc = jwt.ExpiresAtUtc
-            };
+            return await BuildAuthResponseAsync(user, cancellationToken);
         }
 
         public async Task<AuthResponse> LoginAsync(
@@ -202,18 +181,7 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            var jwt = GenerateJwtToken(user, engineerPublicId, roles);
-
-            return new AuthResponse
-            {
-                UserId = user.Id,
-                EngineerPublicId = engineerPublicId,
-                FullName = user.FullName,
-                Email = user.Email ?? string.Empty,
-                Roles = roles.ToList(),
-                Token = jwt.Token,
-                ExpiresAtUtc = jwt.ExpiresAtUtc
-            };
+            return await BuildAuthResponseAsync(user, cancellationToken);
         }
 
         private async Task EnsureRoleExistsAsync(string roleName)
@@ -253,8 +221,9 @@ namespace FutureOfEgypt.Infrastructure.Services
             var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-                new Claim("fullName", user.FullName)
+                new Claim("fullName", user.FullName),
             };
 
             if (engineerPublicId.HasValue)
@@ -279,6 +248,184 @@ namespace FutureOfEgypt.Infrastructure.Services
                 signingCredentials: credentials);
 
             return (new JwtSecurityTokenHandler().WriteToken(token), expiresAtUtc);
+        }
+
+        public async Task<AuthResponse> RefreshAsync(
+    RefreshTokenRequest request,
+    CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+                throw new InvalidOperationException("Refresh token is required.");
+
+            var refreshTokenHash = HashRefreshToken(request.RefreshToken);
+
+            var storedRefreshToken = await _context.RefreshTokens
+                .FirstOrDefaultAsync(
+                    x => x.TokenHash == refreshTokenHash,
+                    cancellationToken);
+
+            if (storedRefreshToken is null)
+                throw new InvalidOperationException("Invalid refresh token.");
+
+            if (!storedRefreshToken.IsActive)
+                throw new InvalidOperationException("Refresh token is expired or revoked.");
+
+            var user = await _userManager.FindByIdAsync(
+                storedRefreshToken.UserId.ToString());
+
+            if (user is null)
+                throw new InvalidOperationException("User does not exist.");
+
+            var newRefreshToken = GenerateRefreshToken();
+            var newRefreshTokenHash = HashRefreshToken(newRefreshToken);
+
+            var expiresInDays = int.Parse(
+                _configuration["Jwt:RefreshTokenExpiresInDays"] ?? "30");
+
+            var newRefreshTokenExpiresAtUtc = DateTime.UtcNow.AddDays(expiresInDays);
+
+            storedRefreshToken.RevokedAtUtc = DateTime.UtcNow;
+            storedRefreshToken.ReplacedByTokenHash = newRefreshTokenHash;
+
+            var newRefreshTokenEntity = new RefreshToken
+            {
+                UserId = user.Id,
+                TokenHash = newRefreshTokenHash,
+                CreatedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = newRefreshTokenExpiresAtUtc
+            };
+
+            await _context.RefreshTokens.AddAsync(newRefreshTokenEntity, cancellationToken);
+
+            Guid? engineerPublicId = null;
+
+            if (user.EngineerId.HasValue)
+            {
+                engineerPublicId = await _context.Engineers
+                    .Where(x => x.Id == user.EngineerId.Value && !x.IsDeleted)
+                    .Select(x => (Guid?)x.PublicId)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var jwt = GenerateJwtToken(user, engineerPublicId, roles);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return new AuthResponse
+            {
+                UserId = user.Id,
+                EngineerPublicId = engineerPublicId,
+                FullName = user.FullName,
+                Email = user.Email ?? string.Empty,
+                Roles = roles.ToList(),
+                Token = jwt.Token,
+                ExpiresAtUtc = jwt.ExpiresAtUtc,
+                RefreshToken = newRefreshToken,
+                RefreshTokenExpiresAtUtc = newRefreshTokenExpiresAtUtc
+            };
+        }
+
+        public async Task LogoutAsync(
+    LogoutRequest request,
+    CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+                throw new InvalidOperationException("Refresh token is required.");
+
+            var refreshTokenHash = HashRefreshToken(request.RefreshToken);
+
+            var storedRefreshToken = await _context.RefreshTokens
+                .FirstOrDefaultAsync(
+                    x => x.TokenHash == refreshTokenHash,
+                    cancellationToken);
+
+            if (storedRefreshToken is null)
+                return;
+
+            if (storedRefreshToken.IsRevoked)
+                return;// to not reveal the token status to the others
+
+            storedRefreshToken.RevokedAtUtc = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        private string GenerateRefreshToken()
+        {
+            var randomBytes = RandomNumberGenerator.GetBytes(64);
+
+            return Convert.ToBase64String(randomBytes);
+        }
+
+        private string HashRefreshToken(string refreshToken)
+        {
+            var bytes = Encoding.UTF8.GetBytes(refreshToken);
+            var hash = SHA256.HashData(bytes);
+
+            return Convert.ToBase64String(hash);
+        }
+
+        private async Task<(string Token, DateTime ExpiresAtUtc)> CreateRefreshTokenAsync(
+            ApplicationUser user,
+            CancellationToken cancellationToken = default)
+        {
+            var refreshToken = GenerateRefreshToken();
+            var refreshTokenHash = HashRefreshToken(refreshToken);
+
+            var expiresInDays = int.Parse(
+                _configuration["Jwt:RefreshTokenExpiresInDays"] ?? "30");
+
+            var expiresAtUtc = DateTime.UtcNow.AddDays(expiresInDays);
+
+            var entity = new RefreshToken
+            {
+                UserId = user.Id,
+                TokenHash = refreshTokenHash,
+                CreatedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = expiresAtUtc
+            };
+
+            await _context.RefreshTokens.AddAsync(entity, cancellationToken);
+
+            return (refreshToken, expiresAtUtc);
+        }
+
+        private async Task<AuthResponse> BuildAuthResponseAsync(
+            ApplicationUser user,
+            CancellationToken cancellationToken = default)
+        {
+            Guid? engineerPublicId = null;
+
+            if (user.EngineerId.HasValue)
+            {
+                engineerPublicId = await _context.Engineers
+                    .Where(x => x.Id == user.EngineerId.Value && !x.IsDeleted)
+                    .Select(x => (Guid?)x.PublicId)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var jwt = GenerateJwtToken(user, engineerPublicId, roles);
+
+            var refreshToken = await CreateRefreshTokenAsync(user, cancellationToken);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return new AuthResponse
+            {
+                UserId = user.Id,
+                EngineerPublicId = engineerPublicId,
+                FullName = user.FullName,
+                Email = user.Email ?? string.Empty,
+                Roles = roles.ToList(),
+                Token = jwt.Token,
+                ExpiresAtUtc = jwt.ExpiresAtUtc,
+                RefreshToken = refreshToken.Token,
+                RefreshTokenExpiresAtUtc = refreshToken.ExpiresAtUtc
+            };
         }
     }
 }

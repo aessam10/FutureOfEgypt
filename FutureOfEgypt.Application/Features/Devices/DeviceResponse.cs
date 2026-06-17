@@ -12,6 +12,8 @@ namespace FutureOfEgypt.Application.Features.Devices
 
         public string? Imei { get; set; }
 
+        public string? InstallationId { get; set; }
+
         public DevicePlatform Platform { get; set; }
 
         public DeviceStatus Status { get; set; }

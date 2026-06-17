@@ -16,6 +16,10 @@
 
         public double Longitude { get; set; }
 
+        public double? Accuracy { get; set; }
+
+        public double? Speed { get; set; }
+
         public bool IsMocked { get; set; }
 
         public DateTime RecordedAt { get; set; }

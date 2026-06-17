@@ -1,5 +1,6 @@
 ﻿using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.EngineerDevices;
+using FutureOfEgypt.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,11 +19,20 @@ namespace FutureOfEgypt.Controllers
         }
 
         [HttpPost("assign")]
-        public async Task<IActionResult> AssignDevice(
+        public async Task<IActionResult> Assign(
             [FromBody] AssignDeviceRequest request,
             CancellationToken cancellationToken)
         {
-            return Ok(await _engineerDeviceService.AssignDeviceAsync(request, cancellationToken));
+            var adminUserId = User.GetUserId();
+            var adminEmail = User.GetUserEmail();
+
+            var result = await _engineerDeviceService.AssignDeviceAsync(
+                adminUserId,
+                adminEmail,
+                request,
+                cancellationToken);
+
+            return Ok(result);
         }
 
         [HttpGet]

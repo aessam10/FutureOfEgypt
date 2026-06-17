@@ -1,11 +1,16 @@
+using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.Auth;
+using FutureOfEgypt.Application.Features.Dashboard;
+using FutureOfEgypt.Application.Features.DeviceAccessRequests;
 using FutureOfEgypt.Application.Features.Devices;
 using FutureOfEgypt.Application.Features.EngineerDevices;
 using FutureOfEgypt.Application.Features.Engineers;
 using FutureOfEgypt.Application.Features.Tracking;
+using FutureOfEgypt.Hubs;
 using FutureOfEgypt.Infrastructure.Identity;
 using FutureOfEgypt.Infrastructure.Persistence;
 using FutureOfEgypt.Infrastructure.Services;
+using FutureOfEgypt.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +28,28 @@ namespace FutureOfEgypt
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddControllers();
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("LocalFrontend", policy =>
+                {
+                    policy
+                        .SetIsOriginAllowed(_ => true) // Development only
+                        .AllowAnyHeader()
+                        .AllowAnyMethod()
+                        .AllowCredentials();
+                    /*
+                     .WithOrigins(
+    "https://dashboard.futureofegypt.com",
+    "https://admin.futureofegypt.com"
+)
+.AllowAnyHeader()
+.AllowAnyMethod()
+.AllowCredentials();
+                     */
 
+                });
+            });
+            builder.Services.AddSignalR();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(options =>
             {
@@ -45,6 +71,10 @@ namespace FutureOfEgypt
             builder.Services.AddScoped<IDeviceService, DeviceService>();
             builder.Services.AddScoped<IEngineerDeviceService, EngineerDeviceService>();
             builder.Services.AddScoped<IAuthService, AuthService>();
+            builder.Services.AddScoped<IDeviceAccessRequestService, DeviceAccessRequestService>();
+            builder.Services.AddScoped<IDashboardService, DashboardService>();
+            builder.Services.AddScoped<ILocationNotifier, SignalRLocationNotifier>();
+            builder.Services.AddScoped<IAuditLogService, AuditLogService>();
             builder.Services.AddIdentity<ApplicationUser, ApplicationRole>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
             var jwtKey = builder.Configuration["Jwt:Key"];
 
@@ -61,6 +91,8 @@ namespace FutureOfEgypt
                 })
                 .AddJwtBearer(options =>
                 {
+                    options.RequireHttpsMetadata = false;
+
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuer = true,
@@ -78,13 +110,30 @@ namespace FutureOfEgypt
 
                         RoleClaimType = ClaimTypes.Role
                     };
+
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnMessageReceived = context =>
+                        {
+                            var accessToken = context.Request.Query["access_token"];
+                            var path = context.HttpContext.Request.Path;
+
+                            if (!string.IsNullOrWhiteSpace(accessToken)
+                                && path.StartsWithSegments("/hubs/locations"))
+                            {
+                                context.Token = accessToken;
+                            }
+
+                            return Task.CompletedTask;
+                        }
+                    };
                 });
 
             var app = builder.Build();
 
             if (app.Environment.IsDevelopment())
             {
-                app.UseSwagger();
+                app.UseSwagger();   
                 app.UseSwaggerUI();
             }
             app.Use(async (context, next) =>
@@ -115,11 +164,13 @@ namespace FutureOfEgypt
                 }
             });
             app.UseHttpsRedirection();
+            app.UseCors("LocalFrontend");
 
             app.UseAuthentication();
             app.UseAuthorization();
 
             app.MapControllers();
+            app.MapHub<LocationHub>("/hubs/locations");
 
             app.Run();
         }

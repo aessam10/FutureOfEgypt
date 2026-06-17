@@ -22,6 +22,74 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActionType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("EntityName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<Guid?>("EntityPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("PerformedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PerformedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("PerformedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActionType");
+
+                    b.HasIndex("EntityName");
+
+                    b.HasIndex("EntityPublicId");
+
+                    b.HasIndex("PerformedAtUtc");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.Device", b =>
                 {
                     b.Property<int>("Id")
@@ -35,10 +103,16 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     b.Property<string>("DeviceName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("Imei")
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("InstallationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -54,6 +128,82 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     b.Property<string>("SerialNumber")
                         .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Imei");
+
+                    b.HasIndex("InstallationId")
+                        .IsUnique()
+                        .HasFilter("\"InstallationId\" IS NOT NULL AND \"IsDeleted\" = false");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("SerialNumber");
+
+                    b.ToTable("Devices");
+                });
+
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceAccessRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CreatedDeviceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DeviceName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("EngineerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Imei")
+                        .HasColumnType("text");
+
+                    b.Property<string>("InstallationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Platform")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("RequestedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SerialNumber")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<int>("Status")
@@ -64,10 +214,24 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedDeviceId");
+
+                    b.HasIndex("EngineerId");
+
+                    b.HasIndex("InstallationId");
+
                     b.HasIndex("PublicId")
                         .IsUnique();
 
-                    b.ToTable("Devices");
+                    b.HasIndex("SerialNumber");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("EngineerId", "InstallationId", "Status")
+                        .IsUnique()
+                        .HasFilter("\"InstallationId\" IS NOT NULL AND \"Status\" = 1 AND \"IsDeleted\" = false");
+
+                    b.ToTable("DeviceAccessRequests");
                 });
 
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceLatestLocation", b =>
@@ -77,6 +241,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<double?>("Accuracy")
+                        .HasColumnType("double precision");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -107,6 +274,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     b.Property<DateTime>("RecordedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("Speed")
+                        .HasColumnType("double precision");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -224,6 +394,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<double?>("Accuracy")
+                        .HasColumnType("double precision");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -253,6 +426,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     b.Property<DateTime>("RecordedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("Speed")
+                        .HasColumnType("double precision");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -370,6 +546,43 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("FutureOfEgypt.Infrastructure.Identity.RefreshToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReplacedByTokenHash")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RefreshTokens");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.Property<int>("Id")
@@ -473,6 +686,24 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceAccessRequest", b =>
+                {
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Device", "CreatedDevice")
+                        .WithMany()
+                        .HasForeignKey("CreatedDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Engineer", "Engineer")
+                        .WithMany()
+                        .HasForeignKey("EngineerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedDevice");
+
+                    b.Navigation("Engineer");
+                });
+
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceLatestLocation", b =>
                 {
                     b.HasOne("FutureOfEgypt.Domain.Entities.Device", "Device")
@@ -537,6 +768,17 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .HasForeignKey("EngineerId");
 
                     b.Navigation("Engineer");
+                });
+
+            modelBuilder.Entity("FutureOfEgypt.Infrastructure.Identity.RefreshToken", b =>
+                {
+                    b.HasOne("FutureOfEgypt.Infrastructure.Identity.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

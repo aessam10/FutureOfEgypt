@@ -52,9 +52,17 @@ namespace FutureOfEgypt.Controllers
 
         [Authorize(Roles = AppRoles.ADMIN)]
         [HttpGet("history/{devicePublicId:guid}")]
-        public async Task<IActionResult> GetDeviceLocationHistory(Guid devicePublicId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken cancellationToken)
+        public async Task<IActionResult> GetDeviceLocationHistory(
+            Guid devicePublicId,
+            [FromQuery] LocationHistoryQueryRequest request,
+            CancellationToken cancellationToken)
         {
-            return Ok(await _trackingService.GetDeviceLocationHistoryAsync(devicePublicId, from, to, cancellationToken));
+            var result = await _trackingService.GetDeviceLocationHistoryAsync(
+                devicePublicId,
+                request,
+                cancellationToken);
+
+            return Ok(result);
         }
     }
 }

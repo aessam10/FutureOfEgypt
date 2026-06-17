@@ -1,4 +1,6 @@
-﻿namespace FutureOfEgypt.Application.Features.Tracking
+﻿using FutureOfEgypt.Application.Common.Models;
+
+namespace FutureOfEgypt.Application.Features.Tracking
 {
     public interface ITrackingService
     {
@@ -10,10 +12,9 @@
         Task<IReadOnlyList<LatestLocationResponse>> GetLatestLocationsAsync(
             CancellationToken cancellationToken = default);
 
-        Task<IReadOnlyList<LocationHistoryResponse>> GetDeviceLocationHistoryAsync(
+        Task<PagedResponse<LocationHistoryResponse>> GetDeviceLocationHistoryAsync(
             Guid devicePublicId,
-            DateTime? from,
-            DateTime? to,
+            LocationHistoryQueryRequest request,
             CancellationToken cancellationToken = default);
     }
 }

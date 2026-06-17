@@ -4,9 +4,15 @@
     {
         public Guid DevicePublicId { get; set; }
 
+        public string? InstallationId { get; set; }
+
         public double Latitude { get; set; }
 
         public double Longitude { get; set; }
+
+        public double? Accuracy { get; set; }
+
+        public double? Speed { get; set; }
 
         public bool IsMocked { get; set; }
 

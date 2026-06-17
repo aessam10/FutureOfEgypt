@@ -1,5 +1,6 @@
 ﻿using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.Engineers;
+using FutureOfEgypt.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,19 +19,45 @@ namespace FutureOfEgypt.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateEngineer(
+        public async Task<IActionResult> Create(
             [FromBody] CreateEngineerRequest request,
             CancellationToken cancellationToken)
         {
-            return Ok(await _engineerService.CreateEngineerAsync(
+            var adminUserId = User.GetUserId();
+            var adminEmail = User.GetUserEmail();
+
+            var result = await _engineerService.CreateEngineerAsync(
+                adminUserId,
+                adminEmail,
                 request,
-                cancellationToken));
+                cancellationToken);
+
+            return Ok(result);
         }
 
         [HttpGet]
         public async Task<IActionResult> GetEngineers(CancellationToken cancellationToken)
         {
             return Ok(await _engineerService.GetEngineersAsync(cancellationToken));
+        }
+
+        [HttpPatch("{engineerPublicId:guid}/status")]
+        public async Task<IActionResult> UpdateStatus(
+    Guid engineerPublicId,
+    [FromBody] UpdateEngineerStatusRequest request,
+    CancellationToken cancellationToken)
+        {
+            var adminUserId = User.GetUserId();
+            var adminEmail = User.GetUserEmail();
+
+            var result = await _engineerService.UpdateEngineerStatusAsync(
+                adminUserId,
+                adminEmail,
+                engineerPublicId,
+                request,
+                cancellationToken);
+
+            return Ok(result);
         }
     }
 }

@@ -15,6 +15,7 @@ namespace FutureOfEgypt.Infrastructure.Persistence.Configurations
             builder.HasIndex(x => x.DeviceId)
                 .IsUnique()
                 .HasFilter("\"IsActive\" = true AND \"IsDeleted\" = false");
+
         }
     }
 }

@@ -23,6 +23,12 @@ namespace FutureOfEgypt.Infrastructure.Persistence
 
         public DbSet<DeviceLatestLocation> DeviceLatestLocations { get; set; }
 
+        public DbSet<DeviceAccessRequest> DeviceAccessRequests { get; set; }
+
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+            
+        public DbSet<AuditLog> AuditLogs { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
