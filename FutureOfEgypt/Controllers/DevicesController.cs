@@ -35,9 +35,15 @@ namespace FutureOfEgypt.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetDevices(CancellationToken cancellationToken)
+        public async Task<IActionResult> GetDevices(
+            [FromQuery] DevicesQueryRequest request,
+            CancellationToken cancellationToken)
         {
-            return Ok(await _deviceService.GetDevicesAsync(cancellationToken));
+            var result = await _deviceService.GetDevicesAsync(
+                request,
+                cancellationToken);
+
+            return Ok(result);
         }
 
         [HttpPatch("{devicePublicId:guid}/status")]

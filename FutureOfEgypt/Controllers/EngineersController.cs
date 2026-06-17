@@ -36,9 +36,15 @@ namespace FutureOfEgypt.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetEngineers(CancellationToken cancellationToken)
+        public async Task<IActionResult> GetEngineers(
+            [FromQuery] EngineersQueryRequest request,
+            CancellationToken cancellationToken)
         {
-            return Ok(await _engineerService.GetEngineersAsync(cancellationToken));
+            var result = await _engineerService.GetEngineersAsync(
+                request,
+                cancellationToken);
+
+            return Ok(result);
         }
 
         [HttpPatch("{engineerPublicId:guid}/status")]

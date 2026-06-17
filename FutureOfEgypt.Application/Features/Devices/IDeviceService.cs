@@ -1,14 +1,17 @@
-﻿namespace FutureOfEgypt.Application.Features.Devices
+﻿using FutureOfEgypt.Application.Common.Models;
+
+namespace FutureOfEgypt.Application.Features.Devices
 {
     public interface IDeviceService
     {
         Task<DeviceResponse> CreateDeviceAsync(
-                   Guid adminUserId,
-                   string adminEmail,
-                   CreateDeviceRequest request,
-                   CancellationToken cancellationToken = default);
+                 Guid adminUserId,
+                 string adminEmail,
+                 CreateDeviceRequest request,
+                 CancellationToken cancellationToken = default);
 
-        Task<IReadOnlyList<DeviceResponse>> GetDevicesAsync(
+        Task<PagedResponse<DeviceResponse>> GetDevicesAsync(
+            DevicesQueryRequest request,
             CancellationToken cancellationToken = default);
 
         Task<DeviceResponse> UpdateDeviceStatusAsync(

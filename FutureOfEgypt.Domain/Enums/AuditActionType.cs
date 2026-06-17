@@ -15,6 +15,8 @@
         Logout = 11,
         EngineerInactivated = 12,
         DeviceInactivated = 13,
-        DeviceMarkedLost = 14
+        DeviceMarkedLost = 14,
+        AdminUserCreated = 15,
+        EngineerUserCreated = 16
     }
 }

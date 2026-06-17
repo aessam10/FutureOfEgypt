@@ -1,4 +1,5 @@
-﻿using FutureOfEgypt.Application.Features.AuditLog;
+﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.Devices;
 using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Domain.Enums;
@@ -87,25 +88,65 @@ namespace FutureOfEgypt.Infrastructure.Services
             };
         }
 
-        public async Task<IReadOnlyList<DeviceResponse>> GetDevicesAsync(
-            CancellationToken cancellationToken = default)
+        public async Task<PagedResponse<DeviceResponse>> GetDevicesAsync(
+    DevicesQueryRequest request,
+    CancellationToken cancellationToken = default)
         {
-            return await _context.Devices
+            var query = _context.Devices
                 .AsNoTracking()
-                .Where(x => !x.IsDeleted)
-                .OrderByDescending(x => x.CreatedAt)
+                .Where(x => !x.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(request.Search))
+            {
+                var search = request.Search.Trim().ToLower();
+
+                query = query.Where(x =>
+                    x.DeviceName.ToLower().Contains(search)
+                    || x.SerialNumber.ToLower().Contains(search)
+                    || (x.Imei != null && x.Imei.ToLower().Contains(search))
+                    || (x.InstallationId != null && x.InstallationId.ToLower().Contains(search)));
+            }
+
+            if (request.Status.HasValue)
+            {
+                query = query.Where(x => x.Status == request.Status.Value);
+            }
+
+            if (request.Platform.HasValue)
+            {
+                query = query.Where(x => x.Platform == request.Platform.Value);
+            }
+
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var totalPages = (int)Math.Ceiling(totalCount / (double)request.PageSize);
+
+            var items = await query
+                .OrderBy(x => x.DeviceName)
+                .Skip((request.PageNumber - 1) * request.PageSize)
+                .Take(request.PageSize)
                 .Select(x => new DeviceResponse
                 {
                     PublicId = x.PublicId,
                     DeviceName = x.DeviceName,
                     SerialNumber = x.SerialNumber,
                     Imei = x.Imei,
+                    InstallationId = x.InstallationId,
                     Platform = x.Platform,
                     Status = x.Status,
                     LastSeenAtUtc = x.LastSeenAtUtc,
                     CreatedAt = x.CreatedAt
                 })
                 .ToListAsync(cancellationToken);
+
+            return new PagedResponse<DeviceResponse>
+            {
+                Items = items,
+                PageNumber = request.PageNumber,
+                PageSize = request.PageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages
+            };
         }
 
         public async Task<DeviceResponse> UpdateDeviceStatusAsync(

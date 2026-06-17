@@ -1,0 +1,26 @@
+﻿global using FutureOfEgypt.Application.Common.Models;
+global using FutureOfEgypt.Application.Features.AuditLog;
+global using FutureOfEgypt.Application.Features.Auth;
+global using FutureOfEgypt.Application.Features.Dashboard;
+global using FutureOfEgypt.Application.Features.DeviceAccessRequests;
+global using FutureOfEgypt.Application.Features.Devices;
+global using FutureOfEgypt.Application.Features.EngineerDevices;
+global using FutureOfEgypt.Application.Features.Engineers;
+global using FutureOfEgypt.Application.Features.Tracking;
+global using FutureOfEgypt.Hubs;
+global using FutureOfEgypt.Infrastructure.Identity;
+global using FutureOfEgypt.Infrastructure.Persistence;
+global using FutureOfEgypt.Infrastructure.Services;
+global using FutureOfEgypt.Middleware;
+global using FutureOfEgypt.Services;
+global using Microsoft.AspNetCore.Authentication.JwtBearer;
+global using Microsoft.AspNetCore.HttpOverrides;
+global using Microsoft.AspNetCore.Identity;
+global using Microsoft.AspNetCore.Mvc;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.IdentityModel.Tokens;
+global using Microsoft.OpenApi;
+global using System.Security.Claims;
+global using System.Text;
+global using System.Threading.RateLimiting;
+

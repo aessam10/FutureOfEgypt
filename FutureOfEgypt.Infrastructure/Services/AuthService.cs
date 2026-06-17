@@ -1,5 +1,7 @@
 ﻿using FutureOfEgypt.Application.Common.Security;
+using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.Auth;
+using FutureOfEgypt.Domain.Enums;
 using FutureOfEgypt.Infrastructure.Identity;
 using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -10,6 +12,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace FutureOfEgypt.Infrastructure.Services
 {
@@ -19,20 +22,25 @@ namespace FutureOfEgypt.Infrastructure.Services
         private readonly RoleManager<ApplicationRole> _roleManager;
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IAuditLogService _auditLogService;
 
         public AuthService(
             UserManager<ApplicationUser> userManager,
             RoleManager<ApplicationRole> roleManager,
             AppDbContext context,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IAuditLogService auditLogService)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _context = context;
             _configuration = configuration;
+            _auditLogService = auditLogService;
         }
 
-        public async Task<AuthResponse> RegisterAdminAsync(
+        public async Task<UserAccountResponse> RegisterAdminAsync(
+            Guid performedByUserId,
+            string performedByEmail,
             RegisterAdminRequest request,
             CancellationToken cancellationToken = default)
         {
@@ -80,10 +88,33 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            return await BuildAuthResponseAsync(user, cancellationToken);
+            var response = await BuildUserAccountResponseAsync(user, cancellationToken);
+
+            await _auditLogService.CreateAsync(
+                new CreateAuditLogRequest
+                {
+                    ActionType = AuditActionType.AdminUserCreated,
+                    PerformedByUserId = performedByUserId,
+                    PerformedByEmail = performedByEmail,
+                    EntityName = nameof(ApplicationUser),
+                    EntityPublicId = user.Id,
+                    Description = $"Admin created admin user '{user.Email}'.",
+                    MetadataJson = JsonSerializer.Serialize(new
+                    {
+                        createdUserId = user.Id,
+                        user.Email,
+                        user.FullName,
+                        roles = response.Roles
+                    })
+                },
+                cancellationToken);
+
+            return response;
         }
 
-        public async Task<AuthResponse> RegisterEngineerUserAsync(
+        public async Task<UserAccountResponse> RegisterEngineerUserAsync(
+            Guid performedByUserId,
+            string performedByEmail,
             RegisterEngineerUserRequest request,
             CancellationToken cancellationToken = default)
         {
@@ -142,7 +173,29 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            return await BuildAuthResponseAsync(user, cancellationToken);
+            var response = await BuildUserAccountResponseAsync(user, cancellationToken);
+
+            await _auditLogService.CreateAsync(
+                new CreateAuditLogRequest
+                {
+                    ActionType = AuditActionType.EngineerUserCreated,
+                    PerformedByUserId = performedByUserId,
+                    PerformedByEmail = performedByEmail,
+                    EntityName = nameof(ApplicationUser),
+                    EntityPublicId = user.Id,
+                    Description = $"Admin created engineer user '{user.Email}'.",
+                    MetadataJson = JsonSerializer.Serialize(new
+                    {
+                        createdUserId = user.Id,
+                        engineerPublicId = response.EngineerPublicId,
+                        user.Email,
+                        user.FullName,
+                        roles = response.Roles
+                    })
+                },
+                cancellationToken);
+
+            return response;
         }
 
         public async Task<AuthResponse> LoginAsync(
@@ -427,5 +480,33 @@ namespace FutureOfEgypt.Infrastructure.Services
                 RefreshTokenExpiresAtUtc = refreshToken.ExpiresAtUtc
             };
         }
+
+        private async Task<UserAccountResponse> BuildUserAccountResponseAsync(
+    ApplicationUser user,
+    CancellationToken cancellationToken = default)
+        {
+            Guid? engineerPublicId = null;
+
+            if (user.EngineerId.HasValue)
+            {
+                engineerPublicId = await _context.Engineers
+                    .Where(x => x.Id == user.EngineerId.Value && !x.IsDeleted)
+                    .Select(x => (Guid?)x.PublicId)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            return new UserAccountResponse
+            {
+                UserId = user.Id,
+                EngineerPublicId = engineerPublicId,
+                FullName = user.FullName,
+                Email = user.Email ?? string.Empty,
+                Roles = roles.ToList(),
+                CreatedAtUtc = DateTime.UtcNow
+            };
+        }
+
     }
 }

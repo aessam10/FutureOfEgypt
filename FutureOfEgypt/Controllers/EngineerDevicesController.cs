@@ -36,17 +36,27 @@ namespace FutureOfEgypt.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAssignments(CancellationToken cancellationToken)
+        public async Task<IActionResult> GetAssignments(
+            [FromQuery] EngineerDevicesQueryRequest request,
+            CancellationToken cancellationToken)
         {
-            return Ok(await _engineerDeviceService.GetAssignmentsAsync(cancellationToken));
+            var result = await _engineerDeviceService.GetAssignmentsAsync(
+                request,
+                cancellationToken);
+
+            return Ok(result);
         }
 
         [HttpGet("active")]
-        public async Task<IActionResult> GetActiveAssignments(CancellationToken cancellationToken)
+        public async Task<IActionResult> GetActiveAssignments(
+            [FromQuery] EngineerDevicesQueryRequest request,
+            CancellationToken cancellationToken)
         {
-            var assignments = await _engineerDeviceService.GetActiveAssignmentsAsync(cancellationToken);
+            var result = await _engineerDeviceService.GetActiveAssignmentsAsync(
+                request,
+                cancellationToken);
 
-            return Ok(assignments);
+            return Ok(result);
         }
     }
 }

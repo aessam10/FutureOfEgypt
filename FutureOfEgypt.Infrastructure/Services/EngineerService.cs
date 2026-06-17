@@ -1,4 +1,5 @@
-﻿using FutureOfEgypt.Application.Features.AuditLog;
+﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.Engineers;
 using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Domain.Enums;
@@ -69,13 +70,37 @@ namespace FutureOfEgypt.Infrastructure.Services
             };
         }
 
-        public async Task<IReadOnlyList<EngineerResponse>> GetEngineersAsync(
-            CancellationToken cancellationToken = default)
+        public async Task<PagedResponse<EngineerResponse>> GetEngineersAsync(
+    EngineersQueryRequest request,
+    CancellationToken cancellationToken = default)
         {
-            return await _context.Engineers
+            var query = _context.Engineers
                 .AsNoTracking()
-                .Where(x => !x.IsDeleted)
-                .OrderByDescending(x => x.CreatedAt)
+                .Where(x => !x.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(request.Search))
+            {
+                var search = request.Search.Trim().ToLower();
+
+                query = query.Where(x =>
+                    x.FullName.ToLower().Contains(search)
+                    || (x.Email != null && x.Email.ToLower().Contains(search))
+                    || (x.PhoneNumber != null && x.PhoneNumber.Contains(search)));
+            }
+
+            if (request.Status.HasValue)
+            {
+                query = query.Where(x => x.Status == request.Status.Value);
+            }
+
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var totalPages = (int)Math.Ceiling(totalCount / (double)request.PageSize);
+
+            var items = await query
+                .OrderBy(x => x.FullName)
+                .Skip((request.PageNumber - 1) * request.PageSize)
+                .Take(request.PageSize)
                 .Select(x => new EngineerResponse
                 {
                     PublicId = x.PublicId,
@@ -86,6 +111,15 @@ namespace FutureOfEgypt.Infrastructure.Services
                     CreatedAt = x.CreatedAt
                 })
                 .ToListAsync(cancellationToken);
+
+            return new PagedResponse<EngineerResponse>
+            {
+                Items = items,
+                PageNumber = request.PageNumber,
+                PageSize = request.PageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages
+            };
         }
 
         public async Task<EngineerResponse> UpdateEngineerStatusAsync(

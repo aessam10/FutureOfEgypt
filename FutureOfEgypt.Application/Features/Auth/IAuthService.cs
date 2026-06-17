@@ -2,11 +2,15 @@
 {
     public interface IAuthService
     {
-        Task<AuthResponse> RegisterAdminAsync(
-            RegisterAdminRequest request,
-            CancellationToken cancellationToken = default);
+        Task<UserAccountResponse> RegisterAdminAsync(
+         Guid performedByUserId,
+         string performedByEmail,
+         RegisterAdminRequest request,
+         CancellationToken cancellationToken = default);
 
-        Task<AuthResponse> RegisterEngineerUserAsync(
+        Task<UserAccountResponse> RegisterEngineerUserAsync(
+            Guid performedByUserId,
+            string performedByEmail,
             RegisterEngineerUserRequest request,
             CancellationToken cancellationToken = default);
 

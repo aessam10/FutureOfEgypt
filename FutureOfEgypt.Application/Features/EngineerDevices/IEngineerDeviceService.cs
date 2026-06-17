@@ -1,4 +1,6 @@
-﻿namespace FutureOfEgypt.Application.Features.EngineerDevices
+﻿using FutureOfEgypt.Application.Common.Models;
+
+namespace FutureOfEgypt.Application.Features.EngineerDevices
 {
     public interface IEngineerDeviceService
     {
@@ -8,10 +10,12 @@
             AssignDeviceRequest request,
             CancellationToken cancellationToken = default);
 
-        Task<IReadOnlyList<EngineerDeviceResponse>> GetAssignmentsAsync(
+        Task<PagedResponse<EngineerDeviceResponse>> GetAssignmentsAsync(
+            EngineerDevicesQueryRequest request,
             CancellationToken cancellationToken = default);
 
-        Task<IReadOnlyList<EngineerDeviceResponse>> GetActiveAssignmentsAsync(
+        Task<PagedResponse<EngineerDeviceResponse>> GetActiveAssignmentsAsync(
+            EngineerDevicesQueryRequest request,
             CancellationToken cancellationToken = default);
     }
 }

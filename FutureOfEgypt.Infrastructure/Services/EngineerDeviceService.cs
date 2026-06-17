@@ -1,4 +1,5 @@
-﻿using FutureOfEgypt.Application.Features.AuditLog;
+﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.EngineerDevices;
 using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Domain.Enums;
@@ -136,39 +137,76 @@ namespace FutureOfEgypt.Infrastructure.Services
             };
         }
 
-        public async Task<IReadOnlyList<EngineerDeviceResponse>> GetAssignmentsAsync(CancellationToken cancellationToken = default)
+        public async Task<PagedResponse<EngineerDeviceResponse>> GetAssignmentsAsync(
+            EngineerDevicesQueryRequest request,
+            CancellationToken cancellationToken = default)
         {
-            return await _context.EngineerDevices
-                .AsNoTracking()
-                .Include(x => x.Engineer)
-                .Include(x => x.Device)
-                .Where(x => !x.IsDeleted)
-                .OrderByDescending(x => x.AssignedAtUtc)
-                .Select(x => new EngineerDeviceResponse
-                {
-                    PublicId = x.PublicId,
-
-                    EngineerPublicId = x.Engineer!.PublicId,
-                    EngineerName = x.Engineer.FullName,
-
-                    DevicePublicId = x.Device!.PublicId,
-                    DeviceName = x.Device.DeviceName,
-
-                    IsActive = x.IsActive,
-                    AssignedAtUtc = x.AssignedAtUtc,
-                    UnassignedAtUtc = x.UnassignedAtUtc
-                })
-                .ToListAsync(cancellationToken);
+            return await GetPagedAssignmentsAsync(
+                request,
+                forceActiveOnly: false,
+                cancellationToken);
         }
 
-        public async Task<IReadOnlyList<EngineerDeviceResponse>> GetActiveAssignmentsAsync(CancellationToken cancellationToken = default)
+        public async Task<PagedResponse<EngineerDeviceResponse>> GetActiveAssignmentsAsync(
+            EngineerDevicesQueryRequest request,
+            CancellationToken cancellationToken = default)
         {
-            return await _context.EngineerDevices
+            request.IsActive = true;
+
+            return await GetPagedAssignmentsAsync(
+                request,
+                forceActiveOnly: true,
+                cancellationToken);
+        }
+
+        private async Task<PagedResponse<EngineerDeviceResponse>> GetPagedAssignmentsAsync(
+            EngineerDevicesQueryRequest request,
+            bool forceActiveOnly,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _context.EngineerDevices
                 .AsNoTracking()
                 .Include(x => x.Engineer)
                 .Include(x => x.Device)
-                .Where(x => x.IsActive && !x.IsDeleted)
+                .Where(x => !x.IsDeleted);
+
+            if (forceActiveOnly)
+            {
+                query = query.Where(x => x.IsActive);
+            }
+            else if (request.IsActive.HasValue)
+            {
+                query = query.Where(x => x.IsActive == request.IsActive.Value);
+            }
+
+            if (request.EngineerPublicId.HasValue)
+            {
+                query = query.Where(x => x.Engineer!.PublicId == request.EngineerPublicId.Value);
+            }
+
+            if (request.DevicePublicId.HasValue)
+            {
+                query = query.Where(x => x.Device!.PublicId == request.DevicePublicId.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Search))
+            {
+                var search = request.Search.Trim().ToLower();
+
+                query = query.Where(x =>
+                    x.Engineer!.FullName.ToLower().Contains(search)
+                    || x.Device!.DeviceName.ToLower().Contains(search)
+                    || x.Device.SerialNumber.ToLower().Contains(search));
+            }
+
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var totalPages = (int)Math.Ceiling(totalCount / (double)request.PageSize);
+
+            var items = await query
                 .OrderByDescending(x => x.AssignedAtUtc)
+                .Skip((request.PageNumber - 1) * request.PageSize)
+                .Take(request.PageSize)
                 .Select(x => new EngineerDeviceResponse
                 {
                     PublicId = x.PublicId,
@@ -184,6 +222,15 @@ namespace FutureOfEgypt.Infrastructure.Services
                     UnassignedAtUtc = x.UnassignedAtUtc
                 })
                 .ToListAsync(cancellationToken);
+
+            return new PagedResponse<EngineerDeviceResponse>
+            {
+                Items = items,
+                PageNumber = request.PageNumber,
+                PageSize = request.PageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages
+            };
         }
     }
 }

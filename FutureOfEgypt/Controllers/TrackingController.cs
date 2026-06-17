@@ -2,6 +2,7 @@
 using FutureOfEgypt.Application.Features.Tracking;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace FutureOfEgypt.Controllers
@@ -16,6 +17,8 @@ namespace FutureOfEgypt.Controllers
         {
             _trackingService = trackingService;
         }
+
+        [EnableRateLimiting("TrackingPolicy")]
         [Authorize(Roles = AppRoles.ENGINEER)]
         [HttpPost("location")]
         public async Task<IActionResult> ReceiveLocationUpdate(
@@ -37,7 +40,7 @@ namespace FutureOfEgypt.Controllers
 
             return Ok(new
             {
-                Message = "Location update received successfully."
+                message = "Location update received successfully."
             });
         }
 

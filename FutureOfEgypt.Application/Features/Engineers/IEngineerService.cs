@@ -1,4 +1,6 @@
-﻿namespace FutureOfEgypt.Application.Features.Engineers
+﻿using FutureOfEgypt.Application.Common.Models;
+
+namespace FutureOfEgypt.Application.Features.Engineers
 {
     public interface IEngineerService
     {
@@ -8,7 +10,8 @@
             CreateEngineerRequest request,
             CancellationToken cancellationToken = default);
 
-        Task<IReadOnlyList<EngineerResponse>> GetEngineersAsync(
+        Task<PagedResponse<EngineerResponse>> GetEngineersAsync(
+            EngineersQueryRequest request,
             CancellationToken cancellationToken = default);
 
         Task<EngineerResponse> UpdateEngineerStatusAsync(
