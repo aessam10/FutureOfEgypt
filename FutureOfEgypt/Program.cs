@@ -1,3 +1,5 @@
+using FutureOfEgypt.Application.Features.Chat;
+
 namespace FutureOfEgypt
 {
     public class Program
@@ -143,6 +145,8 @@ namespace FutureOfEgypt
             builder.Services.AddScoped<IDashboardService, DashboardService>();
             builder.Services.AddScoped<ILocationNotifier, SignalRLocationNotifier>();
             builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+            builder.Services.AddScoped<IChatService, ChatService>();
+            builder.Services.AddScoped<IChatRealtimeNotifier, SignalRChatRealtimeNotifier>();
             builder.Services.AddIdentity<ApplicationUser, ApplicationRole>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
             var jwtKey = builder.Configuration["Jwt:Key"];
 
@@ -184,10 +188,12 @@ namespace FutureOfEgypt
                         OnMessageReceived = context =>
                         {
                             var accessToken = context.Request.Query["access_token"];
+
                             var path = context.HttpContext.Request.Path;
 
-                            if (!string.IsNullOrWhiteSpace(accessToken)
-                                && path.StartsWithSegments("/hubs/locations"))
+                            if (!string.IsNullOrEmpty(accessToken) &&
+                                (path.StartsWithSegments("/hubs/locations") ||
+                                 path.StartsWithSegments("/hubs/chat")))
                             {
                                 context.Token = accessToken;
                             }
@@ -232,6 +238,8 @@ namespace FutureOfEgypt
             app.MapControllers();
 
             app.MapHub<LocationHub>("/hubs/locations");
+
+            app.MapHub<ChatHub>("/hubs/chat");
 
             app.MapHealthChecks("/health");
 

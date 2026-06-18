@@ -9,7 +9,6 @@
   <ItemGroup>
     <ProjectReference Include="..\FutureOfEgypt.Application\FutureOfEgypt.Application.csproj" />
     <ProjectReference Include="..\FutureOfEgypt.Domain\FutureOfEgypt.Domain.csproj" />
-    <ProjectReference Include="..\FutureOfEgypt.Shared\FutureOfEgypt.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

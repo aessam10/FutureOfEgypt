@@ -395,10 +395,10 @@ namespace FutureOfEgypt.Infrastructure.Services
                     cancellationToken);
 
             if (storedRefreshToken is null)
-                return;
+                throw new InvalidOperationException("Refresh token is expired or revoked.");
 
-            if (storedRefreshToken.IsRevoked)
-                return;// to not reveal the token status to the others
+            if (storedRefreshToken.IsRevoked || storedRefreshToken.IsExpired)
+                throw new InvalidOperationException("Refresh token is expired or revoked.");
 
             storedRefreshToken.RevokedAtUtc = DateTime.UtcNow;
 

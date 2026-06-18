@@ -29,6 +29,12 @@ namespace FutureOfEgypt.Infrastructure.Persistence
             
         public DbSet<AuditLog> AuditLogs { get; set; }
 
+        public DbSet<ChatConversation> ChatConversations { get; set; }
+
+        public DbSet<ChatParticipant> ChatParticipants { get; set; }
+
+        public DbSet<ChatMessage> ChatMessages { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
