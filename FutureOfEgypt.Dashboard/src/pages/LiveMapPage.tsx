@@ -1,13 +1,16 @@
 import { useMemo, useEffect, useState } from 'react';
-import { Box, Paper, Typography } from '@mui/material';
-import { Marker, Popup, TileLayer, MapContainer, useMap } from 'react-leaflet';
+import { Box, Paper, Typography, Button } from '@mui/material';
+import { Marker, Popup, TileLayer, MapContainer, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '../components/common/PageHeader';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { EmptyState } from '../components/common/EmptyState';
-import { getLatestLocations } from '../api/trackingApi';
+import { getLatestLocations, getDeviceLocationHistory } from '../api/trackingApi';
 import { createLocationHubConnection } from '../signalr/locationHub';
 import type { LatestLocationResponse, LocationReceivedEvent } from '../types/tracking';
 
@@ -102,6 +105,8 @@ export function LiveMapPage() {
   const [liveLocations, setLiveLocations] = useState<LatestLocationResponse[]>([]);
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedEngineer, setSelectedEngineer] = useState<string | null>(null);
+  const [routeHistory, setRouteHistory] = useState<[number, number][]>([]);
+  const [isFetchingRoute, setIsFetchingRoute] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['latest-locations'],
@@ -154,6 +159,21 @@ export function LiveMapPage() {
       ? [filteredLocations[0].latitude, filteredLocations[0].longitude]
       : DEFAULT_CENTER;
   }, [filteredLocations, selectedEngineer, liveLocations]);
+
+  // Handle Fetch Route
+  const handleFetchRoute = async (devicePublicId: string) => {
+    try {
+      setIsFetchingRoute(true);
+      const res = await getDeviceLocationHistory(devicePublicId);
+      if (res && res.history) {
+        setRouteHistory(res.history.map(h => [h.latitude, h.longitude]));
+      }
+    } catch (e) {
+      console.error('Failed to fetch route history', e);
+    } finally {
+      setIsFetchingRoute(false);
+    }
+  };
 
   return (
     <>
@@ -259,60 +279,76 @@ export function LiveMapPage() {
                 />
                 <MapRecenter center={mapCenter} />
 
-                {filteredLocations.map((location) => (
-                  <Marker
-                    key={location.devicePublicId}
-                    position={[location.latitude, location.longitude]}
-                    icon={getMarkerIcon(location)}
-                    eventHandlers={{
-                      click: () => setSelectedEngineer(location.engineerPublicId),
-                    }}
-                  >
-                    <Popup>
-                      <Box sx={{ minWidth: 180, fontFamily: 'Inter, sans-serif' }}>
-                        <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', mb: 0.5 }}>
-                          {location.engineerName}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#64748b', mb: 0.25 }}>
-                          📱 {location.deviceName}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#64748b', mb: 0.25 }}>
-                          📍 {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
-                        </Typography>
-                        {location.accuracy != null && (
-                          <Typography variant="body2" sx={{ color: '#64748b', mb: 0.25 }}>
-                            Accuracy: {location.accuracy.toFixed(1)}m
+                <MarkerClusterGroup chunkedLoading>
+                  {filteredLocations.map((location) => (
+                    <Marker
+                      key={location.devicePublicId}
+                      position={[location.latitude, location.longitude]}
+                      icon={getMarkerIcon(location)}
+                      eventHandlers={{
+                        click: () => setSelectedEngineer(location.engineerPublicId),
+                      }}
+                    >
+                      <Popup>
+                        <Box sx={{ minWidth: 180, fontFamily: 'Inter, sans-serif' }}>
+                          <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', mb: 0.5 }}>
+                            {location.engineerName}
                           </Typography>
-                        )}
-                        {location.speed != null && (
                           <Typography variant="body2" sx={{ color: '#64748b', mb: 0.25 }}>
-                            Speed: {location.speed.toFixed(1)} km/h
+                            📱 {location.deviceName}
                           </Typography>
-                        )}
-                        {location.isMocked && (
-                          <Box
-                            sx={{
-                              mt: 0.5,
-                              px: 1,
-                              py: 0.25,
-                              borderRadius: '4px',
-                              backgroundColor: 'rgba(239,68,68,0.1)',
-                              color: '#ef4444',
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                              display: 'inline-block',
-                            }}
+                          <Typography variant="body2" sx={{ color: '#64748b', mb: 0.25 }}>
+                            📍 {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
+                          </Typography>
+                          {location.accuracy != null && (
+                            <Typography variant="body2" sx={{ color: '#64748b', mb: 0.25 }}>
+                              Accuracy: {location.accuracy.toFixed(1)}m
+                            </Typography>
+                          )}
+                          {location.speed != null && (
+                            <Typography variant="body2" sx={{ color: '#64748b', mb: 0.25 }}>
+                              Speed: {location.speed.toFixed(1)} km/h
+                            </Typography>
+                          )}
+                          {location.isMocked && (
+                            <Box
+                              sx={{
+                                mt: 0.5,
+                                px: 1,
+                                py: 0.25,
+                                borderRadius: '4px',
+                                backgroundColor: 'rgba(239,68,68,0.1)',
+                                color: '#ef4444',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                display: 'inline-block',
+                                mb: 1
+                              }}
+                            >
+                              ⚠ Mocked GPS
+                            </Box>
+                          )}
+                          <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: '#94a3b8' }}>
+                            {formatLastSeen(location.recordedAtUtc)}
+                          </Typography>
+                          
+                          <Button 
+                            variant="outlined" 
+                            size="small" 
+                            disabled={isFetchingRoute}
+                            onClick={() => void handleFetchRoute(location.devicePublicId)}
+                            sx={{ mt: 1.5, width: '100%', borderColor: '#00F0FF', color: '#00F0FF', '&:hover': { backgroundColor: 'rgba(0, 240, 255, 0.1)' } }}
                           >
-                            ⚠ Mocked GPS
-                          </Box>
-                        )}
-                        <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: '#94a3b8' }}>
-                          {formatLastSeen(location.recordedAtUtc)}
-                        </Typography>
-                      </Box>
-                    </Popup>
-                  </Marker>
-                ))}
+                            {isFetchingRoute ? 'Loading...' : 'Show Route'}
+                          </Button>
+                        </Box>
+                      </Popup>
+                    </Marker>
+                  ))}
+                </MarkerClusterGroup>
+                {routeHistory.length > 0 && (
+                  <Polyline positions={routeHistory} color="#00F0FF" weight={4} dashArray="5, 10" />
+                )}
               </MapContainer>
             </Paper>
           </Box>
@@ -343,9 +379,10 @@ export function LiveMapPage() {
                   <Box
                     key={location.devicePublicId}
                     component="button"
-                    onClick={() => setSelectedEngineer(
-                      isSelected ? null : location.engineerPublicId
-                    )}
+                    onClick={() => {
+                      setSelectedEngineer(isSelected ? null : location.engineerPublicId);
+                      if (isSelected) setRouteHistory([]); // clear route on deselect
+                    }}
                     aria-label={`${location.engineerName} — ${online ? 'Online' : 'Offline'}, last seen ${formatLastSeen(location.recordedAtUtc)}`}
                     aria-pressed={isSelected}
                     role="listitem"

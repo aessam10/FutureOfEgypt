@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 
 namespace FutureOfEgypt.Application.Features.Tracking
 {
@@ -7,6 +7,11 @@ namespace FutureOfEgypt.Application.Features.Tracking
         Task ReceiveLocationUpdateAsync(
             Guid engineerPublicId,
             ReceiveLocationUpdateRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task<DeviceValidationResponse> ValidateDeviceAsync(
+            Guid engineerPublicId,
+            DeviceValidationRequest request,
             CancellationToken cancellationToken = default);
 
         Task<IReadOnlyList<LatestLocationResponse>> GetLatestLocationsAsync(

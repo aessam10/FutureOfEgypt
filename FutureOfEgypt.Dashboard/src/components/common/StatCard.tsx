@@ -13,11 +13,11 @@ interface StatCardProps {
 }
 
 const ACCENT_COLORS = {
-  success: { bg: 'rgba(16,185,129,0.12)', icon: '#10b981', text: '#10b981' },
-  error:   { bg: 'rgba(239,68,68,0.12)',  icon: '#ef4444', text: '#ef4444' },
-  warning: { bg: 'rgba(245,158,11,0.12)', icon: '#f59e0b', text: '#f59e0b' },
-  info:    { bg: 'rgba(37,99,235,0.12)',  icon: '#3b82f6', text: '#3b82f6' },
-  default: { bg: 'rgba(15,118,110,0.12)', icon: '#0f766e', text: '#0f766e' },
+  success: { bg: 'rgba(16, 185, 129, 0.1)', icon: '#34D399', text: '#34D399', glow: 'rgba(16, 185, 129, 0.3)' },
+  error:   { bg: 'rgba(239, 68, 68, 0.1)',  icon: '#F87171', text: '#F87171', glow: 'rgba(239, 68, 68, 0.3)' },
+  warning: { bg: 'rgba(245, 158, 11, 0.1)', icon: '#FBBF24', text: '#FBBF24', glow: 'rgba(245, 158, 11, 0.3)' },
+  info:    { bg: 'rgba(37, 99, 235, 0.1)',  icon: '#60A5FA', text: '#60A5FA', glow: 'rgba(37, 99, 235, 0.3)' },
+  default: { bg: 'rgba(0, 240, 255, 0.1)',  icon: '#00F0FF', text: '#00F0FF', glow: 'rgba(0, 240, 255, 0.3)' },
 };
 
 const TREND_SYMBOLS = {
@@ -45,6 +45,12 @@ export function StatCard({
         position: 'relative',
         overflow: 'hidden',
         cursor: 'default',
+        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: `0 10px 30px ${colors.glow}`,
+          '&::after': { opacity: 1 },
+        },
         // Subtle top border accent
         '&::before': {
           content: '""',
@@ -52,10 +58,19 @@ export function StatCard({
           top: 0,
           left: 0,
           right: 0,
-          height: '3px',
+          height: '2px',
           background: `linear-gradient(90deg, ${colors.icon}, transparent)`,
-          opacity: 0.7,
         },
+        // Subtle glow background on hover
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          inset: 0,
+          background: `radial-gradient(circle at top left, ${colors.glow}, transparent 50%)`,
+          opacity: 0,
+          transition: 'opacity 0.3s ease',
+          pointerEvents: 'none',
+        }
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
@@ -72,7 +87,14 @@ export function StatCard({
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              '& svg': { fontSize: '1.4rem' },
+              boxShadow: `inset 0 0 10px ${colors.glow}, 0 0 15px ${colors.glow}`,
+              border: `1px solid ${colors.glow}`,
+              position: 'relative',
+              zIndex: 2,
+              '& svg': { 
+                fontSize: '1.4rem',
+                filter: `drop-shadow(0 0 4px ${colors.icon})`
+              },
             }}
             aria-hidden="true"
           >

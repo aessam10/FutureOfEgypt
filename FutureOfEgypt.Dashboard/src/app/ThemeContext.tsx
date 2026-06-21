@@ -30,8 +30,8 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       // localStorage not available
     }
-    // Default to light mode
-    return 'light';
+    // Default to dark mode for the Deluxe UI
+    return 'dark';
   });
 
   const muiTheme = useMemo(() => getTheme(mode), [mode]);

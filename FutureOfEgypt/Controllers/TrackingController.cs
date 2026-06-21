@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Security;
+using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.Tracking;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +16,29 @@ namespace FutureOfEgypt.Controllers
         public TrackingController(ITrackingService trackingService)
         {
             _trackingService = trackingService;
+        }
+
+        [EnableRateLimiting("TrackingPolicy")]
+        [Authorize(Roles = AppRoles.ENGINEER)]
+        [HttpPost("validate-device")]
+        public async Task<IActionResult> ValidateDevice(
+            [FromBody] DeviceValidationRequest request,
+            CancellationToken cancellationToken)
+        {
+            var engineerPublicIdValue = User.FindFirstValue("engineerPublicId");
+
+            if (string.IsNullOrWhiteSpace(engineerPublicIdValue))
+                return Unauthorized(new { message = "Engineer identity is missing from token." });
+
+            if (!Guid.TryParse(engineerPublicIdValue, out var engineerPublicId))
+                return Unauthorized(new { message = "Invalid engineer identity in token." });
+
+            var result = await _trackingService.ValidateDeviceAsync(
+                engineerPublicId,
+                request,
+                cancellationToken);
+
+            return Ok(result);
         }
 
         [EnableRateLimiting("TrackingPolicy")]

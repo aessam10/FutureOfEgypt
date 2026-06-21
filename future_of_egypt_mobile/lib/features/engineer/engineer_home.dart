@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../tracking/background_service.dart';
 import '../tracking/location_service.dart';
 import '../tracking/tracking_config_service.dart';
+import '../tracking/tracking_intervals.dart';
 
 class EngineerHome extends StatefulWidget {
   final String engineerId;
@@ -33,12 +35,26 @@ class _EngineerHomeState extends State<EngineerHome> {
     }
 
     if (widget.token.isEmpty || widget.deviceId.isEmpty) {
+      debugPrint('[FOE_TRACKING] Missing token or devicePublicId.');
       return;
     }
 
     final installationId = await TrackingConfigService.getInstallationId();
 
+    debugPrint('================ FOE TRACKING DEBUG ================');
+    debugPrint('[FOE_TRACKING] EngineerPublicId: ${widget.engineerId}');
+    debugPrint('[FOE_TRACKING] DevicePublicId: ${widget.deviceId}');
+    debugPrint('[FOE_TRACKING] InstallationId: $installationId');
+    debugPrint('[FOE_TRACKING] Interval: ${TrackingIntervals.label}');
+    debugPrint('====================================================');
+
     await LocationService.start(
+      token: widget.token,
+      devicePublicId: widget.deviceId,
+      installationId: installationId,
+    );
+
+    await BackgroundTrackingService.startTracking(
       token: widget.token,
       devicePublicId: widget.deviceId,
       installationId: installationId,
@@ -48,14 +64,9 @@ class _EngineerHomeState extends State<EngineerHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Engineer"),
-      ),
+      appBar: AppBar(title: const Text("Engineer")),
       body: const Center(
-        child: Text(
-          "Engineer Chat",
-          style: TextStyle(fontSize: 22),
-        ),
+        child: Text("Engineer Chat", style: TextStyle(fontSize: 22)),
       ),
     );
   }

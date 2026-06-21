@@ -1,9 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'features/auth/login_page.dart';
+import 'features/tracking/background_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb) {
+    await BackgroundTrackingService.initialize();
+  }
 
   runApp(const MyApp());
 }

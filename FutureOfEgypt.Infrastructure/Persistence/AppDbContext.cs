@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Common;
+using FutureOfEgypt.Domain.Common;
 using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -36,6 +36,8 @@ namespace FutureOfEgypt.Infrastructure.Persistence
         public DbSet<ChatMessage> ChatMessages { get; set; }
 
         public DbSet<EmailMessage> EmailMessages { get; set; }
+
+        public DbSet<AppNotification> AppNotifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

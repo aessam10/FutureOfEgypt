@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 using FutureOfEgypt.Application.Features.Tracking;
 using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Domain.Enums;
@@ -17,10 +17,99 @@ namespace FutureOfEgypt.Infrastructure.Services
             _locationNotifier = locationNotifier;
         }
 
-public async Task ReceiveLocationUpdateAsync(
-    Guid engineerPublicId,
-    ReceiveLocationUpdateRequest request,
-    CancellationToken cancellationToken = default)
+        public async Task<DeviceValidationResponse> ValidateDeviceAsync(
+            Guid engineerPublicId,
+            DeviceValidationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            // Step 1 — Engineer check.
+            // If not found or not active, return EngineerInactive (clean business response, no exception).
+            var engineer = await _context.Engineers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.PublicId == engineerPublicId && !x.IsDeleted,
+                    cancellationToken);
+
+            if (engineer is null || engineer.Status != EngineerStatus.Active)
+                return new DeviceValidationResponse { Status = DeviceValidationStatus.EngineerInactive };
+
+            // Step 2 — Device lookup by InstallationId only (no SerialNumber fallback).
+            var installationId = request.InstallationId?.Trim();
+
+            if (string.IsNullOrWhiteSpace(installationId))
+                return new DeviceValidationResponse { Status = DeviceValidationStatus.DeviceNotRegistered };
+
+            var device = await _context.Devices
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.InstallationId == installationId && !x.IsDeleted,
+                    cancellationToken);
+
+            if (device is null)
+                return new DeviceValidationResponse { Status = DeviceValidationStatus.DeviceNotRegistered };
+
+            // Step 3 — Device status check.
+            if (device.Status == DeviceStatus.Blocked)
+                return new DeviceValidationResponse { Status = DeviceValidationStatus.DeviceBlocked };
+
+            if (device.Status == DeviceStatus.Inactive)
+                return new DeviceValidationResponse { Status = DeviceValidationStatus.DeviceInactive };
+
+            // Step 4 — Active assignment check.
+            var activeAssignment = await _context.EngineerDevices
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.DeviceId == device.Id && x.IsActive && !x.IsDeleted,
+                    cancellationToken);
+
+            if (activeAssignment is not null)
+            {
+                if (activeAssignment.EngineerId == engineer.Id)
+                    return new DeviceValidationResponse
+                    {
+                        Status = DeviceValidationStatus.Valid,
+                        DevicePublicId = device.PublicId,
+                        DeviceName = device.DeviceName
+                    };
+
+                // Assigned to a different engineer — regardless of that engineer's active status.
+                return new DeviceValidationResponse { Status = DeviceValidationStatus.DeviceAssignedToOther };
+            }
+
+            // Step 5 — Prior request check (Pending and Rejected only; Cancelled is intentionally excluded).
+            var latestRequest = await _context.DeviceAccessRequests
+                .AsNoTracking()
+                .Where(x =>
+                    x.EngineerId == engineer.Id &&
+                    x.InstallationId == installationId &&
+                    (x.Status == DeviceAccessRequestStatus.Pending ||
+                     x.Status == DeviceAccessRequestStatus.Rejected) &&
+                    !x.IsDeleted)
+                .OrderByDescending(x => x.RequestedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (latestRequest is not null)
+            {
+                if (latestRequest.Status == DeviceAccessRequestStatus.Pending)
+                    return new DeviceValidationResponse { Status = DeviceValidationStatus.PendingApproval };
+
+                if (latestRequest.Status == DeviceAccessRequestStatus.Rejected)
+                    return new DeviceValidationResponse
+                    {
+                        Status = DeviceValidationStatus.Rejected,
+                        ReviewNote = latestRequest.ReviewNote
+                    };
+            }
+
+            // No active assignment, no pending/rejected request — engineer can submit a new request.
+            return new DeviceValidationResponse { Status = DeviceValidationStatus.DeviceNotAssigned };
+        }
+
+
+        public async Task ReceiveLocationUpdateAsync(
+            Guid engineerPublicId,
+            ReceiveLocationUpdateRequest request,
+            CancellationToken cancellationToken = default)
         {
             var engineer = await _context.Engineers
                 .FirstOrDefaultAsync(
@@ -37,6 +126,9 @@ public async Task ReceiveLocationUpdateAsync(
                     x => x.PublicId == request.DevicePublicId && !x.IsDeleted,
                     cancellationToken);
 
+            if (device is null)
+                throw new InvalidOperationException("Device does not exist.");
+
             if (!string.IsNullOrWhiteSpace(device.InstallationId))
             {
                 if (string.IsNullOrWhiteSpace(request.InstallationId))
@@ -46,8 +138,6 @@ public async Task ReceiveLocationUpdateAsync(
                     throw new InvalidOperationException("Invalid installation id for this device.");
             }
 
-            if (device is null)
-                throw new InvalidOperationException("Device does not exist.");
             if (device.Status != DeviceStatus.Active)
                 throw new InvalidOperationException("Device is not active.");
 

@@ -1,4 +1,4 @@
-﻿ {
+ {
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
     "http": {
@@ -7,7 +7,6 @@
       "launchBrowser": true,
       "launchUrl": "swagger",
       "applicationUrl": "http://localhost:5151",
-      //"applicationUrl": "http://192.168.8.186:5050",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
@@ -18,9 +17,8 @@
       "launchBrowser": true,
       "launchUrl": "swagger",
       "applicationUrl": "https://localhost:7029;http://localhost:5151",
-      //"applicationUrl": "http://192.168.8.186:5000",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development" //Production reads appsettings.Production
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     }
   }

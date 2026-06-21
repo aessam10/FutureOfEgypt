@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/network/api_client.dart';
 import '../admin/admin_home.dart';
+import '../device/device_access_service.dart';
+import '../device/device_validation_service.dart';
 import '../engineer/device_pending_page.dart';
 import '../engineer/engineer_home.dart';
 import '../manager/manager_home.dart';
@@ -34,64 +36,47 @@ class _LoginPageState extends State<LoginPage> {
         passwordController.text,
       );
 
-      final token = result["token"]?.toString() ?? "";
-      final roles = List<String>.from(result["roles"] ?? []);
-
-      final engineerPublicId = result["engineerPublicId"]?.toString() ?? "";
-      final devicePublicId = result["devicePublicId"]?.toString() ?? "";
+      // --- extract login response fields ---
+      final token = result['token']?.toString() ?? '';
+      final roles = List<String>.from(result['roles'] ?? []);
+      final engineerPublicId = result['engineerPublicId']?.toString() ?? '';
 
       if (token.isEmpty) {
-        throw Exception("Token is missing from login response");
+        throw Exception('Token is missing from login response');
       }
 
       ApiClient.setToken(token);
 
+      // save base login data (devicePublicId left empty until validation completes)
       await TrackingConfigService.saveLoginData(
         token: token,
         engineerPublicId: engineerPublicId,
-        devicePublicId: devicePublicId,
+        devicePublicId: '',
       );
 
-      if (!mounted) {
+      if (!mounted) return;
+
+      // --- non-engineer roles go directly to their home ---
+      if (roles.contains('Admin')) {
+        _navigateTo(const AdminHome());
         return;
       }
 
-      Widget nextPage;
-
-      if (roles.contains("Admin")) {
-        nextPage = const AdminHome();
-      } else if (roles.contains("Manager")) {
-        nextPage = const ManagerHome();
-      } else {
-        if (engineerPublicId.isEmpty) {
-          throw Exception("Engineer identity is missing from login response");
-        }
-
-        if (devicePublicId.isEmpty) {
-          nextPage = DevicePendingPage(
-            engineerId: engineerPublicId,
-            token: token,
-          );
-        } else {
-          nextPage = EngineerHome(
-            engineerId: engineerPublicId,
-            deviceId: devicePublicId,
-            token: token,
-          );
-        }
-      }
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => nextPage),
-      );
-    } catch (_) {
-      if (!mounted) {
+      if (roles.contains('Manager')) {
+        _navigateTo(const ManagerHome());
         return;
       }
 
+      // --- engineer: validate device before entering the app ---
+      if (engineerPublicId.isEmpty) {
+        throw Exception('Engineer identity is missing from login response');
+      }
+
+      await _validateEngineerDevice(token: token, engineerPublicId: engineerPublicId);
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
-        errorMessage = "Login failed";
+        errorMessage = e.toString();
       });
     } finally {
       if (mounted) {
@@ -100,6 +85,208 @@ class _LoginPageState extends State<LoginPage> {
         });
       }
     }
+  }
+
+  Future<void> _validateEngineerDevice({
+    required String token,
+    required String engineerPublicId,
+  }) async {
+    final installationId = await TrackingConfigService.getInstallationId();
+
+    DeviceValidationResult validation;
+    try {
+      validation = await DeviceValidationService.validate(
+        token: token,
+        installationId: installationId,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        errorMessage = 'Could not validate device. Please try again.';
+      });
+      return;
+    }
+
+    if (!mounted) return;
+
+    switch (validation.status) {
+      // ── success ──────────────────────────────────────────────────────────
+      case DeviceValidationStatus.valid:
+        final devicePublicId = validation.devicePublicId ?? '';
+        await TrackingConfigService.saveDevicePublicId(devicePublicId);
+        if (!mounted) return;
+        _navigateTo(EngineerHome(
+          engineerId: engineerPublicId,
+          deviceId: devicePublicId,
+          token: token,
+        ));
+        break;
+
+      // ── already waiting for approval ─────────────────────────────────────
+      case DeviceValidationStatus.pendingApproval:
+        _navigateTo(DevicePendingPage(
+          engineerId: engineerPublicId,
+          token: token,
+        ));
+        break;
+
+      // ── device not yet assigned — ask if engineer wants to request ────────
+      case DeviceValidationStatus.deviceNotAssigned:
+        _showRequestDialog(
+          token: token,
+          engineerPublicId: engineerPublicId,
+        );
+        break;
+
+      // ── rejected — show note and sign out ────────────────────────────────
+      case DeviceValidationStatus.rejected:
+        final note = (validation.reviewNote?.isNotEmpty ?? false)
+            ? '\n\nReason: ${validation.reviewNote}'
+            : '';
+        _showBlockingAlert(
+          title: 'Request Rejected',
+          message: 'Your device access request was rejected.$note\n\nPlease contact the administration.',
+        );
+        break;
+
+      // ── engineer account not active ──────────────────────────────────────
+      case DeviceValidationStatus.engineerInactive:
+        _showBlockingAlert(
+          title: 'Account Not Active',
+          message: 'Your account is not active. Please contact the administration.',
+        );
+        break;
+
+      // ── device not registered in the system ──────────────────────────────
+      case DeviceValidationStatus.deviceNotRegistered:
+        _showBlockingAlert(
+          title: 'Device Not Registered',
+          message: 'This device is not registered in the system.',
+        );
+        break;
+
+      // ── device blocked ───────────────────────────────────────────────────
+      case DeviceValidationStatus.deviceBlocked:
+        _showBlockingAlert(
+          title: 'Device Blocked',
+          message: 'This device is blocked. Please contact the administration.',
+        );
+        break;
+
+      // ── device inactive ──────────────────────────────────────────────────
+      case DeviceValidationStatus.deviceInactive:
+        _showBlockingAlert(
+          title: 'Device Not Active',
+          message: 'This device is not active. Please contact the administration.',
+        );
+        break;
+
+      // ── device assigned to another engineer ──────────────────────────────
+      case DeviceValidationStatus.deviceAssignedToOther:
+        _showBlockingAlert(
+          title: 'Device Assigned to Another Engineer',
+          message:
+              'This device is currently assigned to another engineer. Please contact the administration.',
+        );
+        break;
+    }
+  }
+
+  /// Shows a dialog asking the engineer if they want to send a device access request.
+  void _showRequestDialog({
+    required String token,
+    required String engineerPublicId,
+  }) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Device Not Assigned'),
+        content: const Text(
+          'This device is not assigned to your account.\n\n'
+          'Would you like to send a request to the administration?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _signOut();
+            },
+            child: const Text('Sign Out'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await _submitRequestAndNavigate(
+                token: token,
+                engineerPublicId: engineerPublicId,
+              );
+            },
+            child: const Text('Yes, Send Request'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Submits the device access request then navigates to the pending page.
+  Future<void> _submitRequestAndNavigate({
+    required String token,
+    required String engineerPublicId,
+  }) async {
+    setState(() => loading = true);
+    try {
+      await DeviceAccessService.createRequest(token: token);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        errorMessage = 'Failed to send device request. Please try again.';
+      });
+      return;
+    }
+    if (!mounted) return;
+    setState(() => loading = false);
+    _navigateTo(DevicePendingPage(engineerId: engineerPublicId, token: token));
+  }
+
+  /// Shows a blocking alert with a single Sign Out button that clears the session.
+  void _showBlockingAlert({required String title, required String message}) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _signOut();
+            },
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Clears the session and returns to the login screen.
+  Future<void> _signOut() async {
+    await TrackingConfigService.clear();
+    ApiClient.setToken('');
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+    );
+  }
+
+  void _navigateTo(Widget page) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => page),
+    );
   }
 
   @override
@@ -113,32 +300,49 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Text(
+                'Future Of Egypt',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 30),
               TextField(
                 controller: emailController,
+                keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
-                  labelText: "Email",
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               TextField(
                 controller: passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(
-                  labelText: "Password",
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 20),
               if (errorMessage != null) ...[
-                Text(
-                  errorMessage!,
-                  style: const TextStyle(color: Colors.red),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red),
+                  ),
+                  child: Text(
+                    errorMessage!,
+                    style: const TextStyle(color: Colors.red, fontSize: 13),
+                  ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
               ],
               SizedBox(
                 width: double.infinity,
@@ -150,7 +354,7 @@ class _LoginPageState extends State<LoginPage> {
                           height: 22,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text("Login"),
+                      : const Text('Login'),
                 ),
               ),
             ],

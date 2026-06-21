@@ -1,4 +1,4 @@
-﻿global using FutureOfEgypt.Application.Common.Models;
+global using FutureOfEgypt.Application.Common.Models;
 global using FutureOfEgypt.Application.Features.AuditLog;
 global using FutureOfEgypt.Application.Features.Auth;
 global using FutureOfEgypt.Application.Features.Dashboard;
@@ -26,6 +26,7 @@ global using System.Threading.RateLimiting;
 global using FutureOfEgypt.Application.Common.Security;
 global using FutureOfEgypt.Application.Features.Chat;
 global using FutureOfEgypt.Application.Features.Email;
+global using FutureOfEgypt.Application.Features.Notifications;
 global using FutureOfEgypt.Application.Features.Email.FutureOfEgypt.Application.Features.Emails;
 global using FutureOfEgypt.Infrastructure.Services.Email;
 

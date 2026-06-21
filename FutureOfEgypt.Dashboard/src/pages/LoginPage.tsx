@@ -11,6 +11,7 @@ import {
   TextField,
   Tooltip,
   Typography,
+  keyframes,
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
@@ -19,7 +20,61 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../auth/AuthContext';
 import { useThemeMode } from '../app/ThemeContext';
 import { routes } from '../app/routes';
-import { BRAND_GOLD } from '../app/theme';
+
+// Deluxe Background animation
+const slowPan = keyframes`
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+`;
+
+const pulseGlow = keyframes`
+  0% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+  100% { opacity: 0.4; transform: scale(1); }
+`;
+
+const goldPulse = keyframes`
+  0% { filter: brightness(1) drop-shadow(0 0 0px rgba(212,175,55,0)); }
+  50% { filter: brightness(1.3) drop-shadow(0 0 15px rgba(212,175,55,0.6)); }
+  100% { filter: brightness(1) drop-shadow(0 0 0px rgba(212,175,55,0)); }
+`;
+
+const borderPulse = keyframes`
+  0% { opacity: 0.4; filter: brightness(1) drop-shadow(0 0 0px rgba(212,175,55,0)); }
+  50% { opacity: 1; filter: brightness(1.6) drop-shadow(0 0 12px rgba(255,215,0,0.8)); }
+  100% { opacity: 0.4; filter: brightness(1) drop-shadow(0 0 0px rgba(212,175,55,0)); }
+`;
+
+const inputPulse = keyframes`
+  0% { box-shadow: 0 0 4px rgba(212,175,55,0.2); }
+  50% { box-shadow: 0 0 20px rgba(212,175,55,0.5); }
+  100% { box-shadow: 0 0 4px rgba(212,175,55,0.2); }
+`;
+
+const fieldsetPulse = keyframes`
+  0% { border-color: rgba(212,175,55,0.5); }
+  50% { border-color: rgba(212,175,55,1); }
+  100% { border-color: rgba(212,175,55,0.5); }
+`;
+
+const labelPulse = keyframes`
+  0% { color: rgba(212,175,55,0.8); text-shadow: 0 0 0px rgba(212,175,55,0); }
+  50% { color: rgba(212,175,55,1); text-shadow: 0 0 8px rgba(212,175,55,0.5); }
+  100% { color: rgba(212,175,55,0.8); text-shadow: 0 0 0px rgba(212,175,55,0); }
+`;
+
+// Card entrance animation
+const fadeInUp = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -46,9 +101,11 @@ export function LoginPage() {
     try {
       await login({ email, password });
       navigate(routes.dashboard, { replace: true });
-    } catch (err) {
+    } catch (err: any) {
       if (err instanceof Error && err.message === 'DASHBOARD_ACCESS_DENIED') {
         setError('هذه اللوحة للمديرين والمشرفين فقط. يرجى استخدام تطبيق الجوال.');
+      } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        setError('Error: Disconnected from the Auth Server. Maintenance in progress.');
       } else {
         setError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
       }
@@ -62,172 +119,192 @@ export function LoginPage() {
       sx={{
         minHeight: '100vh',
         display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         position: 'relative',
         overflow: 'hidden',
-        backgroundColor: isDark ? '#0d1117' : '#0f1923',
+        background: isDark
+          ? 'linear-gradient(-45deg, #0a0804, #120e06, #1c150b, #0f0c05)'
+          : 'linear-gradient(-45deg, #fdfbf7, #f6f0e3, #e8dcc4, #f8f5ee)',
+        backgroundSize: '400% 400%',
+        animation: `${slowPan} 20s ease infinite`,
       }}
     >
-      {/* Theme toggle - top right */}
-      <Box sx={{ position: 'absolute', top: 16, right: 20, zIndex: 10 }}>
+      {/* Background Watermark Logo */}
+      <Box
+        sx={{
+          display: isDark ? 'flex' : 'none',
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          opacity: 0.04,
+          pointerEvents: 'none',
+          zIndex: 0,
+          width: '90vw',
+          maxWidth: '900px',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <img
+          src="/logo.png"
+          alt=""
+          style={{
+            width: '100%',
+            height: 'auto',
+            mixBlendMode: isDark ? 'screen' : 'multiply',
+            filter: isDark ? 'none' : 'invert(1) grayscale(100%) opacity(0.6)'
+          }}
+        />
+      </Box>
+
+      {/* Decorative ambient glowing orbs */}
+      <Box
+        sx={{
+          display: isDark ? 'block' : 'none',
+          position: 'absolute',
+          width: '600px',
+          height: '600px',
+          background: 'radial-gradient(circle, rgba(212,175,55,0.08) 0%, transparent 60%)',
+          top: '-15%',
+          left: '-10%',
+          zIndex: 1,
+          animation: `${pulseGlow} 8s ease-in-out infinite`,
+        }}
+      />
+      <Box
+        sx={{
+          display: isDark ? 'block' : 'none',
+          position: 'absolute',
+          width: '700px',
+          height: '700px',
+          background: 'radial-gradient(circle, rgba(184,134,11,0.06) 0%, transparent 60%)',
+          bottom: '-25%',
+          right: '-15%',
+          zIndex: 1,
+          animation: `${pulseGlow} 12s ease-in-out infinite reverse`,
+        }}
+      />
+
+      {/* Theme toggle */}
+      <Box sx={{ position: 'absolute', top: 32, right: 32, zIndex: 10 }}>
         <Tooltip title={isDark ? 'Light Mode' : 'Dark Mode'}>
           <IconButton
             onClick={toggleMode}
             aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             sx={{
-              color: 'rgba(255,255,255,0.6)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: '8px',
-              '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)', color: '#fff' },
+              color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.5)',
+              backdropFilter: 'blur(12px)',
+              border: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+              borderRadius: '14px',
+              p: 1.5,
+              '&:hover': {
+                backgroundColor: isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(255,255,255,0.9)',
+                color: isDark ? '#00F0FF' : '#2563EB',
+                boxShadow: isDark ? '0 0 15px rgba(0,240,255,0.3)' : '0 4px 12px rgba(0,0,0,0.1)',
+                transform: 'scale(1.05)'
+              },
             }}
           >
-            {isDark ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+            {isDark ? <LightModeIcon /> : <DarkModeIcon />}
           </IconButton>
         </Tooltip>
       </Box>
 
-      {/* Left panel — branding */}
-      <Box
+      {/* Center login card — Deluxe Glassmorphism */}
+      <Paper
+        component="form"
+        onSubmit={handleSubmit}
+        elevation={0}
         sx={{
-          display: { xs: 'none', lg: 'flex' },
-          width: '45%',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
           position: 'relative',
-          p: 6,
-          background: `
-            radial-gradient(ellipse at 30% 50%, rgba(201,168,76,0.08) 0%, transparent 60%),
-            radial-gradient(ellipse at 70% 20%, rgba(15,118,110,0.12) 0%, transparent 50%),
-            #0f1923
-          `,
-          '&::after': {
+          zIndex: 2,
+          width: '100%',
+          maxWidth: 460,
+          mx: 2,
+          p: { xs: 4, sm: 6 },
+          borderRadius: '28px',
+          // Core Deluxe Glass styles
+          backgroundColor: isDark ? 'rgba(15, 12, 8, 0.5)' : 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(30px)',
+          WebkitBackdropFilter: 'blur(30px)',
+          border: `1px solid ${isDark ? 'rgba(212, 175, 55, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+          boxShadow: isDark
+            ? '0 30px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(212, 175, 55, 0.08)'
+            : '0 20px 40px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+          animation: `${fadeInUp} 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards`,
+          '&::before': isDark ? {
             content: '""',
             position: 'absolute',
-            right: 0,
-            top: '10%',
-            height: '80%',
-            width: '1px',
-            background: 'linear-gradient(to bottom, transparent, rgba(201,168,76,0.3), transparent)',
-          },
+            top: 0,
+            left: '10%',
+            right: '10%',
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent, rgba(212,175,55,1), transparent)',
+            animation: `${borderPulse} 6s ease-in-out infinite`,
+          } : {},
         }}
       >
-        <Box
-          component="img"
-          src="/logo.png"
-          alt="جهاز مستقبل مصر للتنمية المستدامة"
-          onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-            e.currentTarget.style.display = 'none';
-          }}
-          sx={{ width: 140, height: 140, objectFit: 'contain', mb: 4 }}
-        />
-
-        <Typography
-          variant="h4"
-          sx={{
-            color: BRAND_GOLD,
-            fontWeight: 800,
-            textAlign: 'center',
-            mb: 1.5,
-            letterSpacing: '-0.02em',
-          }}
-        >
-          جهاز مستقبل مصر
-        </Typography>
-        <Typography
-          sx={{
-            color: 'rgba(255,255,255,0.6)',
-            textAlign: 'center',
-            fontSize: '1rem',
-            fontWeight: 400,
-            mb: 5,
-          }}
-        >
-          للتنمية المستدامة
-        </Typography>
-
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 320, width: '100%' }}>
-          {[
-            { icon: '📍', text: 'تتبع مواقع المهندسين في الوقت الفعلي' },
-            { icon: '📱', text: 'إدارة الأجهزة والتكليفات' },
-            { icon: '💬', text: 'محادثات مباشرة وجماعية' },
-            { icon: '🔒', text: 'سجل كامل لجميع الأحداث' },
-          ].map((item) => (
-            <Box
-              key={item.text}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                p: 1.5,
-                borderRadius: '10px',
-                backgroundColor: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.06)',
-              }}
-            >
-              <Typography sx={{ fontSize: '1.2rem' }}>{item.icon}</Typography>
-              <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem' }}>
-                {item.text}
-              </Typography>
-            </Box>
-          ))}
+        <Box sx={{ mb: 4, textAlign: 'center' }}>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{
+              fontWeight: 800,
+              mb: 1.5,
+              letterSpacing: '-0.02em',
+              background: isDark
+                ? 'linear-gradient(to right, #F5D061, #D4AF37)'
+                : undefined,
+              WebkitBackgroundClip: isDark ? 'text' : undefined,
+              WebkitTextFillColor: isDark ? 'transparent' : 'inherit',
+              animation: isDark ? `${goldPulse} 6s ease-in-out infinite` : 'none',
+            }}
+          >
+            Welcome Back
+          </Typography>
+          <Typography
+            variant="h5"
+            component="h1"
+            sx={{
+              fontWeight: 900,
+              mb: 1.5,
+              letterSpacing: '-0.02em',
+              background: isDark
+                ? 'linear-gradient(to right, #F5D061, #D4AF37)'
+                : undefined,
+              WebkitBackgroundClip: isDark ? 'text' : undefined,
+              WebkitTextFillColor: isDark ? 'transparent' : 'inherit',
+              animation: isDark ? `${goldPulse} 6s ease-in-out infinite` : 'none',
+            }}
+          >
+            Eng: Ahmed S. El-Mansy
+          </Typography>
         </Box>
-      </Box>
 
-      {/* Right panel — login form */}
-      <Box
-        sx={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          p: 3,
-          backgroundColor: isDark ? '#0d1117' : '#f0f4f8',
-        }}
-      >
-        <Paper
-          component="form"
-          onSubmit={handleSubmit}
-          elevation={0}
-          sx={{
-            width: '100%',
-            maxWidth: 420,
-            p: 4,
-            borderRadius: '16px',
-            border: '1px solid',
-            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-            backgroundColor: isDark ? '#161b22' : '#ffffff',
-          }}
-        >
-          {/* Logo visible on mobile */}
-          <Box sx={{ display: { xs: 'flex', lg: 'none' }, justifyContent: 'center', mb: 3 }}>
-            <Box
-              component="img"
-              src="/logo.png"
-              alt="جهاز مستقبل مصر"
-              onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                e.currentTarget.style.display = 'none';
-              }}
-              sx={{ width: 64, height: 64, objectFit: 'contain' }}
-            />
-          </Box>
+        {error && (
+          <Alert
+            severity="error"
+            sx={{
+              mb: 4,
+              borderRadius: '12px',
+              backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)',
+              border: `1px solid ${isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)'}`,
+              color: isDark ? '#fca5a5' : '#b91c1c'
+            }}
+            role="alert"
+          >
+            {error}
+          </Alert>
+        )}
 
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 0.5, color: 'text.primary' }}>
-            تسجيل الدخول
-          </Typography>
-          <Typography sx={{ color: 'text.secondary', mb: 3, fontSize: '0.9rem' }}>
-            مرحباً بك في لوحة تحكم جهاز مستقبل مصر
-          </Typography>
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 2.5 }} role="alert">
-              {error}
-            </Alert>
-          )}
-
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <TextField
             fullWidth
             id="login-email"
-            label="البريد الإلكتروني"
+            label="Email Address"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -235,13 +312,44 @@ export function LoginPage() {
             autoFocus
             required
             slotProps={{ htmlInput: { 'aria-label': 'Email address', 'aria-required': 'true' } }}
-            sx={{ mb: 2 }}
+            sx={{
+              '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus, & input:-webkit-autofill:active, & input:-internal-autofill-previewed, & input:-internal-autofill-selected': {
+                transition: 'background-color 5000s ease-in-out 0s !important',
+                WebkitTextFillColor: isDark ? '#fff !important' : undefined,
+              },
+              '& label': {
+                color: isDark ? 'rgba(212,175,55,0.8)' : undefined,
+                animation: isDark ? `${labelPulse} 6s ease-in-out infinite` : 'none',
+              },
+              '& label.Mui-focused': {
+                color: isDark ? '#D4AF37 !important' : undefined,
+                textShadow: isDark ? '0 0 10px rgba(212,175,55,0.8) !important' : undefined,
+              },
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.6)',
+                backdropFilter: 'blur(10px)',
+                animation: isDark ? `${inputPulse} 6s ease-in-out infinite` : 'none',
+                '&.Mui-focused': {
+                  boxShadow: isDark ? '0 0 25px rgba(212,175,55,0.6) !important' : undefined,
+                },
+                '& fieldset': {
+                  borderColor: isDark ? 'rgba(212,175,55,0.5)' : undefined,
+                  animation: isDark ? `${fieldsetPulse} 6s ease-in-out infinite` : 'none',
+                },
+                '&:hover fieldset': {
+                  borderColor: isDark ? 'rgba(212,175,55,0.7) !important' : undefined,
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: isDark ? '#D4AF37 !important' : undefined,
+                },
+              }
+            }}
           />
 
           <TextField
             fullWidth
             id="login-password"
-            label="كلمة المرور"
+            label="Password"
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -268,7 +376,38 @@ export function LoginPage() {
                 ),
               },
             }}
-            sx={{ mb: 3 }}
+            sx={{
+              '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus, & input:-webkit-autofill:active, & input:-internal-autofill-previewed, & input:-internal-autofill-selected': {
+                transition: 'background-color 5000s ease-in-out 0s !important',
+                WebkitTextFillColor: isDark ? '#fff !important' : undefined,
+              },
+              '& label': {
+                color: isDark ? 'rgba(212,175,55,0.8)' : undefined,
+                animation: isDark ? `${labelPulse} 6s ease-in-out infinite` : 'none',
+              },
+              '& label.Mui-focused': {
+                color: isDark ? '#D4AF37 !important' : undefined,
+                textShadow: isDark ? '0 0 10px rgba(212,175,55,0.8) !important' : undefined,
+              },
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.6)',
+                backdropFilter: 'blur(10px)',
+                animation: isDark ? `${inputPulse} 6s ease-in-out infinite` : 'none',
+                '&.Mui-focused': {
+                  boxShadow: isDark ? '0 0 25px rgba(212,175,55,0.6) !important' : undefined,
+                },
+                '& fieldset': {
+                  borderColor: isDark ? 'rgba(212,175,55,0.5)' : undefined,
+                  animation: isDark ? `${fieldsetPulse} 6s ease-in-out infinite` : 'none',
+                },
+                '&:hover fieldset': {
+                  borderColor: isDark ? 'rgba(212,175,55,0.7) !important' : undefined,
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: isDark ? '#D4AF37 !important' : undefined,
+                },
+              }
+            }}
           />
 
           <Button
@@ -279,28 +418,28 @@ export function LoginPage() {
             disabled={isLoading || !email || !password}
             aria-label={isLoading ? 'Signing in...' : 'Sign in'}
             sx={{
-              py: 1.5,
-              fontSize: '1rem',
+              mt: 2,
+              py: 1.8,
+              fontSize: '1.05rem',
               fontWeight: 700,
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #0f766e 0%, #0d6360 100%)',
+              borderRadius: '14px',
+              backgroundColor: isDark ? '#D4AF37' : undefined,
+              color: isDark ? '#000' : undefined,
+              animation: isDark ? `${goldPulse} 6s ease-in-out infinite` : 'none',
               '&:hover': {
-                background: 'linear-gradient(135deg, #14b8a6 0%, #0f766e 100%)',
-                boxShadow: '0 8px 24px rgba(15,118,110,0.4)',
+                backgroundColor: isDark ? '#F5D061' : undefined,
+                boxShadow: isDark ? `0 8px 20px rgba(212, 175, 55, 0.3)` : undefined
               },
+              '&.Mui-disabled': {
+                backgroundColor: isDark ? 'rgba(212,175,55,0.2)' : undefined,
+                color: isDark ? 'rgba(255,255,255,0.3)' : undefined
+              }
             }}
           >
-            {isLoading ? <CircularProgress size={22} color="inherit" /> : 'دخول'}
+            {isLoading ? <CircularProgress size={26} color="inherit" /> : 'Sign In'}
           </Button>
-
-          <Typography
-            variant="caption"
-            sx={{ display: 'block', textAlign: 'center', mt: 3, color: 'text.secondary' }}
-          >
-            لوحة التحكم مخصصة للمديرين والمشرفين فقط
-          </Typography>
-        </Paper>
-      </Box>
+        </Box>
+      </Paper>
     </Box>
   );
 }

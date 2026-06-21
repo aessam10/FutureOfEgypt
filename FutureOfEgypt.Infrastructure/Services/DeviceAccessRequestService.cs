@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.DeviceAccessRequests;
 using FutureOfEgypt.Domain.Entities;
@@ -74,17 +74,8 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (existingPendingRequest is not null)
                 return Map(existingPendingRequest);
 
-            if (!string.IsNullOrWhiteSpace(installationId))
-            {
-                var installationAlreadyUsed = await _context.Devices
-                    .AnyAsync(
-                        x => x.InstallationId == installationId
-                             && !x.IsDeleted,
-                        cancellationToken);
-
-                if (installationAlreadyUsed)
-                    throw new InvalidOperationException("This app installation is already registered to a device.");
-            }
+            // NOTE: InstallationId may already exist in Devices — that is expected in the new flow.
+            // A device must exist before an assignment request is created. No guard needed here.
 
             var alreadyApprovedDevice = await _context.Devices
                 .FirstOrDefaultAsync(
@@ -346,6 +337,41 @@ namespace FutureOfEgypt.Infrastructure.Services
             };
 
             await _context.EngineerDevices.AddAsync(newAssignment, cancellationToken);
+
+            // Cancel all other Pending requests for the same engineer (excluding the one being approved).
+            var engineerPendingRequests = await _context.DeviceAccessRequests
+                .Where(x =>
+                    x.EngineerId == accessRequest.EngineerId &&
+                    x.Id != accessRequest.Id &&
+                    x.Status == DeviceAccessRequestStatus.Pending &&
+                    !x.IsDeleted)
+                .ToListAsync(cancellationToken);
+
+            foreach (var pendingRequest in engineerPendingRequests)
+            {
+                pendingRequest.Status = DeviceAccessRequestStatus.Cancelled;
+                pendingRequest.UpdatedAt = now;
+            }
+
+            // Cancel all other Pending requests for the same device (by InstallationId), excluding the approved one
+            // and any already cancelled above (different engineer).
+            if (!string.IsNullOrWhiteSpace(device.InstallationId))
+            {
+                var devicePendingRequests = await _context.DeviceAccessRequests
+                    .Where(x =>
+                        x.InstallationId == device.InstallationId &&
+                        x.EngineerId != accessRequest.EngineerId &&
+                        x.Id != accessRequest.Id &&
+                        x.Status == DeviceAccessRequestStatus.Pending &&
+                        !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var pendingRequest in devicePendingRequests)
+                {
+                    pendingRequest.Status = DeviceAccessRequestStatus.Cancelled;
+                    pendingRequest.UpdatedAt = now;
+                }
+            }
 
             accessRequest.Status = DeviceAccessRequestStatus.Approved;
             accessRequest.ReviewedAtUtc = now;

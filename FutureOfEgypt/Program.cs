@@ -155,6 +155,8 @@ namespace FutureOfEgypt
             builder.Services.AddScoped<IChatService, ChatService>();
             builder.Services.AddScoped<IChatRealtimeNotifier, SignalRChatRealtimeNotifier>();
             builder.Services.AddScoped<IEmailService, EmailService>();
+            builder.Services.AddScoped<INotificationService, NotificationService>();
+            builder.Services.AddScoped<INotificationRealtimeNotifier, FutureOfEgypt.Services.SignalRNotificationNotifier>();
             builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
             builder.Services.AddIdentity<ApplicationUser, ApplicationRole>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
             var jwtKey = builder.Configuration["Jwt:Key"];
@@ -202,6 +204,7 @@ namespace FutureOfEgypt
 
                             if (!string.IsNullOrEmpty(accessToken) &&
                                 (path.StartsWithSegments("/hubs/locations") ||
+                                 path.StartsWithSegments("/hubs/notifications") ||
                                  path.StartsWithSegments("/hubs/chat")))
                             {
                                 context.Token = accessToken;
@@ -234,8 +237,10 @@ namespace FutureOfEgypt
 
             app.UseRequestLogging();
 
-            app.UseHttpsRedirection();
-
+            if (!app.Environment.IsDevelopment())
+            {
+                app.UseHttpsRedirection();
+            }
             app.UseCors("Frontend");
 
             app.UseAuthentication();
@@ -247,6 +252,8 @@ namespace FutureOfEgypt
             app.MapControllers();
 
             app.MapHub<LocationHub>("/hubs/locations");
+
+            app.MapHub<NotificationHub>("/hubs/notifications");
 
             app.MapHub<ChatHub>("/hubs/chat");
 

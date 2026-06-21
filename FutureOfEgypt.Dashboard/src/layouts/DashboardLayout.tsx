@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Drawer,
@@ -14,12 +14,17 @@ import {
   AppBar,
   Toolbar,
   Badge,
+  Popover,
 } from '@mui/material';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useThemeMode } from '../app/ThemeContext';
 import { routes } from '../app/routes';
-import { BRAND_GOLD, SIDEBAR_BACKGROUND } from '../app/theme';
+import { BRAND_CYAN, SIDEBAR_BACKGROUND } from '../app/theme';
+import { CommandPalette } from '../components/common/CommandPalette';
+import { createNotificationHubConnection } from '../signalr/notificationHub';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { getNotifications, getUnreadCount, markAllAsRead } from '../api/notificationsApi';
 
 // Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -68,6 +73,78 @@ export function DashboardLayout() {
   const { user, logout } = useAuth();
   const { mode, toggleMode, isDark } = useThemeMode();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [notificationsAnchor, setNotificationsAnchor] = useState<null | HTMLElement>(null);
+  const queryClient = useQueryClient();
+
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications-unread-count'],
+    queryFn: getUnreadCount,
+    refetchInterval: 60000,
+  });
+
+  const [localUnreadCount, setLocalUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (unreadData !== undefined) {
+      setLocalUnreadCount(unreadData);
+    }
+  }, [unreadData]);
+
+  const {
+    data: notifData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch: refetchNotifs,
+    isLoading: isLoadingNotifs
+  } = useInfiniteQuery({
+    queryKey: ['notifications'],
+    queryFn: ({ pageParam = 1 }) => getNotifications(pageParam as number, 10),
+    getNextPageParam: (lastPage) => {
+      return (lastPage.pageNumber * lastPage.pageSize < lastPage.totalCount)
+        ? lastPage.pageNumber + 1
+        : undefined;
+    },
+    initialPageParam: 1,
+  });
+
+  useEffect(() => {
+    const connection = createNotificationHubConnection(
+      (newNotification) => {
+        queryClient.setQueryData(['notifications'], (oldData: any) => {
+          if (!oldData || !oldData.pages) return oldData;
+          const newPages = [...oldData.pages];
+          if (newPages.length > 0) {
+            newPages[0] = {
+              ...newPages[0],
+              items: [newNotification, ...newPages[0].items]
+            };
+          }
+          return { ...oldData, pages: newPages };
+        });
+        setLocalUnreadCount((prev) => prev + 1);
+      },
+      () => localStorage.getItem('access_token') || ''
+    );
+
+    void connection.start().catch(err => console.error('NotificationHub connection error:', err));
+    return () => { void connection.stop(); };
+  }, [queryClient]);
+
+  const handleOpenNotifications = async (e: React.MouseEvent<HTMLElement>) => {
+    setNotificationsAnchor(e.currentTarget);
+    if (localUnreadCount > 0) {
+      setLocalUnreadCount(0);
+      try {
+        await markAllAsRead();
+        void refetchNotifs();
+      } catch (err) {
+        console.error('Failed to mark notifications as read', err);
+      }
+    }
+  };
+
+  const allNotifications = notifData ? notifData.pages.flatMap(p => p.items) : [];
 
   const currentNavItem = NAV_ITEMS.find((item) => item.path === location.pathname);
   const initials = getInitials(user?.fullName, user?.email);
@@ -82,12 +159,11 @@ export function DashboardLayout() {
     }
   }
 
-  const sidebarBg = SIDEBAR_BACKGROUND; // Always dark navy
+  const sidebarBg = SIDEBAR_BACKGROUND;
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
 
-      {/* ── Sidebar ─────────────────────────────────────────────── */}
       <Drawer
         variant="permanent"
         aria-label="Main navigation"
@@ -98,60 +174,64 @@ export function DashboardLayout() {
             width: DRAWER_WIDTH,
             boxSizing: 'border-box',
             backgroundColor: sidebarBg,
-            borderRight: 'none',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRight: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
             display: 'flex',
             flexDirection: 'column',
             overflowX: 'hidden',
           },
         }}
       >
-        {/* Logo area */}
         <Box
           sx={{
             px: 2.5,
             py: 2.5,
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: 1.5,
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
+            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            background: 'linear-gradient(to bottom, rgba(0, 240, 255, 0.05), transparent)',
           }}
         >
-          {/* Logo image — place logo.png in src/assets/ */}
-          <Box
-            component="img"
-            src="/logo.png"
-            alt="جهاز مستقبل مصر"
-            onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-              e.currentTarget.style.display = 'none';
-            }}
-            sx={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }}
+          <img 
+            src="https://foe.gov.eg/wp-content/uploads/elementor/thumbs/logo-copy-1-qmt34vs13ki4mzgtw9e10dwdcrr44a4wz2ps1aj1a4.png" 
+            alt="Logo" 
+            style={{ 
+              width: '42px', 
+              height: 'auto',
+              filter: 'brightness(0) invert(1) drop-shadow(0 0 6px rgba(0, 240, 255, 0.5))'
+            }} 
           />
-          <Box>
+          <Box sx={{ textAlign: 'left' }}>
             <Typography
               sx={{
-                color: BRAND_GOLD,
-                fontWeight: 700,
-                fontSize: '0.85rem',
+                color: BRAND_CYAN,
+                fontWeight: 800,
+                fontSize: '0.9rem',
                 lineHeight: 1.2,
-                letterSpacing: '0.01em',
+                letterSpacing: '0.02em',
+                textShadow: '0 0 10px rgba(0, 240, 255, 0.3)',
               }}
             >
-              جهاز مستقبل مصر
+              Future of Egypt
             </Typography>
             <Typography
               sx={{
-                color: 'rgba(255,255,255,0.45)',
+                color: 'rgba(0, 240, 255, 0.6)',
                 fontSize: '0.7rem',
                 lineHeight: 1.2,
-                fontWeight: 400,
+                fontWeight: 500,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
               }}
             >
-              للتنمية المستدامة
+              Workspace
             </Typography>
           </Box>
         </Box>
 
-        {/* Navigation */}
         <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', py: 1.5, px: 1.5 }}>
           <Typography
             sx={{
@@ -185,37 +265,38 @@ export function DashboardLayout() {
                       py: 1,
                       minHeight: 42,
                       backgroundColor: isActive
-                        ? 'rgba(201,168,76,0.12)'
+                        ? 'rgba(0, 240, 255, 0.1)'
                         : 'transparent',
                       '&:hover': {
                         backgroundColor: isActive
-                          ? 'rgba(201,168,76,0.16)'
-                          : 'rgba(255,255,255,0.06)',
+                          ? 'rgba(0, 240, 255, 0.15)'
+                          : 'rgba(255,255,255,0.05)',
                       },
                       '&.Mui-selected': {
-                        backgroundColor: 'rgba(201,168,76,0.12)',
+                        backgroundColor: 'rgba(0, 240, 255, 0.1)',
                       },
                       '&.Mui-selected:hover': {
-                        backgroundColor: 'rgba(201,168,76,0.16)',
+                        backgroundColor: 'rgba(0, 240, 255, 0.15)',
                       },
-                      // Active left border indicator
                       '&::before': isActive ? {
                         content: '""',
                         position: 'absolute',
                         left: 0,
-                        top: '20%',
-                        height: '60%',
-                        width: 3,
-                        backgroundColor: BRAND_GOLD,
-                        borderRadius: '0 3px 3px 0',
+                        top: '15%',
+                        height: '70%',
+                        width: 4,
+                        backgroundColor: BRAND_CYAN,
+                        borderRadius: '0 4px 4px 0',
+                        boxShadow: `0 0 10px ${BRAND_CYAN}`,
                       } : {},
                     }}
                   >
                     <ListItemIcon
                       sx={{
                         minWidth: 36,
-                        color: isActive ? BRAND_GOLD : 'rgba(255,255,255,0.5)',
-                        transition: 'color 0.2s ease',
+                        color: isActive ? BRAND_CYAN : 'rgba(255,255,255,0.5)',
+                        transition: 'all 0.3s ease',
+                        filter: isActive ? `drop-shadow(0 0 5px ${BRAND_CYAN})` : 'none',
                         '& svg': { fontSize: '1.15rem' },
                       }}
                     >
@@ -244,7 +325,6 @@ export function DashboardLayout() {
           </List>
         </Box>
 
-        {/* User info + logout at bottom */}
         <Box
           sx={{
             borderTop: '1px solid rgba(255,255,255,0.07)',
@@ -266,8 +346,9 @@ export function DashboardLayout() {
               sx={{
                 width: 34,
                 height: 34,
-                bgcolor: BRAND_GOLD,
-                color: '#0f1923',
+                bgcolor: BRAND_CYAN,
+                color: '#000',
+                boxShadow: `0 0 15px rgba(0, 240, 255, 0.4)`,
                 fontSize: '0.8rem',
                 fontWeight: 700,
                 flexShrink: 0,
@@ -317,7 +398,6 @@ export function DashboardLayout() {
         </Box>
       </Drawer>
 
-      {/* ── Main content area ────────────────────────────────────── */}
       <Box
         component="div"
         sx={{
@@ -329,20 +409,19 @@ export function DashboardLayout() {
           transition: 'background-color 0.25s ease',
         }}
       >
-        {/* TopBar */}
         <AppBar
           position="sticky"
           elevation={0}
           sx={{
-            backgroundColor: 'background.paper',
-            borderBottom: '1px solid',
-            borderColor: 'divider',
+            backgroundColor: isDark ? 'rgba(10, 15, 26, 0.65)' : 'rgba(255, 255, 255, 0.8)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
             color: 'text.primary',
             zIndex: (theme) => theme.zIndex.drawer - 1,
           }}
         >
           <Toolbar sx={{ minHeight: '60px !important', gap: 2 }}>
-            {/* Page title */}
             <Box sx={{ flex: 1 }}>
               <Typography
                 variant="subtitle1"
@@ -357,7 +436,6 @@ export function DashboardLayout() {
               )}
             </Box>
 
-            {/* Dark mode toggle */}
             <Tooltip title={mode === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}>
               <IconButton
                 onClick={toggleMode}
@@ -380,21 +458,19 @@ export function DashboardLayout() {
               </IconButton>
             </Tooltip>
 
-            {/* Notifications (UI only) */}
             <Tooltip title="Notifications">
               <IconButton
+                onClick={handleOpenNotifications}
                 size="small"
                 aria-label="Notifications"
                 sx={{
-                  color: 'text.secondary',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: '8px',
+                  color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)',
+                  '&:hover': { color: BRAND_CYAN, background: isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0, 240, 255, 0.2)' },
                   width: 36,
                   height: 36,
                 }}
               >
-                <Badge badgeContent={0} color="error">
+                <Badge badgeContent={localUnreadCount} color="error">
                   <NotificationsNoneIcon sx={{ fontSize: '1.1rem' }} />
                 </Badge>
               </IconButton>
@@ -402,7 +478,6 @@ export function DashboardLayout() {
 
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 24, alignSelf: 'center' }} />
 
-            {/* User avatar */}
             <Avatar
               sx={{
                 width: 34,
@@ -419,7 +494,81 @@ export function DashboardLayout() {
           </Toolbar>
         </AppBar>
 
-        {/* Page content */}
+        <Popover
+          open={Boolean(notificationsAnchor)}
+          anchorEl={notificationsAnchor}
+          onClose={() => setNotificationsAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{
+            paper: {
+              sx: {
+                mt: 1.5,
+                width: 320,
+                maxHeight: 400,
+                background: isDark ? 'rgba(10, 15, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(20px)',
+                border: isDark ? '1px solid rgba(0, 240, 255, 0.2)' : '1px solid rgba(0,0,0,0.1)',
+                boxShadow: isDark ? '0 8px 32px rgba(0, 0, 0, 0.5)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                borderRadius: 2,
+              }
+            }
+          }}
+        >
+          <Box sx={{ p: 2, borderBottom: isDark ? '1px solid rgba(0, 240, 255, 0.1)' : '1px solid rgba(0,0,0,0.05)' }}>
+            <Typography sx={{ color: isDark ? '#fff' : '#000', fontWeight: 600 }}>Notifications</Typography>
+          </Box>
+          <List sx={{ p: 0, overflowY: 'auto', flex: 1, '&::-webkit-scrollbar': { width: '6px' }, '&::-webkit-scrollbar-thumb': { background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', borderRadius: '10px' } }}>
+            {isLoadingNotifs ? (
+              <Box sx={{ p: 3, textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>Loading...</Typography>
+              </Box>
+            ) : allNotifications.length === 0 ? (
+              <Box sx={{ p: 3, textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>No new notifications</Typography>
+              </Box>
+            ) : (
+              <>
+                {allNotifications.map((notif) => (
+                  <ListItemButton key={notif.id} sx={{ borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)', display: 'block', py: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography sx={{ color: isDark ? BRAND_CYAN : '#0891B2', fontWeight: 600, fontSize: '0.85rem' }}>
+                        {notif.title}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)', fontSize: '0.7rem' }}>
+                        {new Date(notif.createdAtUtc).toLocaleTimeString()}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" sx={{ color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontSize: '0.8rem', lineHeight: 1.4 }}>
+                      {notif.message}
+                    </Typography>
+                  </ListItemButton>
+                ))}
+                {hasNextPage && (
+                  <Box sx={{ p: 2, textAlign: 'center' }}>
+                    <Typography
+                      component="div"
+                      sx={{
+                        color: BRAND_CYAN,
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        '&:hover': { textDecoration: 'underline' }
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void fetchNextPage();
+                      }}
+                    >
+                      {isFetchingNextPage ? 'Loading...' : 'Load older notifications'}
+                    </Typography>
+                  </Box>
+                )}
+              </>
+            )}
+          </List>
+        </Popover>
+
         <Box
           component="main"
           id="main-content"
@@ -433,6 +582,9 @@ export function DashboardLayout() {
           <Outlet />
         </Box>
       </Box>
+
+      {/* Global Command Palette */}
+      <CommandPalette />
     </Box>
   );
 }
