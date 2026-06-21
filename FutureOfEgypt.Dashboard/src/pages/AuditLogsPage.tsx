@@ -24,6 +24,15 @@ import { ErrorState } from '../components/common/ErrorState';
 import { EmptyState } from '../components/common/EmptyState';
 import { getAuditLogs } from '../api/auditLogsApi';
 
+// Parse UTC date strings reliably — handles missing 'Z' suffix
+function safeDate(utcStr: string | null | undefined): Date | null {
+  if (!utcStr) return null;
+  // Append Z if no timezone info present
+  const normalized = /[Zz+\-]\d*$/.test(utcStr.trim()) ? utcStr : `${utcStr}Z`;
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export function AuditLogsPage() {
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -77,11 +86,12 @@ export function AuditLogsPage() {
             value={search}
             onChange={(event) => handleSearchChange(event.target.value)}
             sx={{ maxWidth: { md: 420 } }}
+            aria-label="Search audit logs"
             slotProps={{
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
                   </InputAdornment>
                 ),
               },
@@ -98,7 +108,7 @@ export function AuditLogsPage() {
         </Box>
       </Paper>
 
-      {isLoading && <LoadingState message="Loading audit logs..." />}
+      {isLoading && <LoadingState variant="table" />}
 
       {isError && (
         <ErrorState
@@ -119,14 +129,14 @@ export function AuditLogsPage() {
       {!isLoading && !isError && data && data.items.length > 0 && (
         <Paper>
           <TableContainer>
-            <Table>
+            <Table aria-label="Audit logs table">
               <TableHead>
                 <TableRow>
-                  <TableCell>Action</TableCell>
-                  <TableCell>User</TableCell>
-                  <TableCell>Entity</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell>Created At</TableCell>
+                  <TableCell scope="col">Action</TableCell>
+                  <TableCell scope="col">User</TableCell>
+                  <TableCell scope="col">Entity</TableCell>
+                  <TableCell scope="col">Description</TableCell>
+                  <TableCell scope="col">Created At</TableCell>
                 </TableRow>
               </TableHead>
 
@@ -134,17 +144,16 @@ export function AuditLogsPage() {
                 {data.items.map((log) => (
                   <TableRow key={log.publicId} hover>
                     <TableCell>
-                      <Typography sx={{ fontWeight: 700 }}>{log.action}</Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>{log.action}</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
                         {log.publicId}
                       </Typography>
                     </TableCell>
 
                     <TableCell>
-                      <Typography>{log.userName || 'System'}</Typography>
-
+                      <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>{log.userName || 'System'}</Typography>
                       {log.userId && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
                           {log.userId}
                         </Typography>
                       )}
@@ -167,7 +176,7 @@ export function AuditLogsPage() {
                     </TableCell>
 
                     <TableCell>
-                      {new Date(log.createdAtUtc).toLocaleString()}
+                      {safeDate(log.createdAtUtc)?.toLocaleString() ?? '—'}
                     </TableCell>
                   </TableRow>
                 ))}

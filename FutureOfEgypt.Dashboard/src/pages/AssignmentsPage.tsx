@@ -3,6 +3,7 @@ import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import {
+  Autocomplete,
   Box,
   Button,
   Dialog,
@@ -30,17 +31,11 @@ import { ErrorState } from '../components/common/ErrorState';
 import { EmptyState } from '../components/common/EmptyState';
 import { StatusChip } from '../components/status/StatusChip';
 import { assignDevice, getActiveAssignments } from '../api/assignmentsApi';
+import { getEngineers } from '../api/engineersApi';
+import { getDevices } from '../api/devicesApi';
 import type { AssignDeviceRequest } from '../types/assignments';
-
-interface AssignFormState {
-  engineerPublicId: string;
-  devicePublicId: string;
-}
-
-const initialFormState: AssignFormState = {
-  engineerPublicId: '',
-  devicePublicId: '',
-};
+import type { EngineerResponse } from '../types/engineers';
+import type { DeviceResponse } from '../types/devices';
 
 export function AssignmentsPage() {
   const queryClient = useQueryClient();
@@ -50,77 +45,73 @@ export function AssignmentsPage() {
   const [search, setSearch] = useState('');
 
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
-  const [formState, setFormState] = useState<AssignFormState>(initialFormState);
+  const [selectedEngineer, setSelectedEngineer] = useState<EngineerResponse | null>(null);
+  const [selectedDevice, setSelectedDevice] = useState<DeviceResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const queryParams = useMemo(
-    () => ({
-      pageNumber,
-      pageSize,
-      search: search.trim() || undefined,
-    }),
+    () => ({ pageNumber, pageSize, search: search.trim() || undefined }),
     [pageNumber, pageSize, search],
   );
 
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch,
-    isFetching,
-  } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['active-assignments', queryParams],
     queryFn: () => getActiveAssignments(queryParams),
   });
 
+  // Fetch engineers and devices for autocomplete
+  const { data: engineersData } = useQuery({
+    queryKey: ['engineers-all'],
+    queryFn: () => getEngineers({ pageNumber: 1, pageSize: 200 }),
+    staleTime: 5 * 60_000,
+    enabled: isAssignDialogOpen,
+  });
+  const { data: devicesData } = useQuery({
+    queryKey: ['devices-all'],
+    queryFn: () => getDevices({ pageNumber: 1, pageSize: 200 }),
+    staleTime: 5 * 60_000,
+    enabled: isAssignDialogOpen,
+  });
+
+  const engineers = engineersData?.items ?? [];
+  const devices = devicesData?.items ?? [];
+
   const assignMutation = useMutation({
-    mutationFn: (request: AssignDeviceRequest) => assignDevice(request),
+    mutationFn: (req: AssignDeviceRequest) => assignDevice(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['active-assignments'] });
       setIsAssignDialogOpen(false);
-      setFormState(initialFormState);
+      setSelectedEngineer(null);
+      setSelectedDevice(null);
       setFormError(null);
     },
-    onError: () => {
-      setFormError('Failed to assign device.');
-    },
+    onError: () => setFormError('Failed to assign device.'),
   });
 
-  function handleSearchChange(value: string) {
-    setSearch(value);
-    setPageNumber(1);
+  function handleAssignSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!selectedEngineer || !selectedDevice) {
+      setFormError('Please select both an engineer and a device.');
+      return;
+    }
+    setFormError(null);
+    assignMutation.mutate({
+      engineerPublicId: selectedEngineer.publicId,
+      devicePublicId: selectedDevice.publicId,
+    });
   }
 
-  function handleOpenAssignDialog() {
-    setFormState(initialFormState);
+  function openDialog() {
+    setSelectedEngineer(null);
+    setSelectedDevice(null);
     setFormError(null);
     setIsAssignDialogOpen(true);
   }
 
-  function handleCloseAssignDialog() {
-    if (assignMutation.isPending) {
-      return;
-    }
-
+  function closeDialog() {
+    if (assignMutation.isPending) return;
     setIsAssignDialogOpen(false);
     setFormError(null);
-  }
-
-  function handleAssignSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const request: AssignDeviceRequest = {
-      engineerPublicId: formState.engineerPublicId.trim(),
-      devicePublicId: formState.devicePublicId.trim(),
-    };
-
-    if (!request.engineerPublicId || !request.devicePublicId) {
-      setFormError('Please fill engineer public id and device public id.');
-      return;
-    }
-
-    setFormError(null);
-    assignMutation.mutate(request);
   }
 
   return (
@@ -130,39 +121,30 @@ export function AssignmentsPage() {
         subtitle="View and manage active engineer-device assignments."
         actionLabel="Assign Device"
         actionIcon={<AddIcon />}
-        onActionClick={handleOpenAssignDialog}
+        onActionClick={openDialog}
       />
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 2,
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexDirection: { xs: 'column', md: 'row' },
-          }}
-        >
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
           <TextField
-            fullWidth
             placeholder="Search assignments..."
             value={search}
-            onChange={(event) => handleSearchChange(event.target.value)}
-            sx={{ maxWidth: { md: 420 } }}
+            onChange={(e) => { setSearch(e.target.value); setPageNumber(1); }}
+            sx={{ maxWidth: 400 }}
+            aria-label="Search assignments"
             slotProps={{
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
                   </InputAdornment>
                 ),
               },
             }}
           />
-
           <Tooltip title="Refresh">
             <span>
-              <IconButton onClick={() => void refetch()} disabled={isFetching}>
+              <IconButton onClick={() => void refetch()} disabled={isFetching} aria-label="Refresh assignments">
                 <RefreshIcon />
               </IconButton>
             </span>
@@ -170,62 +152,40 @@ export function AssignmentsPage() {
         </Box>
       </Paper>
 
-      {isLoading && <LoadingState message="Loading assignments..." />}
-
-      {isError && (
-        <ErrorState
-          message="Failed to load assignments."
-          onRetry={() => {
-            void refetch();
-          }}
-        />
-      )}
-
+      {isLoading && <LoadingState variant="table" />}
+      {isError && <ErrorState message="Failed to load assignments." onRetry={() => { void refetch(); }} />}
       {!isLoading && !isError && data && data.items.length === 0 && (
-        <EmptyState
-          title="No active assignments found"
-          description="Assign a device to an engineer to see it here."
-        />
+        <EmptyState title="No active assignments" description="Assign a device to an engineer to see it here." />
       )}
 
       {!isLoading && !isError && data && data.items.length > 0 && (
         <Paper>
           <TableContainer>
-            <Table>
+            <Table aria-label="Assignments table">
               <TableHead>
                 <TableRow>
-                  <TableCell>Engineer</TableCell>
-                  <TableCell>Device</TableCell>
-                  <TableCell>Assigned At</TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell scope="col">Engineer</TableCell>
+                  <TableCell scope="col">Device</TableCell>
+                  <TableCell scope="col">Assigned At</TableCell>
+                  <TableCell scope="col">Status</TableCell>
                 </TableRow>
               </TableHead>
-
               <TableBody>
                 {data.items.map((assignment) => (
                   <TableRow key={assignment.publicId} hover>
                     <TableCell>
-                      <Typography sx={{ fontWeight: 600 }}>
-                        {assignment.engineerName}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>{assignment.engineerName}</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
                         {assignment.engineerPublicId}
                       </Typography>
                     </TableCell>
-
                     <TableCell>
-                      <Typography sx={{ fontWeight: 600 }}>
-                        {assignment.deviceName}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>{assignment.deviceName}</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
                         {assignment.devicePublicId}
                       </Typography>
                     </TableCell>
-
-                    <TableCell>
-                      {new Date(assignment.assignedAtUtc).toLocaleDateString()}
-                    </TableCell>
-
+                    <TableCell>{new Date(assignment.assignedAtUtc).toLocaleDateString()}</TableCell>
                     <TableCell>
                       {assignment.isActive ? (
                         <StatusChip label="Active" color="success" />
@@ -238,78 +198,54 @@ export function AssignmentsPage() {
               </TableBody>
             </Table>
           </TableContainer>
-
           <TablePagination
             component="div"
             count={data.totalCount}
             page={pageNumber - 1}
             rowsPerPage={pageSize}
             rowsPerPageOptions={[5, 10, 25, 50]}
-            onPageChange={(_, newPage) => {
-              setPageNumber(newPage + 1);
-            }}
-            onRowsPerPageChange={(event) => {
-              setPageSize(Number(event.target.value));
-              setPageNumber(1);
-            }}
+            onPageChange={(_, p) => setPageNumber(p + 1)}
+            onRowsPerPageChange={(e) => { setPageSize(Number(e.target.value)); setPageNumber(1); }}
           />
         </Paper>
       )}
 
-      <Dialog
-        open={isAssignDialogOpen}
-        onClose={handleCloseAssignDialog}
-        fullWidth
-        maxWidth="sm"
-      >
+      {/* Assign Dialog — with searchable dropdowns */}
+      <Dialog open={isAssignDialogOpen} onClose={closeDialog} fullWidth maxWidth="sm" aria-labelledby="assign-dialog-title">
         <Box component="form" onSubmit={handleAssignSubmit}>
-          <DialogTitle>Assign Device</DialogTitle>
-
+          <DialogTitle id="assign-dialog-title">Assign Device to Engineer</DialogTitle>
           <DialogContent>
             {formError && (
-              <Typography color="error" sx={{ mb: 2 }}>
-                {formError}
-              </Typography>
+              <Typography color="error" sx={{ mb: 2, fontSize: '0.875rem' }}>{formError}</Typography>
             )}
 
-            <TextField
-              fullWidth
-              label="Engineer Public Id"
-              value={formState.engineerPublicId}
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  engineerPublicId: event.target.value,
-                }))
-              }
-              sx={{ mt: 1, mb: 2 }}
+            <Autocomplete
+              options={engineers}
+              getOptionLabel={(opt) => `${opt.fullName} — ${opt.email ?? opt.publicId}`}
+              value={selectedEngineer}
+              onChange={(_, val) => setSelectedEngineer(val)}
+              renderInput={(params) => (
+                <TextField {...params} label="Engineer" placeholder="Search engineers..." sx={{ mt: 1, mb: 2 }} required />
+              )}
+              noOptionsText="No engineers found"
+              aria-label="Select engineer"
             />
 
-            <TextField
-              fullWidth
-              label="Device Public Id"
-              value={formState.devicePublicId}
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  devicePublicId: event.target.value,
-                }))
-              }
-              sx={{ mb: 2 }}
+            <Autocomplete
+              options={devices}
+              getOptionLabel={(opt) => `${opt.deviceName} — ${opt.serialNumber}`}
+              value={selectedDevice}
+              onChange={(_, val) => setSelectedDevice(val)}
+              renderInput={(params) => (
+                <TextField {...params} label="Device" placeholder="Search devices..." required />
+              )}
+              noOptionsText="No devices found"
+              aria-label="Select device"
             />
-
-            <Typography variant="body2" color="text.secondary">
-              For now, paste the engineer public id and device public id. Later we can replace this
-              with searchable dropdowns.
-            </Typography>
           </DialogContent>
-
           <DialogActions>
-            <Button onClick={handleCloseAssignDialog} disabled={assignMutation.isPending}>
-              Cancel
-            </Button>
-
-            <Button type="submit" variant="contained" disabled={assignMutation.isPending}>
+            <Button onClick={closeDialog} disabled={assignMutation.isPending}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={assignMutation.isPending || !selectedEngineer || !selectedDevice}>
               {assignMutation.isPending ? 'Assigning...' : 'Assign'}
             </Button>
           </DialogActions>

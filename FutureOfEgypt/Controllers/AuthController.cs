@@ -137,16 +137,26 @@ namespace FutureOfEgypt.Controllers
             });
         }
 
-        [Authorize(Roles = AppRoles.ADMIN)]
+        [Authorize(Policy = "AdminOnly")]
         [HttpPost("register-admin")]
-        public async Task<IActionResult> RegisterAdmin(
+        public IActionResult RegisterAdmin()
+        {
+            return BadRequest(new
+            {
+                message = "Admin can only be created once using create-first-admin."
+            });
+        }
+
+        [Authorize(Policy = "AdminOnly")]
+        [HttpPost("register-manager")]
+        public async Task<IActionResult> RegisterManager(
             [FromBody] RegisterAdminRequest request,
             CancellationToken cancellationToken)
         {
             var adminUserId = User.GetUserId();
             var adminEmail = User.GetUserEmail();
 
-            var result = await _authService.RegisterAdminAsync(
+            var result = await _authService.RegisterManagerAsync(
                 adminUserId,
                 adminEmail,
                 request,
@@ -155,7 +165,7 @@ namespace FutureOfEgypt.Controllers
             return Ok(result);
         }
 
-        [Authorize(Roles = AppRoles.ADMIN)]
+        [Authorize(Policy = "AdminOrManager")]
         [HttpPost("register-engineer")]
         public async Task<IActionResult> RegisterEngineer(
             [FromBody] RegisterEngineerUserRequest request,

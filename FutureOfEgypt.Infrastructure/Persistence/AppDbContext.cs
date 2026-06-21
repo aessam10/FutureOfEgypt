@@ -35,6 +35,8 @@ namespace FutureOfEgypt.Infrastructure.Persistence
 
         public DbSet<ChatMessage> ChatMessages { get; set; }
 
+        public DbSet<EmailMessage> EmailMessages { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

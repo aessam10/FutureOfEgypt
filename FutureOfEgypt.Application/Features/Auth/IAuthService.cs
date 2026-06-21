@@ -8,6 +8,12 @@
          RegisterAdminRequest request,
          CancellationToken cancellationToken = default);
 
+        Task<UserAccountResponse> RegisterManagerAsync(
+    Guid performedByUserId,
+    string performedByEmail,
+    RegisterAdminRequest request,
+    CancellationToken cancellationToken = default);
+
         Task<UserAccountResponse> RegisterEngineerUserAsync(
             Guid performedByUserId,
             string performedByEmail,

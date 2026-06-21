@@ -1,9 +1,9 @@
 ﻿using System.Security.Claims;
 using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.DeviceAccessRequests;
+using FutureOfEgypt.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using FutureOfEgypt.Extensions;
 
 namespace FutureOfEgypt.Controllers
 {
@@ -41,6 +41,29 @@ namespace FutureOfEgypt.Controllers
             return Ok(result);
         }
 
+        [Authorize(Roles = AppRoles.ENGINEER)]
+        [HttpGet("my-latest")]
+        public async Task<IActionResult> GetMyLatestRequest(
+            CancellationToken cancellationToken)
+        {
+            var engineerPublicIdValue = User.FindFirstValue("engineerPublicId");
+
+            if (string.IsNullOrWhiteSpace(engineerPublicIdValue))
+                return Unauthorized(new { message = "Engineer identity is missing from token." });
+
+            if (!Guid.TryParse(engineerPublicIdValue, out var engineerPublicId))
+                return Unauthorized(new { message = "Invalid engineer identity in token." });
+
+            var result = await _deviceAccessRequestService.GetLatestForEngineerAsync(
+                engineerPublicId,
+                cancellationToken);
+
+            if (result is null)
+                return Ok(null);
+
+            return Ok(result);
+        }
+
         [Authorize(Roles = AppRoles.ADMIN)]
         [HttpGet]
         public async Task<IActionResult> GetRequests(
@@ -53,6 +76,7 @@ namespace FutureOfEgypt.Controllers
 
             return Ok(result);
         }
+
         [Authorize(Roles = AppRoles.ADMIN)]
         [HttpGet("pending")]
         public async Task<IActionResult> GetPendingRequests(

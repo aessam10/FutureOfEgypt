@@ -1,0 +1,38 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+class ApiClient {
+  static const String baseUrl = "https://localhost:7029/api";
+
+  static String? token;
+
+  // 🔐 Set token after login
+  static void setToken(String newToken) {
+    token = newToken;
+  }
+
+  // 📡 Generic GET
+  static Future<http.Response> get(String endpoint) async {
+    return await http.get(
+      Uri.parse("$baseUrl/$endpoint"),
+      headers: _headers(),
+    );
+  }
+
+  // 📡 Generic POST
+  static Future<http.Response> post(String endpoint, Map data) async {
+    return await http.post(
+      Uri.parse("$baseUrl/$endpoint"),
+      headers: _headers(),
+      body: jsonEncode(data),
+    );
+  }
+
+  // 🔑 Headers (JWT ready)
+  static Map<String, String> _headers() {
+    return {
+      "Content-Type": "application/json",
+      if (token != null) "Authorization": "Bearer $token",
+    };
+  }
+}

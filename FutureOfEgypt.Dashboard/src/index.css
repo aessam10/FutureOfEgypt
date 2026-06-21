@@ -1,12 +1,124 @@
+/* ============================================================
+   Global Styles — FutureOfEgypt Dashboard
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 html,
 body,
 #root {
   width: 100%;
   min-height: 100%;
   margin: 0;
+  padding: 0;
 }
 
 body {
-  font-family: Roboto, Arial, sans-serif;
-  background: #f5f7fb;
+  font-family: 'Inter', 'Roboto', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Smooth theme transitions ─────────────────────────────── */
+body,
+.MuiPaper-root,
+.MuiAppBar-root,
+.MuiDrawer-paper,
+.MuiTableCell-root,
+.MuiInputBase-root {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+/* ─── Custom scrollbar (WebKit) ─────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(120, 140, 160, 0.35);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 140, 160, 0.6);
+}
+
+/* ─── Accessibility: Focus visible ──────────────────────────── */
+:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Leaflet overrides (dark mode compatible) ───────────────── */
+.leaflet-container {
+  font-family: 'Inter', sans-serif !important;
+  border-radius: 12px;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15) !important;
+}
+.leaflet-popup-tip-container {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+
+/* ─── Chat message area ──────────────────────────────────────── */
+.chat-messages-container {
+  scroll-behavior: smooth;
+}
+
+/* ─── Stat card hover animation ──────────────────────────────── */
+.stat-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+}
+
+/* ─── Sidebar nav item active indicator ──────────────────────── */
+.nav-item-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 3px;
+  background: #C9A84C;
+  border-radius: 0 3px 3px 0;
+}
+
+/* ─── Table row hover ────────────────────────────────────────── */
+.MuiTableRow-root.MuiTableRow-hover:hover {
+  transition: background-color 0.15s ease;
+}
+
+/* ─── Remove default outline on MUI elements, rely on focus-visible ── */
+.MuiButtonBase-root:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ─── Loader shimmer animation ───────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 1.8s infinite;
+}
+
+/* ─── Count-up animation ─────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.fade-in-up {
+  animation: fadeInUp 0.4s ease forwards;
 }

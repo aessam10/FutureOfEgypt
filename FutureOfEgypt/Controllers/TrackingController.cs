@@ -44,7 +44,7 @@ namespace FutureOfEgypt.Controllers
             });
         }
 
-        [Authorize(Roles = AppRoles.ADMIN)]
+        [Authorize(Policy = "AdminOrManager")]
         [HttpGet("latest")]
         public async Task<IActionResult> GetLatestLocations(CancellationToken cancellationToken)
         {
@@ -53,7 +53,7 @@ namespace FutureOfEgypt.Controllers
             return Ok(locations);
         }
 
-        [Authorize(Roles = AppRoles.ADMIN)]
+        [Authorize(Policy = "AdminOrManager")]
         [HttpGet("history/{devicePublicId:guid}")]
         public async Task<IActionResult> GetDeviceLocationHistory(
             Guid devicePublicId,

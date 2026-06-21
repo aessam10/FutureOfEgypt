@@ -23,4 +23,9 @@ global using Microsoft.OpenApi;
 global using System.Security.Claims;
 global using System.Text;
 global using System.Threading.RateLimiting;
+global using FutureOfEgypt.Application.Common.Security;
+global using FutureOfEgypt.Application.Features.Chat;
+global using FutureOfEgypt.Application.Features.Email;
+global using FutureOfEgypt.Application.Features.Email.FutureOfEgypt.Application.Features.Emails;
+global using FutureOfEgypt.Infrastructure.Services.Email;
 

@@ -7,5 +7,6 @@ export const routes = {
   deviceRequests: '/device-requests',
   liveMap: '/live-map',
   chat: '/chat',
+  emails: '/emails',
   auditLogs: '/audit-logs',
 };

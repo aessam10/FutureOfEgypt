@@ -67,6 +67,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                 UserName = email,
                 Email = email,
                 FullName = request.FullName.Trim(),
+                CompanyEmail = string.IsNullOrWhiteSpace(request.CompanyEmail)
+                    ? null
+                    : request.CompanyEmail.Trim().ToLowerInvariant(),
                 EngineerId = null
             };
 
@@ -99,6 +102,78 @@ namespace FutureOfEgypt.Infrastructure.Services
                     EntityName = nameof(ApplicationUser),
                     EntityPublicId = user.Id,
                     Description = $"Admin created admin user '{user.Email}'.",
+                    MetadataJson = JsonSerializer.Serialize(new
+                    {
+                        createdUserId = user.Id,
+                        user.Email,
+                        user.FullName,
+                        roles = response.Roles
+                    })
+                },
+                cancellationToken);
+
+            return response;
+        }
+
+        public async Task<UserAccountResponse> RegisterManagerAsync(
+    Guid performedByUserId,
+    string performedByEmail,
+    RegisterAdminRequest request,
+    CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(request.FullName))
+                throw new InvalidOperationException("Full name is required.");
+
+            if (string.IsNullOrWhiteSpace(request.Email))
+                throw new InvalidOperationException("Email is required.");
+
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new InvalidOperationException("Password is required.");
+
+            await EnsureRoleExistsAsync(AppRoles.MANAGER);
+
+            var email = request.Email.Trim();
+
+            var existingUser = await _userManager.FindByEmailAsync(email);
+
+            if (existingUser is not null)
+                throw new InvalidOperationException("Email is already registered.");
+
+            var user = new ApplicationUser
+            {
+                UserName = email,
+                Email = email,
+                FullName = request.FullName.Trim(),
+                EngineerId = null
+            };
+
+            var createResult = await _userManager.CreateAsync(user, request.Password);
+
+            if (!createResult.Succeeded)
+            {
+                var errors = string.Join(", ", createResult.Errors.Select(x => x.Description));
+                throw new InvalidOperationException(errors);
+            }
+
+            var roleResult = await _userManager.AddToRoleAsync(user, AppRoles.MANAGER);
+
+            if (!roleResult.Succeeded)
+            {
+                var errors = string.Join(", ", roleResult.Errors.Select(x => x.Description));
+                throw new InvalidOperationException(errors);
+            }
+
+            var response = await BuildUserAccountResponseAsync(user, cancellationToken);
+
+            await _auditLogService.CreateAsync(
+                new CreateAuditLogRequest
+                {
+                    ActionType = AuditActionType.AdminUserCreated,
+                    PerformedByUserId = performedByUserId,
+                    PerformedByEmail = performedByEmail,
+                    EntityName = nameof(ApplicationUser),
+                    EntityPublicId = user.Id,
+                    Description = $"Admin created manager user '{user.Email}'.",
                     MetadataJson = JsonSerializer.Serialize(new
                     {
                         createdUserId = user.Id,
@@ -196,6 +271,36 @@ namespace FutureOfEgypt.Infrastructure.Services
                 cancellationToken);
 
             return response;
+        }
+
+        private async Task<(Guid? DevicePublicId, string? DeviceName)> GetActiveDeviceForUserAsync(
+    ApplicationUser user,
+    CancellationToken cancellationToken = default)
+        {
+            if (!user.EngineerId.HasValue)
+                return (null, null);
+
+            var activeDevice = await _context.EngineerDevices
+                .AsNoTracking()
+                .Include(x => x.Device)
+                .Where(x => x.EngineerId == user.EngineerId.Value
+                            && x.IsActive
+                            && !x.IsDeleted
+                            && x.Device != null
+                            && !x.Device.IsDeleted
+                            && x.Device.Status == DeviceStatus.Active)
+                .OrderByDescending(x => x.AssignedAtUtc)
+                .Select(x => new
+                {
+                    x.Device!.PublicId,
+                    x.Device.DeviceName
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (activeDevice is null)
+                return (null, null);
+
+            return (activeDevice.PublicId, activeDevice.DeviceName);
         }
 
         public async Task<AuthResponse> LoginAsync(
@@ -362,6 +467,8 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var roles = await _userManager.GetRolesAsync(user);
 
+            var activeDevice = await GetActiveDeviceForUserAsync(user, cancellationToken);
+
             var jwt = GenerateJwtToken(user, engineerPublicId, roles);
 
             await _context.SaveChangesAsync(cancellationToken);
@@ -370,6 +477,8 @@ namespace FutureOfEgypt.Infrastructure.Services
             {
                 UserId = user.Id,
                 EngineerPublicId = engineerPublicId,
+                DevicePublicId = activeDevice.DevicePublicId,
+                DeviceName = activeDevice.DeviceName,
                 FullName = user.FullName,
                 Email = user.Email ?? string.Empty,
                 Roles = roles.ToList(),
@@ -459,6 +568,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                     .FirstOrDefaultAsync(cancellationToken);
             }
 
+            var activeDevice = await GetActiveDeviceForUserAsync(user, cancellationToken);
+
             var roles = await _userManager.GetRolesAsync(user);
 
             var jwt = GenerateJwtToken(user, engineerPublicId, roles);
@@ -471,6 +582,8 @@ namespace FutureOfEgypt.Infrastructure.Services
             {
                 UserId = user.Id,
                 EngineerPublicId = engineerPublicId,
+                DevicePublicId = activeDevice.DevicePublicId,
+                DeviceName = activeDevice.DeviceName,
                 FullName = user.FullName,
                 Email = user.Email ?? string.Empty,
                 Roles = roles.ToList(),

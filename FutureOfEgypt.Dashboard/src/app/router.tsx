@@ -12,6 +12,7 @@ import { ChatPage } from '../pages/ChatPage';
 import { AuditLogsPage } from '../pages/AuditLogsPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { routes } from './routes';
+import { EmailsPage } from '../pages/EmailsPage';
 
 export const router = createBrowserRouter([
   {
@@ -55,6 +56,10 @@ export const router = createBrowserRouter([
           {
             path: routes.chat,
             element: <ChatPage />,
+          },
+          {
+            path: routes.emails,
+            element: <EmailsPage />,
           },
           {
             path: routes.auditLogs,

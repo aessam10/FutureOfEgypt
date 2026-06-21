@@ -40,13 +40,16 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             if (engineer is null)
                 throw new InvalidOperationException("Engineer does not exist.");
+
             if (engineer.Status != EngineerStatus.Active)
                 throw new InvalidOperationException("Engineer is not active.");
 
             var serialNumber = request.SerialNumber.Trim();
+
             var installationId = string.IsNullOrWhiteSpace(request.InstallationId)
-    ? null
-    : request.InstallationId.Trim();
+                ? null
+                : request.InstallationId.Trim();
+
             var existingPendingRequestQuery = _context.DeviceAccessRequests
                 .Include(x => x.Engineer)
                 .Include(x => x.CreatedDevice)
@@ -89,7 +92,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                     cancellationToken);
 
             if (alreadyApprovedDevice is not null &&
-    alreadyApprovedDevice.Status is DeviceStatus.Blocked or DeviceStatus.Lost)
+                alreadyApprovedDevice.Status is DeviceStatus.Blocked or DeviceStatus.Lost)
             {
                 throw new InvalidOperationException("This device cannot request access.");
             }
@@ -126,6 +129,23 @@ namespace FutureOfEgypt.Infrastructure.Services
             accessRequest.Engineer = engineer;
 
             return Map(accessRequest);
+        }
+
+        public async Task<DeviceAccessRequestResponse?> GetLatestForEngineerAsync(
+            Guid engineerPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            var latestRequest = await _context.DeviceAccessRequests
+                .AsNoTracking()
+                .Include(x => x.Engineer)
+                .Include(x => x.CreatedDevice)
+                .Where(x => !x.IsDeleted
+                            && x.Engineer != null
+                            && x.Engineer.PublicId == engineerPublicId)
+                .OrderByDescending(x => x.RequestedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return latestRequest is null ? null : MapProjection(latestRequest);
         }
 
         public async Task<PagedResponse<DeviceAccessRequestResponse>> GetRequestsAsync(
@@ -181,7 +201,6 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (!string.IsNullOrWhiteSpace(request.SerialNumber))
             {
                 var serialNumber = request.SerialNumber.Trim();
-
                 query = query.Where(x => x.SerialNumber == serialNumber);
             }
 
@@ -393,6 +412,7 @@ namespace FutureOfEgypt.Infrastructure.Services
             accessRequest.UpdatedAt = now;
 
             await _context.SaveChangesAsync(cancellationToken);
+
             await _auditLogService.CreateAsync(
                 new CreateAuditLogRequest
                 {
@@ -414,6 +434,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                     })
                 },
                 cancellationToken);
+
             return Map(accessRequest);
         }
 

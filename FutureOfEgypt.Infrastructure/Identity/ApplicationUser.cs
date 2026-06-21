@@ -9,6 +9,8 @@ namespace FutureOfEgypt.Infrastructure.Identity
 
         public int? EngineerId { get; set; }
 
+        public string? CompanyEmail { get; set; }
+
         public Engineer? Engineer { get; set; }
     }
 }

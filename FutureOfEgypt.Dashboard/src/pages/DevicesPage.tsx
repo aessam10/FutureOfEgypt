@@ -36,11 +36,7 @@ import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { EmptyState } from '../components/common/EmptyState';
 import { DeviceStatusChip } from '../components/status/DeviceStatusChip';
-import {
-  createDevice,
-  getDevices,
-  updateDeviceStatus,
-} from '../api/devicesApi';
+import { createDevice, getDevices, updateDeviceStatus } from '../api/devicesApi';
 import type { CreateDeviceRequest, DeviceResponse } from '../types/devices';
 
 const ACTIVE_STATUS = 1;
@@ -52,185 +48,103 @@ interface DeviceFormState {
   imei: string;
   status: number;
 }
-
 const initialFormState: DeviceFormState = {
-  deviceName: '',
-  serialNumber: '',
-  imei: '',
-  status: ACTIVE_STATUS,
+  deviceName: '', serialNumber: '', imei: '', status: ACTIVE_STATUS,
 };
 
 export function DevicesPage() {
   const queryClient = useQueryClient();
-
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
-
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [formState, setFormState] = useState<DeviceFormState>(initialFormState);
   const [formError, setFormError] = useState<string | null>(null);
-
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<DeviceResponse | null>(null);
 
   const queryParams = useMemo(
-    () => ({
-      pageNumber,
-      pageSize,
-      search: search.trim() || undefined,
-    }),
+    () => ({ pageNumber, pageSize, search: search.trim() || undefined }),
     [pageNumber, pageSize, search],
   );
 
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch,
-    isFetching,
-  } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['devices', queryParams],
     queryFn: () => getDevices(queryParams),
   });
 
   const createMutation = useMutation({
-    mutationFn: (request: CreateDeviceRequest) => createDevice(request),
+    mutationFn: (req: CreateDeviceRequest) => createDevice(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['devices'] });
       setIsCreateDialogOpen(false);
       setFormState(initialFormState);
       setFormError(null);
     },
-    onError: () => {
-      setFormError('Failed to create device.');
-    },
+    onError: () => setFormError('Failed to create device.'),
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({
-      devicePublicId,
-      status,
-    }: {
-      devicePublicId: string;
-      status: number;
-    }) =>
-      updateDeviceStatus(devicePublicId, {
-        status,
-      }),
+    mutationFn: ({ devicePublicId, status }: { devicePublicId: string; status: number }) =>
+      updateDeviceStatus(devicePublicId, { status }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['devices'] });
-      handleCloseMenu();
+      setMenuAnchor(null);
+      setSelectedDevice(null);
     },
   });
 
-  function handleSearchChange(value: string) {
-    setSearch(value);
-    setPageNumber(1);
-  }
-
-  function handleOpenCreateDialog() {
-    setFormState(initialFormState);
-    setFormError(null);
-    setIsCreateDialogOpen(true);
-  }
-
-  function handleCloseCreateDialog() {
-    if (createMutation.isPending) {
-      return;
-    }
-
-    setIsCreateDialogOpen(false);
-    setFormError(null);
-  }
-
-  function handleStatusChange(event: SelectChangeEvent<number>) {
-    setFormState((current) => ({
-      ...current,
-      status: Number(event.target.value),
-    }));
-  }
-
-  function handleCreateSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const request: CreateDeviceRequest = {
+  function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const req: CreateDeviceRequest = {
       deviceName: formState.deviceName.trim(),
       serialNumber: formState.serialNumber.trim(),
       imei: formState.imei.trim(),
       status: formState.status,
     };
-
-    if (!request.deviceName || !request.serialNumber || !request.imei) {
+    if (!req.deviceName || !req.serialNumber || !req.imei) {
       setFormError('Please fill all required fields.');
       return;
     }
-
     setFormError(null);
-    createMutation.mutate(request);
-  }
-
-  function handleOpenMenu(event: React.MouseEvent<HTMLElement>, device: DeviceResponse) {
-    setMenuAnchor(event.currentTarget);
-    setSelectedDevice(device);
-  }
-
-  function handleCloseMenu() {
-    setMenuAnchor(null);
-    setSelectedDevice(null);
-  }
-
-  function handleChangeDeviceStatus(status: number) {
-    if (!selectedDevice) {
-      return;
-    }
-
-    updateStatusMutation.mutate({
-      devicePublicId: selectedDevice.publicId,
-      status,
-    });
+    createMutation.mutate(req);
   }
 
   return (
     <>
       <PageHeader
         title="Devices"
-        subtitle="Manage company devices and activation status."
+        subtitle="Manage company tablets and mobile devices."
         actionLabel="Add Device"
         actionIcon={<AddIcon />}
-        onActionClick={handleOpenCreateDialog}
+        onActionClick={() => {
+          setFormState(initialFormState);
+          setFormError(null);
+          setIsCreateDialogOpen(true);
+        }}
       />
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 2,
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexDirection: { xs: 'column', md: 'row' },
-          }}
-        >
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
           <TextField
-            fullWidth
-            placeholder="Search devices..."
+            placeholder="Search devices by name or serial..."
             value={search}
-            onChange={(event) => handleSearchChange(event.target.value)}
-            sx={{ maxWidth: { md: 420 } }}
+            onChange={(e) => { setSearch(e.target.value); setPageNumber(1); }}
+            sx={{ maxWidth: 400 }}
+            aria-label="Search devices"
             slotProps={{
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
                   </InputAdornment>
                 ),
               },
             }}
           />
-
           <Tooltip title="Refresh">
             <span>
-              <IconButton onClick={() => void refetch()} disabled={isFetching}>
+              <IconButton onClick={() => void refetch()} disabled={isFetching} aria-label="Refresh devices list">
                 <RefreshIcon />
               </IconButton>
             </span>
@@ -238,100 +152,82 @@ export function DevicesPage() {
         </Box>
       </Paper>
 
-      {isLoading && <LoadingState message="Loading devices..." />}
-
-      {isError && (
-        <ErrorState
-          message="Failed to load devices."
-          onRetry={() => {
-            void refetch();
-          }}
-        />
-      )}
-
+      {isLoading && <LoadingState variant="table" />}
+      {isError && <ErrorState message="Failed to load devices." onRetry={() => { void refetch(); }} />}
       {!isLoading && !isError && data && data.items.length === 0 && (
-        <EmptyState
-          title="No devices found"
-          description="Try changing your search filters or add a new device."
-        />
+        <EmptyState title="No devices found" description="Add a new device or change your search filters." />
       )}
 
       {!isLoading && !isError && data && data.items.length > 0 && (
         <Paper>
           <TableContainer>
-            <Table>
+            <Table aria-label="Devices table">
               <TableHead>
                 <TableRow>
-                  <TableCell>Device</TableCell>
-                  <TableCell>Serial Number</TableCell>
-                  <TableCell>IMEI</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Created At</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell scope="col">Device</TableCell>
+                  <TableCell scope="col">Serial Number</TableCell>
+                  <TableCell scope="col">IMEI</TableCell>
+                  <TableCell scope="col">Status</TableCell>
+                  <TableCell scope="col">Created</TableCell>
+                  <TableCell scope="col" align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
-
               <TableBody>
                 {data.items.map((device) => (
                   <TableRow key={device.publicId} hover>
                     <TableCell>
-                      <Typography sx={{ fontWeight: 600 }}>{device.deviceName}</Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>{device.deviceName}</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
                         {device.publicId}
                       </Typography>
                     </TableCell>
-
-                    <TableCell>{device.serialNumber}</TableCell>
-
-                    <TableCell>{device.imei}</TableCell>
-
-                    <TableCell>
-                      <DeviceStatusChip status={device.status} />
-                    </TableCell>
-
-                    <TableCell>
-                      {new Date(device.createdAt).toLocaleDateString()}
-                    </TableCell>
-
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{device.serialNumber}</TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{device.imei}</TableCell>
+                    <TableCell><DeviceStatusChip status={device.status} /></TableCell>
+                    <TableCell>{new Date(device.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell align="right">
-                      <IconButton onClick={(event) => handleOpenMenu(event, device)}>
-                        <MoreVertIcon />
-                      </IconButton>
+                      <Tooltip title="Options">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => { setMenuAnchor(e.currentTarget); setSelectedDevice(device); }}
+                          aria-label={`Options for ${device.deviceName}`}
+                          aria-haspopup="menu"
+                        >
+                          <MoreVertIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </TableContainer>
-
           <TablePagination
             component="div"
             count={data.totalCount}
             page={pageNumber - 1}
             rowsPerPage={pageSize}
             rowsPerPageOptions={[5, 10, 25, 50]}
-            onPageChange={(_, newPage) => {
-              setPageNumber(newPage + 1);
-            }}
-            onRowsPerPageChange={(event) => {
-              setPageSize(Number(event.target.value));
-              setPageNumber(1);
-            }}
+            onPageChange={(_, p) => setPageNumber(p + 1)}
+            onRowsPerPageChange={(e) => { setPageSize(Number(e.target.value)); setPageNumber(1); }}
           />
         </Paper>
       )}
 
-      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={handleCloseMenu}>
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={() => { setMenuAnchor(null); setSelectedDevice(null); }}
+      >
         <MenuItem
           disabled={selectedDevice?.status === ACTIVE_STATUS || updateStatusMutation.isPending}
-          onClick={() => handleChangeDeviceStatus(ACTIVE_STATUS)}
+          onClick={() => { if (selectedDevice) updateStatusMutation.mutate({ devicePublicId: selectedDevice.publicId, status: ACTIVE_STATUS }); }}
         >
           Mark as Active
         </MenuItem>
-
         <MenuItem
           disabled={selectedDevice?.status === INACTIVE_STATUS || updateStatusMutation.isPending}
-          onClick={() => handleChangeDeviceStatus(INACTIVE_STATUS)}
+          onClick={() => { if (selectedDevice) updateStatusMutation.mutate({ devicePublicId: selectedDevice.publicId, status: INACTIVE_STATUS }); }}
         >
           Mark as Inactive
         </MenuItem>
@@ -339,79 +235,35 @@ export function DevicesPage() {
 
       <Dialog
         open={isCreateDialogOpen}
-        onClose={handleCloseCreateDialog}
-        fullWidth
-        maxWidth="sm"
+        onClose={() => { if (!createMutation.isPending) { setIsCreateDialogOpen(false); setFormError(null); } }}
+        fullWidth maxWidth="sm"
+        aria-labelledby="create-device-title"
       >
         <Box component="form" onSubmit={handleCreateSubmit}>
-          <DialogTitle>Add Device</DialogTitle>
-
+          <DialogTitle id="create-device-title">Add Device</DialogTitle>
           <DialogContent>
             {formError && (
-              <Typography color="error" sx={{ mb: 2 }}>
-                {formError}
-              </Typography>
+              <Typography color="error" sx={{ mb: 2, fontSize: '0.875rem' }}>{formError}</Typography>
             )}
-
-            <TextField
-              fullWidth
-              label="Device Name"
-              value={formState.deviceName}
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  deviceName: event.target.value,
-                }))
-              }
-              sx={{ mt: 1, mb: 2 }}
-            />
-
-            <TextField
-              fullWidth
-              label="Serial Number"
-              value={formState.serialNumber}
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  serialNumber: event.target.value,
-                }))
-              }
-              sx={{ mb: 2 }}
-            />
-
-            <TextField
-              fullWidth
-              label="IMEI"
-              value={formState.imei}
-              onChange={(event) =>
-                setFormState((current) => ({
-                  ...current,
-                  imei: event.target.value,
-                }))
-              }
-              sx={{ mb: 2 }}
-            />
-
-            <FormControl fullWidth>
+            <TextField fullWidth label="Device Name" required value={formState.deviceName}
+              onChange={(e) => setFormState((s) => ({ ...s, deviceName: e.target.value }))} sx={{ mt: 1, mb: 2 }} />
+            <TextField fullWidth label="Serial Number" required value={formState.serialNumber}
+              onChange={(e) => setFormState((s) => ({ ...s, serialNumber: e.target.value }))} sx={{ mb: 2 }} />
+            <TextField fullWidth label="IMEI" required value={formState.imei}
+              onChange={(e) => setFormState((s) => ({ ...s, imei: e.target.value }))} sx={{ mb: 2 }} />
+            <FormControl fullWidth size="small">
               <InputLabel>Status</InputLabel>
-              <Select
-                label="Status"
-                value={formState.status}
-                onChange={handleStatusChange}
-              >
+              <Select label="Status" value={formState.status}
+                onChange={(e: SelectChangeEvent<number>) => setFormState((s) => ({ ...s, status: Number(e.target.value) }))}>
                 <MenuItem value={ACTIVE_STATUS}>Active</MenuItem>
                 <MenuItem value={INACTIVE_STATUS}>Inactive</MenuItem>
               </Select>
             </FormControl>
           </DialogContent>
-
           <DialogActions>
-            <Button onClick={handleCloseCreateDialog} disabled={createMutation.isPending}>
-              Cancel
-            </Button>
-
+            <Button onClick={() => { setIsCreateDialogOpen(false); setFormError(null); }} disabled={createMutation.isPending}>Cancel</Button>
             <Button type="submit" variant="contained" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Saving...' : 'Save'}
+              {createMutation.isPending ? 'Saving...' : 'Save Device'}
             </Button>
           </DialogActions>
         </Box>

@@ -7,5 +7,7 @@
         public string Email { get; set; } = string.Empty;
 
         public string Password { get; set; } = string.Empty;
+
+        public string? CompanyEmail { get; set; } = string.Empty;
     }
 }

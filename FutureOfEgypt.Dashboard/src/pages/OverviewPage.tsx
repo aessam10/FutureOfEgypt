@@ -1,4 +1,4 @@
-import { Grid } from '@mui/material';
+import { Box } from '@mui/material';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import DevicesIcon from '@mui/icons-material/Devices';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -13,14 +13,10 @@ import { ErrorState } from '../components/common/ErrorState';
 import { getDashboardSummary } from '../api/dashboardApi';
 
 export function OverviewPage() {
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['dashboard-summary'],
     queryFn: getDashboardSummary,
+    refetchInterval: 60_000,
   });
 
   if (isLoading) {
@@ -31,9 +27,7 @@ export function OverviewPage() {
     return (
       <ErrorState
         message="Failed to load dashboard summary."
-        onRetry={() => {
-          void refetch();
-        }}
+        onRetry={() => { void refetch(); }}
       />
     );
   }
@@ -42,64 +36,65 @@ export function OverviewPage() {
     <>
       <PageHeader
         title="Overview"
-        subtitle="Quick summary of engineers, devices, assignments, and requests."
+        subtitle="Real-time summary of engineers, devices, assignments, and requests."
       />
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 2.5,
+        }}
+      >
+        <StatCard
             title="Total Engineers"
             value={data.totalEngineers}
             icon={<EngineeringIcon />}
             helperText={`${data.activeEngineers} active`}
+            accent="default"
           />
-        </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
+        <StatCard
             title="Total Devices"
             value={data.totalDevices}
             icon={<DevicesIcon />}
             helperText={`${data.activeDevices} active`}
+            accent="info"
           />
-        </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
+        <StatCard
             title="Active Assignments"
             value={data.activeAssignments}
             icon={<AssignmentIcon />}
             helperText="Currently assigned devices"
+            accent="success"
           />
-        </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
+        <StatCard
             title="Pending Requests"
             value={data.pendingDeviceAccessRequests}
             icon={<PendingActionsIcon />}
             helperText="Awaiting admin action"
+            accent={data.pendingDeviceAccessRequests > 0 ? 'warning' : 'default'}
           />
-        </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
+        <StatCard
             title="Online Engineers"
             value={data.onlineEngineers}
             icon={<WifiIcon />}
             helperText="Recently active"
+            accent="success"
+            trend={data.onlineEngineers > 0 ? 'up' : 'neutral'}
           />
-        </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
+        <StatCard
             title="Offline Engineers"
             value={data.offlineEngineers}
             icon={<WifiOffIcon />}
             helperText="No recent location update"
+            accent={data.offlineEngineers > 0 ? 'error' : 'default'}
           />
-        </Grid>
-      </Grid>
+      </Box>
     </>
   );
 }

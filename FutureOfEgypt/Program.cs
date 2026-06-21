@@ -1,5 +1,3 @@
-using FutureOfEgypt.Application.Features.Chat;
-
 namespace FutureOfEgypt
 {
     public class Program
@@ -127,6 +125,7 @@ namespace FutureOfEgypt
                     Description = "Enter JWT token only."
                 });
             });
+            builder.Services.Configure<SmtpEmailSettings>(builder.Configuration.GetSection("SmtpEmail"));
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
             if (string.IsNullOrWhiteSpace(connectionString))
@@ -135,6 +134,14 @@ namespace FutureOfEgypt
             builder.Services.AddDbContext<AppDbContext>(options =>
             {
                 options.UseNpgsql(connectionString);
+            });
+            builder.Services.AddAuthorization(options =>
+            {
+                options.AddPolicy("AdminOnly", policy =>
+                    policy.RequireRole(AppRoles.ADMIN));
+
+                options.AddPolicy("AdminOrManager", policy =>
+                    policy.RequireRole(AppRoles.ADMIN, AppRoles.MANAGER));
             });
             builder.Services.AddScoped<ITrackingService, TrackingService>();
             builder.Services.AddScoped<IEngineerService, EngineerService>(); 
@@ -147,6 +154,8 @@ namespace FutureOfEgypt
             builder.Services.AddScoped<IAuditLogService, AuditLogService>();
             builder.Services.AddScoped<IChatService, ChatService>();
             builder.Services.AddScoped<IChatRealtimeNotifier, SignalRChatRealtimeNotifier>();
+            builder.Services.AddScoped<IEmailService, EmailService>();
+            builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
             builder.Services.AddIdentity<ApplicationUser, ApplicationRole>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
             var jwtKey = builder.Configuration["Jwt:Key"];
 

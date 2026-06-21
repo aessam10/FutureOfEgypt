@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 import SendIcon from '@mui/icons-material/Send';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import {
+  Autocomplete,
+  Avatar,
   Badge,
   Box,
   Button,
@@ -18,6 +20,7 @@ import {
   ListItemButton,
   Paper,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,6 +36,7 @@ import {
   markConversationAsRead,
   sendChatMessage,
 } from '../api/chatApi';
+import { getEngineers } from '../api/engineersApi';
 import { createChatHubConnection } from '../signalr/chatHub';
 import { useAuth } from '../auth/AuthContext';
 import type {
@@ -42,31 +46,51 @@ import type {
   CreateGroupChatRequest,
 } from '../types/chat';
 
-function getConversationTitle(conversation: ChatConversationResponse) {
-  if (conversation.title) {
-    return conversation.title;
-  }
-
-  const firstParticipant = conversation.participants[0];
-
-  return firstParticipant?.displayName ?? 'Direct conversation';
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function getConversationTitle(conversation: ChatConversationResponse): string {
+  if (conversation.title) return conversation.title;
+  const first = conversation.participants[0];
+  return first?.displayName ?? 'Direct conversation';
 }
 
-function convertRealtimeMessageToMessage(
-  message: ChatRealtimeMessageResponse,
+function getConversationInitials(title: string): string {
+  const parts = title.split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return title.slice(0, 2).toUpperCase();
+}
+
+function formatMessageTime(utcStr: string): string {
+  return new Date(utcStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatConversationTime(utcStr: string): string {
+  const d = new Date(utcStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return d.toLocaleDateString();
+}
+
+function convertRealtimeToMessage(
+  msg: ChatRealtimeMessageResponse,
   currentUserId?: string,
 ): ChatMessageResponse {
   return {
-    publicId: message.publicId,
-    senderUserId: message.senderUserId,
-    senderName: message.senderName,
-    messageText: message.messageText,
-    type: message.type,
-    sentAtUtc: message.sentAtUtc,
-    isMine: message.senderUserId === currentUserId,
+    publicId: msg.publicId,
+    senderUserId: msg.senderUserId,
+    senderName: msg.senderName,
+    messageText: msg.messageText,
+    type: msg.type,
+    sentAtUtc: msg.sentAtUtc,
+    isMine: msg.senderUserId === currentUserId,
   };
 }
 
+// ─── Component ───────────────────────────────────────────────────────────────
 export function ChatPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -76,21 +100,23 @@ export function ChatPage() {
     useState<ChatConversationResponse | null>(null);
   const [messageText, setMessageText] = useState('');
 
+  // Direct dialog
   const [isDirectDialogOpen, setIsDirectDialogOpen] = useState(false);
-  const [targetUserId, setTargetUserId] = useState('');
+  const [selectedEngineerUserId, setSelectedEngineerUserId] = useState<string>('');
   const [directDialogError, setDirectDialogError] = useState<string | null>(null);
 
+  // Group dialog
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
   const [groupTitle, setGroupTitle] = useState('');
   const [groupParticipantIds, setGroupParticipantIds] = useState('');
   const [groupDialogError, setGroupDialogError] = useState<string | null>(null);
 
-  const queryParams = useMemo(
-    () => ({
-      pageNumber: 1,
-      pageSize: 30,
-      search: search.trim() || undefined,
-    }),
+  // Scroll ref for auto-scroll to bottom
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // ── Queries ────────────────────────────────────────────────────
+  const conversationQueryParams = useMemo(
+    () => ({ pageNumber: 1, pageSize: 30, search: search.trim() || undefined }),
     [search],
   );
 
@@ -100,8 +126,8 @@ export function ChatPage() {
     isError: isConversationsError,
     refetch: refetchConversations,
   } = useQuery({
-    queryKey: ['chat-conversations', queryParams],
-    queryFn: () => getMyConversations(queryParams),
+    queryKey: ['chat-conversations', conversationQueryParams],
+    queryFn: () => getMyConversations(conversationQueryParams),
   });
 
   const selectedConversationPublicId = selectedConversation?.publicId;
@@ -121,25 +147,26 @@ export function ChatPage() {
     enabled: Boolean(selectedConversationPublicId),
   });
 
+  // Engineers list for autocomplete in direct dialog
+  const { data: engineersData } = useQuery({
+    queryKey: ['engineers-all'],
+    queryFn: () => getEngineers({ pageNumber: 1, pageSize: 100 }),
+    staleTime: 5 * 60_000,
+  });
+
+  const engineers = engineersData?.items ?? [];
+
+  // ── Mutations ──────────────────────────────────────────────────
   const markReadMutation = useMutation({
-    mutationFn: (conversationPublicId: string) =>
-      markConversationAsRead(conversationPublicId),
+    mutationFn: (id: string) => markConversationAsRead(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
     },
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: ({
-      conversationPublicId,
-      text,
-    }: {
-      conversationPublicId: string;
-      text: string;
-    }) =>
-      sendChatMessage(conversationPublicId, {
-        messageText: text,
-      }),
+    mutationFn: ({ conversationPublicId, text }: { conversationPublicId: string; text: string }) =>
+      sendChatMessage(conversationPublicId, { messageText: text }),
     onSuccess: async () => {
       setMessageText('');
       await queryClient.invalidateQueries({
@@ -150,20 +177,15 @@ export function ChatPage() {
   });
 
   const createDirectMutation = useMutation({
-    mutationFn: (userId: string) =>
-      createDirectConversation({
-        targetUserId: userId,
-      }),
+    mutationFn: (userId: string) => createDirectConversation({ targetUserId: userId }),
     onSuccess: async (conversation) => {
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       setSelectedConversation(conversation);
       setIsDirectDialogOpen(false);
-      setTargetUserId('');
+      setSelectedEngineerUserId('');
       setDirectDialogError(null);
     },
-    onError: () => {
-      setDirectDialogError('Failed to create direct conversation.');
-    },
+    onError: () => setDirectDialogError('Failed to create direct conversation.'),
   });
 
   const createGroupMutation = useMutation({
@@ -176,11 +198,10 @@ export function ChatPage() {
       setGroupParticipantIds('');
       setGroupDialogError(null);
     },
-    onError: () => {
-      setGroupDialogError('Failed to create group conversation.');
-    },
+    onError: () => setGroupDialogError('Failed to create group conversation.'),
   });
 
+  // ── SignalR ────────────────────────────────────────────────────
   useEffect(() => {
     const connection = createChatHubConnection({
       onMessageReceived: (message) => {
@@ -190,29 +211,17 @@ export function ChatPage() {
           queryClient.setQueryData(
             ['chat-messages', selectedConversationPublicId],
             (current: typeof messagesData | undefined) => {
-              if (!current) {
-                return current;
-              }
-
-              const alreadyExists = current.items.some(
-                (item) => item.publicId === message.publicId,
-              );
-
-              if (alreadyExists) {
-                return current;
-              }
-
+              if (!current) return current;
+              const alreadyExists = current.items.some((i) => i.publicId === message.publicId);
+              if (alreadyExists) return current;
               return {
                 ...current,
-                items: [
-                  convertRealtimeMessageToMessage(message, user?.userId),
-                  ...current.items,
-                ],
+                // Append to end — newest messages at the bottom
+                items: [...current.items, convertRealtimeToMessage(message, user?.userId)],
                 totalCount: current.totalCount + 1,
               };
             },
           );
-
           void markReadMutation.mutateAsync(message.conversationPublicId);
         }
       },
@@ -228,123 +237,82 @@ export function ChatPage() {
     });
 
     void connection.start();
+    return () => { void connection.stop(); };
+  }, [queryClient, selectedConversationPublicId, user?.userId]);
 
-    return () => {
-      void connection.stop();
-    };
-}, [queryClient, selectedConversationPublicId, user?.userId]);
-
+  // Mark as read when conversation selected
   useEffect(() => {
     if (selectedConversationPublicId) {
       markReadMutation.mutate(selectedConversationPublicId);
     }
   }, [selectedConversationPublicId]);
 
+  // ── Auto scroll to bottom ─────────────────────────────────────
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messagesData?.items]);
+
+  // ── Sorted messages (oldest → newest for display) ─────────────
+  // API returns newest-first (page 1 = most recent), so we reverse for display
+  const sortedMessages = useMemo(() => {
+    if (!messagesData?.items) return [];
+    // If items are already oldest-first (ascending), use as-is.
+    // We detect order by comparing timestamps of first two items.
+    const items = messagesData.items;
+    if (items.length < 2) return [...items];
+    const first = new Date(items[0].sentAtUtc).getTime();
+    const second = new Date(items[1].sentAtUtc).getTime();
+    // If descending (newest first), reverse so oldest is first
+    return first > second ? [...items].reverse() : [...items];
+  }, [messagesData?.items]);
+
   const conversations = conversationsData?.items ?? [];
-  const messages = messagesData?.items ?? [];
 
-  function handleSelectConversation(conversation: ChatConversationResponse) {
-    setSelectedConversation(conversation);
-  }
-
-  function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!selectedConversationPublicId) {
-      return;
-    }
-
-    const text = messageText.trim();
-
-    if (!text) {
-      return;
-    }
-
+  // ── Handlers ──────────────────────────────────────────────────
+  function handleSendMessage(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!selectedConversationPublicId || !messageText.trim()) return;
     sendMessageMutation.mutate({
       conversationPublicId: selectedConversationPublicId,
-      text,
+      text: messageText.trim(),
     });
   }
 
-  function handleOpenDirectDialog() {
-    setTargetUserId('');
-    setDirectDialogError(null);
-    setIsDirectDialogOpen(true);
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!selectedConversationPublicId || !messageText.trim() || sendMessageMutation.isPending) return;
+      sendMessageMutation.mutate({
+        conversationPublicId: selectedConversationPublicId,
+        text: messageText.trim(),
+      });
+    }
   }
 
-  function handleCloseDirectDialog() {
-    if (createDirectMutation.isPending) {
+  function handleCreateDirectSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!selectedEngineerUserId.trim()) {
+      setDirectDialogError('Please select an engineer.');
       return;
     }
-
-    setIsDirectDialogOpen(false);
-    setTargetUserId('');
     setDirectDialogError(null);
+    createDirectMutation.mutate(selectedEngineerUserId.trim());
   }
 
-  function handleCreateDirectSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const userId = targetUserId.trim();
-
-    if (!userId) {
-      setDirectDialogError('Please enter target user id.');
-      return;
-    }
-
-    setDirectDialogError(null);
-    createDirectMutation.mutate(userId);
-  }
-
-  function handleOpenGroupDialog() {
-    setGroupTitle('');
-    setGroupParticipantIds('');
-    setGroupDialogError(null);
-    setIsGroupDialogOpen(true);
-  }
-
-  function handleCloseGroupDialog() {
-    if (createGroupMutation.isPending) {
-      return;
-    }
-
-    setIsGroupDialogOpen(false);
-    setGroupTitle('');
-    setGroupParticipantIds('');
-    setGroupDialogError(null);
-  }
-
-  function parseParticipantIds(value: string) {
-    return value
-      .split(',')
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-  }
-
-  function handleCreateGroupSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  function handleCreateGroupSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     const title = groupTitle.trim();
-    const participantUserIds = parseParticipantIds(groupParticipantIds);
-
-    if (!title) {
-      setGroupDialogError('Please enter group title.');
-      return;
-    }
-
-    if (participantUserIds.length === 0) {
-      setGroupDialogError('Please enter at least one participant user id.');
-      return;
-    }
-
+    const participantUserIds = groupParticipantIds
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!title) { setGroupDialogError('Please enter group title.'); return; }
+    if (participantUserIds.length === 0) { setGroupDialogError('Please enter at least one participant.'); return; }
     setGroupDialogError(null);
-
-    createGroupMutation.mutate({
-      title,
-      participantUserIds,
-    });
+    createGroupMutation.mutate({ title, participantUserIds });
   }
 
+  // ── Render ────────────────────────────────────────────────────
   return (
     <>
       <PageHeader
@@ -355,46 +323,72 @@ export function ChatPage() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: '360px 1fr' },
+          gridTemplateColumns: '320px 1fr',
           gap: 2,
           height: 'calc(100vh - 180px)',
-          minHeight: 560,
+          minHeight: 520,
         }}
       >
-        <Paper sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* ── Conversations sidebar ────────────────────────────── */}
+        <Paper
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+          role="navigation"
+          aria-label="Conversations list"
+        >
+          {/* Header */}
           <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-              <Button
-                fullWidth
-                size="small"
-                variant="contained"
-                startIcon={<PersonAddIcon />}
-                onClick={handleOpenDirectDialog}
-              >
-                Direct
-              </Button>
-
-              <Button
-                fullWidth
-                size="small"
-                variant="outlined"
-                startIcon={<GroupAddIcon />}
-                onClick={handleOpenGroupDialog}
-              >
-                Group
-              </Button>
+            <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+              <Tooltip title="New Direct Chat">
+                <Button
+                  fullWidth
+                  size="small"
+                  variant="contained"
+                  startIcon={<PersonAddIcon />}
+                  onClick={() => {
+                    setSelectedEngineerUserId('');
+                    setDirectDialogError(null);
+                    setIsDirectDialogOpen(true);
+                  }}
+                  aria-label="Start new direct conversation"
+                >
+                  Direct
+                </Button>
+              </Tooltip>
+              <Tooltip title="New Group Chat">
+                <Button
+                  fullWidth
+                  size="small"
+                  variant="outlined"
+                  startIcon={<GroupAddIcon />}
+                  onClick={() => {
+                    setGroupTitle('');
+                    setGroupParticipantIds('');
+                    setGroupDialogError(null);
+                    setIsGroupDialogOpen(true);
+                  }}
+                  aria-label="Create new group conversation"
+                >
+                  Group
+                </Button>
+              </Tooltip>
             </Box>
 
             <TextField
               fullWidth
+              size="small"
               placeholder="Search conversations..."
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search conversations"
               slotProps={{
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon />
+                      <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
                     </InputAdornment>
                   ),
                 },
@@ -402,242 +396,356 @@ export function ChatPage() {
             />
           </Box>
 
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
-            {isConversationsLoading && (
-              <LoadingState message="Loading conversations..." />
-            )}
-
+          {/* Conversation list */}
+          <Box sx={{ flex: 1, overflowY: 'auto' }}>
+            {isConversationsLoading && <LoadingState message="Loading conversations..." />}
             {isConversationsError && (
               <ErrorState
                 message="Failed to load conversations."
-                onRetry={() => {
-                  void refetchConversations();
-                }}
+                onRetry={() => { void refetchConversations(); }}
               />
             )}
+            {!isConversationsLoading && !isConversationsError && conversations.length === 0 && (
+              <EmptyState title="No conversations" description="Start a direct or group chat." />
+            )}
+            {!isConversationsLoading && !isConversationsError && conversations.length > 0 && (
+              <List disablePadding>
+                {conversations.map((conv) => {
+                  const isSelected = selectedConversation?.publicId === conv.publicId;
+                  const title = getConversationTitle(conv);
+                  const initials = getConversationInitials(title);
 
-            {!isConversationsLoading &&
-              !isConversationsError &&
-              conversations.length === 0 && (
-                <EmptyState
-                  title="No conversations"
-                  description="No direct or group conversations found."
-                />
-              )}
-
-            {!isConversationsLoading &&
-              !isConversationsError &&
-              conversations.length > 0 && (
-                <List disablePadding>
-                  {conversations.map((conversation) => {
-                    const selected =
-                      selectedConversation?.publicId === conversation.publicId;
-
-                    return (
-                      <ListItemButton
-                        key={conversation.publicId}
-                        selected={selected}
-                        onClick={() => handleSelectConversation(conversation)}
+                  return (
+                    <ListItemButton
+                      key={conv.publicId}
+                      selected={isSelected}
+                      onClick={() => setSelectedConversation(conv)}
+                      aria-label={`Open conversation: ${title}`}
+                      aria-selected={isSelected}
+                      sx={{
+                        px: 2,
+                        py: 1.5,
+                        gap: 1.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        alignItems: 'flex-start',
+                        '&.Mui-selected': {
+                          backgroundColor: 'primary.main',
+                          '&:hover': { backgroundColor: 'primary.dark' },
+                          '& .MuiTypography-root': { color: '#fff !important' },
+                        },
+                      }}
+                    >
+                      <Avatar
                         sx={{
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          alignItems: 'flex-start',
+                          width: 40,
+                          height: 40,
+                          bgcolor: isSelected ? 'rgba(255,255,255,0.25)' : 'primary.main',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          flexShrink: 0,
                         }}
+                        aria-hidden="true"
                       >
-<Box sx={{ width: '100%', minWidth: 0 }}>
-  <Box
-    sx={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 1,
-      minWidth: 0,
-    }}
-  >
-    <Typography sx={{ fontWeight: 700 }} noWrap>
-      {getConversationTitle(conversation)}
-    </Typography>
+                        {initials}
+                      </Avatar>
 
-    {conversation.unreadCount > 0 && (
-      <Badge color="primary" badgeContent={conversation.unreadCount} />
-    )}
-  </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: 1,
+                          }}
+                        >
+                          <Typography
+                            noWrap
+                            sx={{
+                              fontWeight: 600,
+                              fontSize: '0.875rem',
+                              color: isSelected ? '#fff' : 'text.primary',
+                            }}
+                          >
+                            {title}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                            {conv.unreadCount > 0 && (
+                              <Badge
+                                badgeContent={conv.unreadCount}
+                                color={isSelected ? 'default' : 'primary'}
+                                sx={{ '& .MuiBadge-badge': { position: 'static', transform: 'none' } }}
+                                aria-label={`${conv.unreadCount} unread messages`}
+                              />
+                            )}
+                          </Box>
+                        </Box>
 
-  <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 0.5 }}>
-    {conversation.lastMessage?.messageText ?? 'No messages yet'}
-  </Typography>
+                        <Typography
+                          noWrap
+                          variant="body2"
+                          sx={{
+                            color: isSelected ? 'rgba(255,255,255,0.75)' : 'text.secondary',
+                            fontSize: '0.8rem',
+                            mt: 0.25,
+                          }}
+                        >
+                          {conv.lastMessage?.messageText ?? 'No messages yet'}
+                        </Typography>
 
-  <Typography
-    variant="caption"
-    color="text.secondary"
-    sx={{ display: 'block', mt: 0.5 }}
-  >
-    {new Date(conversation.lastMessageAtUtc).toLocaleString()}
-  </Typography>
-</Box>
-                      </ListItemButton>
-                    );
-                  })}
-                </List>
-              )}
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: isSelected ? 'rgba(255,255,255,0.55)' : 'text.disabled',
+                            display: 'block',
+                            mt: 0.25,
+                            fontSize: '0.7rem',
+                          }}
+                        >
+                          {formatConversationTime(conv.lastMessageAtUtc)}
+                        </Typography>
+                      </Box>
+                    </ListItemButton>
+                  );
+                })}
+              </List>
+            )}
           </Box>
         </Paper>
 
+        {/* ── Message area ─────────────────────────────────────── */}
         <Paper
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}
+          sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+          role="main"
+          aria-label="Chat messages"
         >
+          {/* No conversation selected */}
           {!selectedConversation && (
             <Box
               sx={{
                 flex: 1,
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                p: 3,
-                textAlign: 'center',
+                p: 4,
+                gap: 1.5,
               }}
             >
-              <Box>
-                <Typography variant="h6">Select a conversation</Typography>
-                <Typography color="text.secondary" sx={{ mt: 1 }}>
-                  Choose a direct or group chat from the left side.
-                </Typography>
+              <Box
+                sx={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: '50%',
+                  backgroundColor: 'action.hover',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-hidden="true"
+              >
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
               </Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem' }}>
+                Select a conversation
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+                Choose a conversation from the left panel to start chatting.
+              </Typography>
             </Box>
           )}
 
+          {/* Conversation selected */}
           {selectedConversation && (
             <>
-              <Box sx={{ p: 2 }}>
-                <Typography variant="h6">
-                  {getConversationTitle(selectedConversation)}
-                </Typography>
-
-                <Typography variant="body2" color="text.secondary">
-                  {selectedConversation.type === 1 ? 'Direct chat' : 'Group chat'}
-                </Typography>
-              </Box>
-
-              <Divider />
-
+              {/* Conversation header */}
               <Box
                 sx={{
-                  flex: 1,
-                  overflow: 'auto',
-                  p: 2,
+                  px: 2.5,
+                  py: 1.75,
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
                   display: 'flex',
-                  flexDirection: 'column-reverse',
+                  alignItems: 'center',
                   gap: 1.5,
-                  bgcolor: '#f8fafc',
                 }}
               >
-                {isMessagesLoading && <LoadingState message="Loading messages..." />}
+                <Avatar
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    bgcolor: 'primary.main',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                  }}
+                  aria-hidden="true"
+                >
+                  {getConversationInitials(getConversationTitle(selectedConversation))}
+                </Avatar>
+                <Box>
+                  <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.2 }}>
+                    {getConversationTitle(selectedConversation)}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    {selectedConversation.type === 1 ? 'Direct chat' : `Group chat · ${selectedConversation.participants.length} members`}
+                  </Typography>
+                </Box>
+              </Box>
 
+              {/* Messages container */}
+              <Box
+                className="chat-messages-container"
+                sx={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  p: 2,
+                  display: 'flex',
+                  flexDirection: 'column', // Normal top-to-bottom
+                  gap: 1,
+                  backgroundColor: 'background.default',
+                }}
+                role="log"
+                aria-label="Messages"
+                aria-live="polite"
+              >
+                {isMessagesLoading && <LoadingState message="Loading messages..." />}
                 {isMessagesError && (
                   <ErrorState
                     message="Failed to load messages."
-                    onRetry={() => {
-                      void refetchMessages();
-                    }}
+                    onRetry={() => { void refetchMessages(); }}
+                  />
+                )}
+                {!isMessagesLoading && !isMessagesError && sortedMessages.length === 0 && (
+                  <EmptyState
+                    title="No messages yet"
+                    description="Send the first message to start the conversation."
                   />
                 )}
 
-                {!isMessagesLoading &&
-                  !isMessagesError &&
-                  messages.length === 0 && (
-                    <EmptyState
-                      title="No messages yet"
-                      description="Start the conversation by sending a message."
-                    />
-                  )}
+                {!isMessagesLoading && !isMessagesError && sortedMessages.map((message, idx) => {
+                  const prevMsg = idx > 0 ? sortedMessages[idx - 1] : null;
+                  const showSenderName = !message.isMine &&
+                    (!prevMsg || prevMsg.senderUserId !== message.senderUserId);
 
-                {!isMessagesLoading &&
-                  !isMessagesError &&
-                  messages.map((message) => (
+                  return (
                     <Box
                       key={message.publicId}
                       sx={{
                         display: 'flex',
-                        justifyContent: message.isMine ? 'flex-end' : 'flex-start',
+                        flexDirection: 'column',
+                        alignItems: message.isMine ? 'flex-end' : 'flex-start',
                       }}
                     >
+                      {/* Sender name (group chats) */}
+                      {showSenderName && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: 'text.secondary',
+                            fontWeight: 600,
+                            mb: 0.5,
+                            ml: 0.5,
+                            fontSize: '0.72rem',
+                          }}
+                        >
+                          {message.senderName}
+                        </Typography>
+                      )}
+
+                      {/* Bubble */}
                       <Box
                         sx={{
-                          maxWidth: '70%',
-                          p: 1.5,
-                          borderRadius: 2,
-                          bgcolor: message.isMine ? 'primary.main' : 'background.paper',
-                          color: message.isMine ? 'primary.contrastText' : 'text.primary',
-                          boxShadow: 1,
+                          maxWidth: '68%',
+                          px: 2,
+                          py: 1,
+                          borderRadius: message.isMine
+                            ? '16px 16px 4px 16px'
+                            : '16px 16px 16px 4px',
+                          backgroundColor: message.isMine ? 'primary.main' : 'background.paper',
+                          border: message.isMine ? 'none' : '1px solid',
+                          borderColor: 'divider',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                         }}
+                        role="article"
+                        aria-label={`${message.isMine ? 'You' : message.senderName}: ${message.messageText}`}
                       >
-                        {!message.isMine && (
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              display: 'block',
-                              fontWeight: 700,
-                              mb: 0.5,
-                            }}
-                          >
-                            {message.senderName}
-                          </Typography>
-                        )}
-
-                        <Typography variant="body2">{message.messageText}</Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: message.isMine ? '#fff' : 'text.primary',
+                            lineHeight: 1.5,
+                            wordBreak: 'break-word',
+                            whiteSpace: 'pre-wrap',
+                          }}
+                        >
+                          {message.messageText}
+                        </Typography>
 
                         <Typography
                           variant="caption"
                           sx={{
                             display: 'block',
-                            mt: 0.75,
-                            opacity: 0.8,
                             textAlign: 'right',
+                            mt: 0.5,
+                            opacity: 0.7,
+                            fontSize: '0.68rem',
+                            color: message.isMine ? 'rgba(255,255,255,0.75)' : 'text.disabled',
                           }}
+                          aria-label={`Sent at ${formatMessageTime(message.sentAtUtc)}`}
                         >
-                          {new Date(message.sentAtUtc).toLocaleTimeString()}
+                          {formatMessageTime(message.sentAtUtc)}
                         </Typography>
                       </Box>
                     </Box>
-                  ))}
+                  );
+                })}
+
+                {/* Scroll anchor */}
+                <div ref={messagesEndRef} aria-hidden="true" />
               </Box>
 
               <Divider />
 
+              {/* Message input */}
               <Box
                 component="form"
                 onSubmit={handleSendMessage}
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  gap: 1,
-                }}
+                sx={{ p: 2, display: 'flex', gap: 1.5, alignItems: 'flex-end' }}
               >
                 <TextField
                   fullWidth
-                  placeholder="Type a message..."
+                  multiline
+                  maxRows={4}
+                  placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
                   value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   disabled={sendMessageMutation.isPending}
+                  aria-label="Message input"
+                  slotProps={{ input: { style: { fontSize: '0.9rem' } } }}
                 />
 
                 <Button
                   type="submit"
                   variant="contained"
-                  endIcon={
-                    sendMessageMutation.isPending ? (
-                      <CircularProgress size={18} color="inherit" />
-                    ) : (
-                      <SendIcon />
-                    )
-                  }
+                  aria-label="Send message"
                   disabled={sendMessageMutation.isPending || !messageText.trim()}
+                  sx={{
+                    minWidth: 48,
+                    width: 48,
+                    height: 40,
+                    p: 0,
+                    borderRadius: '10px',
+                    flexShrink: 0,
+                  }}
                 >
-                  Send
+                  {sendMessageMutation.isPending ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <SendIcon sx={{ fontSize: '1rem' }} />
+                  )}
                 </Button>
               </Box>
             </>
@@ -645,59 +753,85 @@ export function ChatPage() {
         </Paper>
       </Box>
 
+      {/* ── Direct Chat Dialog ─────────────────────────────────── */}
       <Dialog
         open={isDirectDialogOpen}
-        onClose={handleCloseDirectDialog}
+        onClose={() => {
+          if (createDirectMutation.isPending) return;
+          setIsDirectDialogOpen(false);
+          setSelectedEngineerUserId('');
+          setDirectDialogError(null);
+        }}
         fullWidth
         maxWidth="sm"
+        aria-labelledby="direct-dialog-title"
       >
         <Box component="form" onSubmit={handleCreateDirectSubmit}>
-          <DialogTitle>New Direct Conversation</DialogTitle>
-
+          <DialogTitle id="direct-dialog-title">New Direct Conversation</DialogTitle>
           <DialogContent>
             {directDialogError && (
-              <Typography color="error" sx={{ mb: 2 }}>
+              <Typography color="error" sx={{ mb: 2, fontSize: '0.875rem' }}>
                 {directDialogError}
               </Typography>
             )}
 
-            <TextField
-              fullWidth
-              label="Target User Id"
-              value={targetUserId}
-              onChange={(event) => setTargetUserId(event.target.value)}
-              sx={{ mt: 1 }}
+            <Autocomplete
+              options={engineers}
+              getOptionLabel={(opt) => `${opt.fullName} (${opt.email ?? opt.publicId})`}
+              onChange={(_, val) => setSelectedEngineerUserId(val?.publicId ?? '')}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Select Engineer"
+                  placeholder="Search by name..."
+                  sx={{ mt: 1 }}
+                />
+              )}
+              noOptionsText="No engineers found"
+              aria-label="Select engineer for direct chat"
             />
-
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Paste the target user id for now. User search dropdown will be added later.
-            </Typography>
           </DialogContent>
-
           <DialogActions>
-            <Button onClick={handleCloseDirectDialog} disabled={createDirectMutation.isPending}>
+            <Button
+              onClick={() => {
+                setIsDirectDialogOpen(false);
+                setSelectedEngineerUserId('');
+                setDirectDialogError(null);
+              }}
+              disabled={createDirectMutation.isPending}
+            >
               Cancel
             </Button>
-
-            <Button type="submit" variant="contained" disabled={createDirectMutation.isPending}>
-              {createDirectMutation.isPending ? 'Creating...' : 'Create'}
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={createDirectMutation.isPending || !selectedEngineerUserId}
+            >
+              {createDirectMutation.isPending ? 'Creating...' : 'Start Chat'}
             </Button>
           </DialogActions>
         </Box>
       </Dialog>
 
+      {/* ── Group Chat Dialog ──────────────────────────────────── */}
       <Dialog
         open={isGroupDialogOpen}
-        onClose={handleCloseGroupDialog}
+        onClose={() => {
+          if (createGroupMutation.isPending) return;
+          setIsGroupDialogOpen(false);
+          setGroupTitle('');
+          setGroupParticipantIds('');
+          setGroupDialogError(null);
+        }}
         fullWidth
         maxWidth="sm"
+        aria-labelledby="group-dialog-title"
       >
         <Box component="form" onSubmit={handleCreateGroupSubmit}>
-          <DialogTitle>New Group Conversation</DialogTitle>
-
+          <DialogTitle id="group-dialog-title">New Group Conversation</DialogTitle>
           <DialogContent>
             {groupDialogError && (
-              <Typography color="error" sx={{ mb: 2 }}>
+              <Typography color="error" sx={{ mb: 2, fontSize: '0.875rem' }}>
                 {groupDialogError}
               </Typography>
             )}
@@ -706,32 +840,40 @@ export function ChatPage() {
               fullWidth
               label="Group Title"
               value={groupTitle}
-              onChange={(event) => setGroupTitle(event.target.value)}
+              onChange={(e) => setGroupTitle(e.target.value)}
               sx={{ mt: 1, mb: 2 }}
+              required
             />
 
             <TextField
               fullWidth
-              label="Participant User Ids"
+              label="Participant User IDs"
               placeholder="id1, id2, id3"
               value={groupParticipantIds}
-              onChange={(event) => setGroupParticipantIds(event.target.value)}
+              onChange={(e) => setGroupParticipantIds(e.target.value)}
               multiline
               minRows={3}
+              helperText="Separate multiple IDs with commas"
             />
-
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Separate multiple user ids with commas.
-            </Typography>
           </DialogContent>
-
           <DialogActions>
-            <Button onClick={handleCloseGroupDialog} disabled={createGroupMutation.isPending}>
+            <Button
+              onClick={() => {
+                setIsGroupDialogOpen(false);
+                setGroupTitle('');
+                setGroupParticipantIds('');
+                setGroupDialogError(null);
+              }}
+              disabled={createGroupMutation.isPending}
+            >
               Cancel
             </Button>
-
-            <Button type="submit" variant="contained" disabled={createGroupMutation.isPending}>
-              {createGroupMutation.isPending ? 'Creating...' : 'Create'}
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={createGroupMutation.isPending}
+            >
+              {createGroupMutation.isPending ? 'Creating...' : 'Create Group'}
             </Button>
           </DialogActions>
         </Box>

@@ -9,6 +9,10 @@ namespace FutureOfEgypt.Application.Features.DeviceAccessRequests
             CreateDeviceAccessRequestRequest request,
             CancellationToken cancellationToken = default);
 
+        Task<DeviceAccessRequestResponse?> GetLatestForEngineerAsync(
+            Guid engineerPublicId,
+            CancellationToken cancellationToken = default);
+
         Task<PagedResponse<DeviceAccessRequestResponse>> GetRequestsAsync(
             DeviceAccessRequestsQueryRequest request,
             CancellationToken cancellationToken = default);
@@ -16,6 +20,7 @@ namespace FutureOfEgypt.Application.Features.DeviceAccessRequests
         Task<PagedResponse<DeviceAccessRequestResponse>> GetPendingRequestsAsync(
             DeviceAccessRequestsQueryRequest request,
             CancellationToken cancellationToken = default);
+
         Task<DeviceAccessRequestResponse> ApproveAsync(
             Guid requestPublicId,
             Guid adminUserId,

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FutureOfEgypt.Controllers
 {
-    [Authorize(Roles = AppRoles.ADMIN)]
+    [Authorize(Policy = "AdminOrManager")]
     [ApiController]
     [Route("api/[controller]")]
     public sealed class EngineerDevicesController : ControllerBase

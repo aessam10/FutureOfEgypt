@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace FutureOfEgypt.Hubs
 {
-    [Authorize(Roles = AppRoles.ADMIN)]
+    [Authorize(Policy = "AdminOrManager")]
     public sealed class LocationHub : Hub
     {
         private const string ADMINS_GROUP_NAMES = "Admins";

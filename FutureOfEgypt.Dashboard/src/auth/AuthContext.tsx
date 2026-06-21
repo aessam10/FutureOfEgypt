@@ -45,14 +45,15 @@ async login(request: LoginRequest) {
   const response = await loginApi(request);
   const authUser = mapAuthResponseToUser(response);
 
-  const isAdmin = authUser.roles.some(
-    (role) => role.toLowerCase() === 'admin',
-  );
+const canAccessDashboard = authUser.roles.some((role) => {
+  const normalizedRole = role.toLowerCase();
 
-  if (!isAdmin) {
-    throw new Error('ADMIN_ONLY');
-  }
+  return normalizedRole === 'admin' || normalizedRole === 'manager';
+});
 
+if (!canAccessDashboard) {
+  throw new Error('DASHBOARD_ACCESS_DENIED');
+}
   saveAuthData(response.token, response.refreshToken, authUser);
 
   setUser(authUser);

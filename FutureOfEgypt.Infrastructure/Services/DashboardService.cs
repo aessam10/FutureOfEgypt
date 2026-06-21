@@ -44,13 +44,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .CountAsync(
                     x => x.Status == DeviceAccessRequestStatus.Pending && !x.IsDeleted,
                     cancellationToken);
-    //        var onlineEngineers = await _context.DeviceLatestLocations
-    //.CountAsync(
-    //    x => !x.IsDeleted
-    //         && x.ReceivedAt >= onlineThresholdUtc
-    //         && x.Engineer!.Status == EngineerStatus.Active
-    //         && x.Device!.Status == DeviceStatus.Active,
-    //    cancellationToken);
+
             var onlineEngineers = await _context.DeviceLatestLocations
                 .Where(x => !x.IsDeleted && x.ReceivedAt >= onlineThresholdUtc)
                 .Join(
