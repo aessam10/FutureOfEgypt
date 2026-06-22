@@ -4,7 +4,6 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import {
-  Autocomplete,
   Box,
   Button,
   Dialog,
@@ -14,6 +13,8 @@ import {
   IconButton,
   InputAdornment,
   Paper,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -33,12 +34,10 @@ import { EmptyState } from '../components/common/EmptyState';
 import { DeviceRequestStatusChip } from '../components/status/DeviceRequestStatusChip';
 import {
   approveDeviceRequest,
-  getPendingDeviceRequests,
+  getDeviceRequests,
   rejectDeviceRequest,
 } from '../api/deviceRequestsApi';
-import { getDevices } from '../api/devicesApi';
 import type { DeviceAccessRequestResponse } from '../types/deviceRequests';
-import type { DeviceResponse } from '../types/devices';
 
 export function DeviceRequestsPage() {
   const queryClient = useQueryClient();
@@ -46,12 +45,13 @@ export function DeviceRequestsPage() {
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState(1);
 
   const [selectedRequest, setSelectedRequest] =
     useState<DeviceAccessRequestResponse | null>(null);
 
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
-  const [selectedDevice, setSelectedDevice] = useState<DeviceResponse | null>(null);
+  const [approveOverrideNote, setApproveOverrideNote] = useState('');
   const [approveError, setApproveError] = useState<string | null>(null);
 
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
@@ -59,33 +59,24 @@ export function DeviceRequestsPage() {
   const [rejectError, setRejectError] = useState<string | null>(null);
 
   const queryParams = useMemo(
-    () => ({ pageNumber, pageSize, search: search.trim() || undefined }),
-    [pageNumber, pageSize, search],
+    () => ({ pageNumber, pageSize, search: search.trim() || undefined, status: statusFilter === 0 ? undefined : statusFilter }),
+    [pageNumber, pageSize, search, statusFilter],
   );
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['pending-device-requests', queryParams],
-    queryFn: () => getPendingDeviceRequests(queryParams),
+    queryKey: ['device-requests', queryParams],
+    queryFn: () => getDeviceRequests(queryParams),
   });
-
-  // Devices for Autocomplete — only loaded when approve dialog is open
-  const { data: devicesData, isLoading: isDevicesLoading } = useQuery({
-    queryKey: ['devices-all'],
-    queryFn: () => getDevices({ pageNumber: 1, pageSize: 200 }),
-    staleTime: 5 * 60_000,
-    enabled: isApproveDialogOpen,
-  });
-  const devices = devicesData?.items ?? [];
 
   // ── Mutations ─────────────────────────────────────────────────
   const approveMutation = useMutation({
-    mutationFn: ({ requestPublicId, devicePublicId }: { requestPublicId: string; devicePublicId: string }) =>
-      approveDeviceRequest(requestPublicId, { devicePublicId }),
+    mutationFn: ({ requestPublicId, reviewNote }: { requestPublicId: string; reviewNote?: string }) =>
+      approveDeviceRequest(requestPublicId, { reviewNote }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['pending-device-requests'] });
+      await queryClient.invalidateQueries({ queryKey: ['device-requests'] });
       setIsApproveDialogOpen(false);
       setSelectedRequest(null);
-      setSelectedDevice(null);
+      setApproveOverrideNote('');
       setApproveError(null);
     },
     onError: () => setApproveError('Failed to approve request.'),
@@ -93,9 +84,9 @@ export function DeviceRequestsPage() {
 
   const rejectMutation = useMutation({
     mutationFn: ({ requestPublicId, reason }: { requestPublicId: string; reason: string }) =>
-      rejectDeviceRequest(requestPublicId, { rejectionReason: reason }),
+      rejectDeviceRequest(requestPublicId, { reviewNote: reason }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['pending-device-requests'] });
+      await queryClient.invalidateQueries({ queryKey: ['device-requests'] });
       setIsRejectDialogOpen(false);
       setSelectedRequest(null);
       setRejectionReason('');
@@ -107,7 +98,7 @@ export function DeviceRequestsPage() {
   // ── Handlers ──────────────────────────────────────────────────
   function handleOpenApproveDialog(request: DeviceAccessRequestResponse) {
     setSelectedRequest(request);
-    setSelectedDevice(null);
+    setApproveOverrideNote('');
     setApproveError(null);
     setIsApproveDialogOpen(true);
   }
@@ -116,21 +107,24 @@ export function DeviceRequestsPage() {
     if (approveMutation.isPending) return;
     setIsApproveDialogOpen(false);
     setSelectedRequest(null);
-    setSelectedDevice(null);
+    setApproveOverrideNote('');
     setApproveError(null);
   }
 
   function handleApproveSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selectedRequest) return;
-    if (!selectedDevice) {
-      setApproveError('Please select a device.');
+    
+    const isRejected = selectedRequest.status === 3;
+    const note = approveOverrideNote.trim();
+    if (isRejected && !note) {
+      setApproveError('Please enter an override note to approve this rejected request.');
       return;
     }
     setApproveError(null);
     approveMutation.mutate({
       requestPublicId: selectedRequest.publicId,
-      devicePublicId: selectedDevice.publicId,
+      reviewNote: note || undefined,
     });
   }
 
@@ -166,14 +160,28 @@ export function DeviceRequestsPage() {
         subtitle="Review pending device access requests from engineers."
       />
 
+      <Tabs
+        value={statusFilter}
+        onChange={(_, newValue) => { setStatusFilter(newValue); setPageNumber(1); }}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{ mb: 2 }}
+      >
+        <Tab label="All" value={0} />
+        <Tab label="Pending" value={1} />
+        <Tab label="Approved" value={2} />
+        <Tab label="Rejected" value={3} />
+        <Tab label="Cancelled" value={4} />
+      </Tabs>
+
       {/* Search bar */}
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
           <TextField
             placeholder="Search requests..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPageNumber(1); }}
-            sx={{ maxWidth: 400 }}
+            sx={{ maxWidth: { xs: 'none', sm: 400 }, flex: 1 }}
             aria-label="Search device requests"
             slotProps={{
               input: {
@@ -207,9 +215,9 @@ export function DeviceRequestsPage() {
       )}
 
       {!isLoading && !isError && data && data.items.length > 0 && (
-        <Paper>
-          <TableContainer>
-            <Table aria-label="Device requests table">
+        <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+          <TableContainer sx={{ maxHeight: '100%', overflowX: 'auto' }}>
+            <Table aria-label="Device requests table" sx={{ minWidth: 800 }}>
               <TableHead>
                 <TableRow>
                   <TableCell scope="col">Engineer</TableCell>
@@ -252,45 +260,54 @@ export function DeviceRequestsPage() {
                     </TableCell>
                     <TableCell>
                       <DeviceRequestStatusChip status={request.status} />
+                      {request.status === 3 && request.reviewNote && (
+                        <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.secondary', maxWidth: 200, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                          Note: {request.reviewNote}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       {new Date(request.requestedAtUtc).toLocaleDateString()}
                     </TableCell>
                     <TableCell align="right">
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                        <Tooltip title="Approve Request">
-                          <IconButton
-                            size="small"
-                            color="success"
-                            onClick={() => handleOpenApproveDialog(request)}
-                            aria-label={`Approve request from ${request.engineerName}`}
-                            sx={{
-                              border: '1px solid',
-                              borderColor: 'success.main',
-                              borderRadius: '8px',
-                              '&:hover': { backgroundColor: 'rgba(16,185,129,0.08)' },
-                            }}
-                          >
-                            <CheckIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Reject Request">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleOpenRejectDialog(request)}
-                            aria-label={`Reject request from ${request.engineerName}`}
-                            sx={{
-                              border: '1px solid',
-                              borderColor: 'error.main',
-                              borderRadius: '8px',
-                              '&:hover': { backgroundColor: 'rgba(239,68,68,0.08)' },
-                            }}
-                          >
-                            <CloseIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
+                      {(request.status === 1 || request.status === 3) && (
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                          <Tooltip title={request.status === 3 ? "Approve Anyway" : "Approve Request"}>
+                            <IconButton
+                              size="small"
+                              color="success"
+                              onClick={() => handleOpenApproveDialog(request)}
+                              aria-label={request.status === 3 ? `Approve request from ${request.engineerName} anyway` : `Approve request from ${request.engineerName}`}
+                              sx={{
+                                border: '1px solid',
+                                borderColor: 'success.main',
+                                borderRadius: '8px',
+                                '&:hover': { backgroundColor: 'rgba(16,185,129,0.08)' },
+                              }}
+                            >
+                              <CheckIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          {request.status === 1 && (
+                            <Tooltip title="Reject Request">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleOpenRejectDialog(request)}
+                                aria-label={`Reject request from ${request.engineerName}`}
+                                sx={{
+                                  border: '1px solid',
+                                  borderColor: 'error.main',
+                                  borderRadius: '8px',
+                                  '&:hover': { backgroundColor: 'rgba(239,68,68,0.08)' },
+                                }}
+                              >
+                                <CloseIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -309,7 +326,7 @@ export function DeviceRequestsPage() {
         </Paper>
       )}
 
-      {/* ── Approve Dialog — searchable Device dropdown ──────────── */}
+      {/* ── Approve Dialog ──────────── */}
       <Dialog
         open={isApproveDialogOpen}
         onClose={handleCloseApproveDialog}
@@ -318,66 +335,79 @@ export function DeviceRequestsPage() {
         aria-labelledby="approve-dialog-title"
       >
         <Box component="form" onSubmit={handleApproveSubmit}>
-          <DialogTitle id="approve-dialog-title">Approve Device Request</DialogTitle>
+          <DialogTitle id="approve-dialog-title">
+            {selectedRequest?.status === 3 ? 'Override Approve Device Request' : 'Approve Device Request'}
+          </DialogTitle>
           <DialogContent>
-            {/* Engineer info */}
             {selectedRequest && (
               <Box
                 sx={{
-                  p: 1.5,
+                  p: 2,
                   mb: 2,
                   borderRadius: '8px',
                   backgroundColor: 'action.hover',
                   border: '1px solid',
                   borderColor: 'divider',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.5
                 }}
               >
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Engineer
+                <Box>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Engineer
+                  </Typography>
+                  <Typography sx={{ fontWeight: 600 }}>{selectedRequest.engineerName}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Requested Device
+                  </Typography>
+                  <Typography sx={{ fontWeight: 600 }}>{selectedRequest.deviceName || 'Unknown Device Name'}</Typography>
+                  <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontFamily: 'monospace', mt: 0.5 }}>
+                    Installation ID: {selectedRequest.installationId}
+                  </Typography>
+                  {selectedRequest.serialNumber && (
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontFamily: 'monospace' }}>
+                      Serial: {selectedRequest.serialNumber}
+                    </Typography>
+                  )}
+                  {selectedRequest.imei && (
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontFamily: 'monospace' }}>
+                      IMEI: {selectedRequest.imei}
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            )}
+
+            {selectedRequest?.status === 3 && (
+              <Box sx={{ mb: 2, p: 1.5, border: '1px dashed', borderColor: 'warning.main', borderRadius: '8px', bgcolor: 'rgba(245,158,11,0.05)' }}>
+                <Typography variant="body2" sx={{ color: 'warning.dark', fontWeight: 600, mb: 0.5 }}>
+                  This request was previously rejected.
                 </Typography>
-                <Typography sx={{ fontWeight: 600, mt: 0.25 }}>{selectedRequest.engineerName}</Typography>
-                <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
-                  Installation ID: {selectedRequest.installationId}
-                </Typography>
+                {selectedRequest.reviewNote && (
+                  <Typography variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
+                    Original Rejection Reason: {selectedRequest.reviewNote}
+                  </Typography>
+                )}
+                <TextField
+                  fullWidth
+                  label="Override Note"
+                  placeholder="Explain why you are approving this rejected request..."
+                  multiline
+                  minRows={2}
+                  value={approveOverrideNote}
+                  onChange={(e) => setApproveOverrideNote(e.target.value)}
+                  required
+                  aria-label="Override note"
+                />
               </Box>
             )}
 
             {approveError && (
               <Typography color="error" sx={{ mb: 2, fontSize: '0.875rem' }}>{approveError}</Typography>
             )}
-
-            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
-              Select the device to assign to this engineer:
-            </Typography>
-
-            {/* ✅ FIX: Searchable Autocomplete instead of raw text field */}
-            <Autocomplete
-              options={devices}
-              loading={isDevicesLoading}
-              getOptionLabel={(opt) => `${opt.deviceName} — ${opt.serialNumber}`}
-              value={selectedDevice}
-              onChange={(_, val) => setSelectedDevice(val)}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Select Device"
-                  placeholder="Search by device name or serial..."
-                  required
-                />
-              )}
-              renderOption={(props, opt) => (
-                <Box component="li" {...props} key={opt.publicId}>
-                  <Box>
-                    <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>{opt.deviceName}</Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-                      {opt.serialNumber}
-                    </Typography>
-                  </Box>
-                </Box>
-              )}
-              noOptionsText="No devices found"
-              aria-label="Select device for approval"
-            />
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseApproveDialog} disabled={approveMutation.isPending}>
@@ -387,10 +417,10 @@ export function DeviceRequestsPage() {
               type="submit"
               variant="contained"
               color="success"
-              disabled={approveMutation.isPending || !selectedDevice}
+              disabled={approveMutation.isPending}
               startIcon={<CheckIcon />}
             >
-              {approveMutation.isPending ? 'Approving...' : 'Approve'}
+              {approveMutation.isPending ? 'Approving...' : (selectedRequest?.status === 3 ? 'Approve Anyway' : 'Approve Request')}
             </Button>
           </DialogActions>
         </Box>

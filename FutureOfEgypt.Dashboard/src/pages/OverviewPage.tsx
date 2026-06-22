@@ -60,68 +60,68 @@ export function OverviewPage() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' },
           gap: 2.5,
         }}
       >
         <StatCard
-            title="Total Engineers"
-            value={data.totalEngineers}
-            icon={<EngineeringIcon />}
-            helperText={`${data.activeEngineers} active`}
-            accent="default"
-          />
+          title="Total Engineers"
+          value={data.totalEngineers}
+          icon={<EngineeringIcon />}
+          helperText={`${data.activeEngineers} active`}
+          accent="default"
+        />
 
         <StatCard
-            title="Total Devices"
-            value={data.totalDevices}
-            icon={<DevicesIcon />}
-            helperText={`${data.activeDevices} active`}
-            accent="info"
-          />
+          title="Total Devices"
+          value={data.totalDevices}
+          icon={<DevicesIcon />}
+          helperText={`${data.activeDevices} active`}
+          accent="info"
+        />
 
         <StatCard
-            title="Active Assignments"
-            value={data.activeAssignments}
-            icon={<AssignmentIcon />}
-            helperText="Currently assigned devices"
-            accent="success"
-          />
+          title="Active Assignments"
+          value={data.activeAssignments}
+          icon={<AssignmentIcon />}
+          helperText="Currently assigned devices"
+          accent="success"
+        />
 
         <StatCard
-            title="Pending Requests"
-            value={data.pendingDeviceAccessRequests}
-            icon={<PendingActionsIcon />}
-            helperText="Awaiting admin action"
-            accent={data.pendingDeviceAccessRequests > 0 ? 'warning' : 'default'}
-          />
+          title="Pending Requests"
+          value={data.pendingDeviceAccessRequests}
+          icon={<PendingActionsIcon />}
+          helperText="Awaiting admin action"
+          accent={data.pendingDeviceAccessRequests > 0 ? 'warning' : 'default'}
+        />
 
         <StatCard
-            title="Online Engineers"
-            value={data.onlineEngineers}
-            icon={<WifiIcon />}
-            helperText="Recently active"
-            accent="success"
-            trend={data.onlineEngineers > 0 ? 'up' : 'neutral'}
-          />
+          title="Online Engineers"
+          value={data.onlineEngineers}
+          icon={<WifiIcon />}
+          helperText="Recently active"
+          accent="success"
+          trend={data.onlineEngineers > 0 ? 'up' : 'neutral'}
+        />
 
         <StatCard
-            title="Offline Engineers"
-            value={data.offlineEngineers}
-            icon={<WifiOffIcon />}
-            helperText="No recent location update"
-            accent={data.offlineEngineers > 0 ? 'error' : 'default'}
-          />
+          title="Offline Engineers"
+          value={data.offlineEngineers}
+          icon={<WifiOffIcon />}
+          helperText="No recent location update"
+          accent={data.offlineEngineers > 0 ? 'error' : 'default'}
+        />
       </Box>
 
       {/* Charts Section */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 2.5, mt: 3 }}>
-        <Paper sx={{ p: 3, background: isDark ? 'rgba(10, 15, 30, 0.4)' : 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)', border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0,0,0,0.05)'}`, borderRadius: 3, display: 'flex', flexDirection: 'column' }}>
+        <Paper sx={{ p: { xs: 2, sm: 3 }, background: isDark ? 'rgba(10, 15, 30, 0.4)' : 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)', border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0,0,0,0.05)'}`, borderRadius: 3, display: 'flex', flexDirection: 'column' }}>
           <Typography variant="h6" sx={{ color: isDark ? '#fff' : '#000', mb: 3, fontWeight: 600 }}>Resource Utilization</Typography>
-          <Box sx={{ display: 'flex', width: '100%', flex: 1, minHeight: 250, gap: 2 }}>
-            
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, width: '100%', flex: 1, minHeight: 250, gap: 2 }}>
+
             {/* Devices Donut */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 200 }}>
               <Typography variant="subtitle2" sx={{ color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', mb: 1, fontWeight: 600 }}>Devices</Typography>
               <Box sx={{ width: '100%', flex: 1, position: 'relative' }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -144,7 +144,7 @@ export function OverviewPage() {
                         <Cell key={`cell-${index}`} fill={index === 0 ? '#00F0FF' : (isDark ? 'rgba(0, 240, 255, 0.15)' : 'rgba(0, 240, 255, 0.3)')} />
                       ))}
                     </Pie>
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{ backgroundColor: isDark ? 'rgba(10, 15, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)', borderColor: isDark ? 'rgba(0, 240, 255, 0.2)' : 'rgba(0,0,0,0.1)', borderRadius: '8px', color: isDark ? '#fff' : '#000' }}
                       itemStyle={{ color: isDark ? '#fff' : '#000' }}
                     />
@@ -160,7 +160,7 @@ export function OverviewPage() {
             </Box>
 
             {/* Engineers Donut */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 200, mt: { xs: 2, sm: 0 } }}>
               <Typography variant="subtitle2" sx={{ color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', mb: 1, fontWeight: 600 }}>Engineers</Typography>
               <Box sx={{ width: '100%', flex: 1, position: 'relative' }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -183,7 +183,7 @@ export function OverviewPage() {
                         <Cell key={`cell-${index}`} fill={index === 0 ? '#8b5cf6' : (isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.3)')} />
                       ))}
                     </Pie>
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{ backgroundColor: isDark ? 'rgba(10, 15, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)', borderColor: isDark ? 'rgba(0, 240, 255, 0.2)' : 'rgba(0,0,0,0.1)', borderRadius: '8px', color: isDark ? '#fff' : '#000' }}
                       itemStyle={{ color: isDark ? '#fff' : '#000' }}
                     />
@@ -201,7 +201,7 @@ export function OverviewPage() {
           </Box>
         </Paper>
 
-        <Paper sx={{ p: 3, background: isDark ? 'rgba(10, 15, 30, 0.4)' : 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)', border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0,0,0,0.05)'}`, borderRadius: 3 }}>
+        <Paper sx={{ p: { xs: 2, sm: 3 }, background: isDark ? 'rgba(10, 15, 30, 0.4)' : 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)', border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0,0,0,0.05)'}`, borderRadius: 3, overflow: 'hidden' }}>
           <Typography variant="h6" sx={{ color: isDark ? '#fff' : '#000', mb: 3, fontWeight: 600 }}>Current Status</Typography>
           <Box sx={{ width: '100%', height: 300 }}>
             <ResponsiveContainer>
@@ -211,10 +211,10 @@ export function OverviewPage() {
                 { name: 'Unassigned', count: statusData.neverConnectedCount, fill: '#ef4444' }
               ] : []} layout="vertical" margin={{ left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"} horizontal={false} />
-                <XAxis type="number" stroke={isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)"} tick={{fill: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'}} />
-                <YAxis dataKey="name" type="category" width={100} stroke={isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)"} tick={{fill: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)', textAnchor: 'middle', dx: -45}} axisLine={false} tickLine={false} />
-                <Tooltip 
-                  cursor={{fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}}
+                <XAxis type="number" stroke={isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)"} tick={{ fill: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }} />
+                <YAxis dataKey="name" type="category" width={100} stroke={isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)"} tick={{ fill: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)', textAnchor: 'middle', dx: -45 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}
                   contentStyle={{ backgroundColor: isDark ? 'rgba(10, 15, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)', borderColor: isDark ? 'rgba(0, 240, 255, 0.2)' : 'rgba(0,0,0,0.1)', borderRadius: '8px', color: isDark ? '#fff' : '#000' }}
                 />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={30} />

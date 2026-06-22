@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.Devices;
 using FutureOfEgypt.Domain.Entities;
@@ -84,7 +84,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                 Platform = device.Platform,
                 Status = device.Status,
                 LastSeenAtUtc = device.LastSeenAtUtc,
-                CreatedAt = device.CreatedAt
+                CreatedAt = device.CreatedAt,
+                AssignedEngineerName = null // newly created device has no assignment
             };
         }
 
@@ -135,7 +136,11 @@ namespace FutureOfEgypt.Infrastructure.Services
                     Platform = x.Platform,
                     Status = x.Status,
                     LastSeenAtUtc = x.LastSeenAtUtc,
-                    CreatedAt = x.CreatedAt
+                    CreatedAt = x.CreatedAt,
+                    AssignedEngineerName = _context.EngineerDevices
+                        .Where(ed => ed.DeviceId == x.Id && ed.IsActive && !ed.IsDeleted)
+                        .Select(ed => ed.Engineer!.FullName)
+                        .FirstOrDefault()
                 })
                 .ToListAsync(cancellationToken);
 
@@ -178,7 +183,11 @@ namespace FutureOfEgypt.Infrastructure.Services
                     Platform = device.Platform,
                     Status = device.Status,
                     LastSeenAtUtc = device.LastSeenAtUtc,
-                    CreatedAt = device.CreatedAt
+                    CreatedAt = device.CreatedAt,
+                    AssignedEngineerName = await _context.EngineerDevices
+                        .Where(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted)
+                        .Select(ed => ed.Engineer!.FullName)
+                        .FirstOrDefaultAsync(cancellationToken)
                 };
             }
 
@@ -242,7 +251,11 @@ namespace FutureOfEgypt.Infrastructure.Services
                 Platform = device.Platform,
                 Status = device.Status,
                 LastSeenAtUtc = device.LastSeenAtUtc,
-                CreatedAt = device.CreatedAt
+                CreatedAt = device.CreatedAt,
+                AssignedEngineerName = await _context.EngineerDevices
+                    .Where(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted)
+                    .Select(ed => ed.Engineer!.FullName)
+                    .FirstOrDefaultAsync(cancellationToken)
             };
         }
     }

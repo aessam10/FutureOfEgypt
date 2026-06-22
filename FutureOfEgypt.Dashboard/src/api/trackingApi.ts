@@ -2,20 +2,31 @@ import { axiosClient } from './axiosClient';
 import type { LatestLocationResponse } from '../types/tracking';
 
 export interface LocationHistoryParams {
-  startDate?: string; // ISO string
-  endDate?: string;   // ISO string
+  fromUtc?: string; // ISO string
+  toUtc?: string;   // ISO string
+  pageNumber?: number;
+  pageSize?: number;
 }
 
 export interface LocationHistoryResponse {
-  devicePublicId: string;
-  history: Array<{
+  items: Array<{
+    publicId: string;
+    engineerPublicId: string;
+    engineerName: string;
+    devicePublicId: string;
+    deviceName: string;
     latitude: number;
     longitude: number;
     accuracy?: number;
-    batteryLevel?: number;
+    speed?: number;
     isMocked: boolean;
-    timestampUtc: string;
+    recordedAt: string;
+    receivedAt: string;
   }>;
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export async function getLatestLocations(): Promise<LatestLocationResponse[]> {
@@ -23,7 +34,21 @@ export async function getLatestLocations(): Promise<LatestLocationResponse[]> {
   return response.data;
 }
 
+export async function getHiddenLatestLocations(): Promise<LatestLocationResponse[]> {
+  const response = await axiosClient.get<LatestLocationResponse[]>('/api/Tracking/latest/hidden');
+  return response.data;
+}
+
 export async function getDeviceLocationHistory(devicePublicId: string, params?: LocationHistoryParams): Promise<LocationHistoryResponse> {
   const response = await axiosClient.get<LocationHistoryResponse>(`/api/Tracking/history/${devicePublicId}`, { params });
   return response.data;
+}
+
+
+export async function hideLatestLocation(devicePublicId: string): Promise<void> {
+  await axiosClient.patch(`/api/Tracking/latest/${devicePublicId}/hide`);
+}
+
+export async function unhideLatestLocation(devicePublicId: string): Promise<void> {
+  await axiosClient.patch(`/api/Tracking/latest/${devicePublicId}/unhide`);
 }

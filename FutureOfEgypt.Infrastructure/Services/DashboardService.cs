@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Features.Dashboard;
+using FutureOfEgypt.Application.Features.Dashboard;
 using FutureOfEgypt.Domain.Enums;
 using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -17,7 +17,7 @@ namespace FutureOfEgypt.Infrastructure.Services
         public async Task<DashboardSummaryResponse> GetSummaryAsync(
             CancellationToken cancellationToken = default)
         {
-            var onlineThresholdUtc = DateTime.UtcNow.AddMinutes(-2);
+            var onlineThresholdUtc = DateTime.UtcNow.AddMinutes(-15);
 
             var totalEngineers = await _context.Engineers
                 .CountAsync(x => !x.IsDeleted, cancellationToken);
@@ -80,7 +80,7 @@ namespace FutureOfEgypt.Infrastructure.Services
         public async Task<IReadOnlyList<EngineerStatusResponse>> GetEngineersStatusAsync(
             CancellationToken cancellationToken = default)
         {
-            var onlineThresholdUtc = DateTime.UtcNow.AddMinutes(-2);
+            var onlineThresholdUtc = DateTime.UtcNow.AddMinutes(-15);
 
             var engineers = await _context.Engineers
                 .AsNoTracking()

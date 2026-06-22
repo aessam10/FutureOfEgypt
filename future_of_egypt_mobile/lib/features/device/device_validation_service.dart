@@ -31,24 +31,34 @@ class DeviceValidationService {
   static DeviceValidationStatus _parseStatus(String raw) {
     switch (raw) {
       case 'Valid':
+      case '0':
         return DeviceValidationStatus.valid;
       case 'EngineerInactive':
+      case '1':
         return DeviceValidationStatus.engineerInactive;
       case 'DeviceNotRegistered':
+      case '2':
         return DeviceValidationStatus.deviceNotRegistered;
       case 'DeviceBlocked':
+      case '3':
         return DeviceValidationStatus.deviceBlocked;
       case 'DeviceInactive':
+      case '4':
         return DeviceValidationStatus.deviceInactive;
       case 'DeviceAssignedToOther':
+      case '5':
         return DeviceValidationStatus.deviceAssignedToOther;
       case 'PendingApproval':
+      case '6':
         return DeviceValidationStatus.pendingApproval;
       case 'Rejected':
+      case '7':
         return DeviceValidationStatus.rejected;
       case 'DeviceNotAssigned':
-      default:
+      case '8':
         return DeviceValidationStatus.deviceNotAssigned;
+      default:
+        throw Exception('Unknown device validation status: $raw');
     }
   }
 

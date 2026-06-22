@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/network/api_client.dart';
+import '../auth/login_page.dart';
 import '../device/device_access_service.dart';
 import '../tracking/tracking_config_service.dart';
 import 'engineer_home.dart';
@@ -60,6 +62,11 @@ class _DevicePendingPageState extends State<DevicePendingPage> {
           _rejected = true;
           _title = 'Request Rejected';
           _message = 'Your device request was rejected.\nPlease contact the administration.';
+          
+          final note = latestRequest?['reviewNote'];
+          if (note != null && note.toString().trim().isNotEmpty) {
+            _message += '\n\nReason: $note';
+          }
         });
       }
     } catch (_) {
@@ -119,8 +126,16 @@ class _DevicePendingPageState extends State<DevicePendingPage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _checkStatusSilently,
-                    child: const Text('Check Again'),
+                    onPressed: () async {
+                      await TrackingConfigService.clear();
+                      ApiClient.setToken('');
+                      if (!mounted) return;
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                      );
+                    },
+                    child: const Text('Sign Out'),
                   ),
                 ),
             ],

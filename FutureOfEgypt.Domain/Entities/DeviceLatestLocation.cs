@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Common;
+using FutureOfEgypt.Domain.Common;
 using System.Data;
 using System.Data.Common;
 using System.Net.NetworkInformation;
@@ -26,6 +26,14 @@ namespace FutureOfEgypt.Domain.Entities
         public double? Speed { get; set; }
 
         public bool IsMocked { get; set; }// in case an Engineer tried to send a fake location, we can detect it.
+
+        public bool IsHidden { get; set; }
+
+        public DateTime? HiddenAt { get; set; }
+
+        public Guid? HiddenByUserId { get; set; }
+
+        public string? HiddenReason { get; set; }
 
         public DateTime RecordedAt { get; set; }
 

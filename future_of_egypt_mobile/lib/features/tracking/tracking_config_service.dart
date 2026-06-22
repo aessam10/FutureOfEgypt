@@ -6,17 +6,20 @@ class TrackingConfigService {
   static const String _engineerPublicIdKey = "engineer_public_id";
   static const String _devicePublicIdKey = "device_public_id";
   static const String _installationIdKey = "installation_id";
+  static const String _rolesKey = "user_roles";
 
   static Future<void> saveLoginData({
     required String token,
     required String engineerPublicId,
     required String devicePublicId,
+    required List<String> roles,
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.setString(_tokenKey, token);
     await prefs.setString(_engineerPublicIdKey, engineerPublicId);
     await prefs.setString(_devicePublicIdKey, devicePublicId);
+    await prefs.setStringList(_rolesKey, roles);
   }
 
   static Future<void> saveDevicePublicId(String devicePublicId) async {
@@ -39,7 +42,12 @@ class TrackingConfigService {
     return newId;
   }
 
-  static Future<Map<String, String>> getTrackingData() async {
+  static Future<List<String>> getRoles() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_rolesKey) ?? [];
+  }
+
+  static Future<Map<String, dynamic>> getTrackingData() async {
     final prefs = await SharedPreferences.getInstance();
 
     final installationId = await getInstallationId();
@@ -49,6 +57,7 @@ class TrackingConfigService {
       "engineerPublicId": prefs.getString(_engineerPublicIdKey) ?? "",
       "devicePublicId": prefs.getString(_devicePublicIdKey) ?? "",
       "installationId": installationId,
+      "roles": prefs.getStringList(_rolesKey) ?? [],
     };
   }
 
@@ -58,5 +67,6 @@ class TrackingConfigService {
     await prefs.remove(_tokenKey);
     await prefs.remove(_engineerPublicIdKey);
     await prefs.remove(_devicePublicIdKey);
+    await prefs.remove(_rolesKey);
   }
 }

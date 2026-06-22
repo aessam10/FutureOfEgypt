@@ -251,7 +251,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .AsNoTracking()
                 .Include(x => x.Engineer)
                 .Include(x => x.Device)
-                .Where(x => !x.IsDeleted)
+                .Where(x => !x.IsDeleted && !x.IsHidden)
                 .OrderByDescending(x => x.ReceivedAt)
                 .Select(x => new LatestLocationResponse
                 {
@@ -272,39 +272,16 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<IReadOnlyList<LocationHistoryResponse>> GetDeviceLocationHistoryAsync(Guid devicePublicId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<LatestLocationResponse>> GetHiddenLatestLocationsAsync(CancellationToken cancellationToken = default)
         {
-            var device = await _context.Devices
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.PublicId == devicePublicId && !x.IsDeleted,
-                    cancellationToken);
-
-            if (device is null)
-                throw new InvalidOperationException("Device does not exist.");
-
-            var query = _context.LocationHistories
+            return await _context.DeviceLatestLocations
                 .AsNoTracking()
                 .Include(x => x.Engineer)
                 .Include(x => x.Device)
-                .Where(x => x.DeviceId == device.Id && !x.IsDeleted);
-
-            if (from.HasValue)
-            {
-                query = query.Where(x => x.RecordedAt >= from.Value);
-            }
-
-            if (to.HasValue)
-            {
-                query = query.Where(x => x.RecordedAt <= to.Value);
-            }
-
-            return await query
-                .OrderBy(x => x.RecordedAt)
-                .Select(x => new LocationHistoryResponse
+                .Where(x => !x.IsDeleted && x.IsHidden)
+                .OrderByDescending(x => x.ReceivedAt)
+                .Select(x => new LatestLocationResponse
                 {
-                    PublicId = x.PublicId,
-
                     EngineerPublicId = x.Engineer!.PublicId,
                     EngineerName = x.Engineer.FullName,
 
@@ -321,6 +298,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 })
                 .ToListAsync(cancellationToken);
         }
+
 
         public async Task<PagedResponse<LocationHistoryResponse>> GetDeviceLocationHistoryAsync(
     Guid devicePublicId,
@@ -392,6 +370,73 @@ namespace FutureOfEgypt.Infrastructure.Services
                 TotalCount = totalCount,
                 TotalPages = totalPages
             };
+        }
+
+        public async Task HideLatestLocationAsync(Guid devicePublicId, Guid adminId, CancellationToken cancellationToken = default)
+        {
+            var device = await _context.Devices
+                .FirstOrDefaultAsync(x => x.PublicId == devicePublicId && !x.IsDeleted, cancellationToken);
+
+            if (device is null)
+                throw new InvalidOperationException($"Device with public id {devicePublicId} not found.");
+
+            var latestLocation = await _context.DeviceLatestLocations
+                .FirstOrDefaultAsync(x => x.DeviceId == device.Id, cancellationToken);
+
+            if (latestLocation is not null && !latestLocation.IsHidden)
+            {
+                latestLocation.IsHidden = true;
+                latestLocation.HiddenAt = DateTime.UtcNow;
+                latestLocation.HiddenByUserId = adminId;
+
+                var auditLog = new AuditLog
+                {
+                    ActionType = AuditActionType.DeviceLocationHidden,
+                    PerformedByUserId = adminId,
+                    EntityName = "DeviceLatestLocation",
+                    EntityPublicId = devicePublicId,
+                    Description = $"Admin/Manager hid the current Live Map marker for device {device.DeviceName}."
+                };
+
+                await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                await _locationNotifier.NotifyLocationHiddenAsync(devicePublicId, cancellationToken);
+            }
+        }
+
+        public async Task UnhideLatestLocationAsync(Guid devicePublicId, Guid adminId, CancellationToken cancellationToken = default)
+        {
+            var device = await _context.Devices
+                .FirstOrDefaultAsync(x => x.PublicId == devicePublicId && !x.IsDeleted, cancellationToken);
+
+            if (device is null)
+                throw new InvalidOperationException($"Device with public id {devicePublicId} not found.");
+
+            var latestLocation = await _context.DeviceLatestLocations
+                .FirstOrDefaultAsync(x => x.DeviceId == device.Id, cancellationToken);
+
+            if (latestLocation is not null && latestLocation.IsHidden)
+            {
+                latestLocation.IsHidden = false;
+                latestLocation.HiddenAt = null;
+                latestLocation.HiddenByUserId = null;
+                latestLocation.HiddenReason = null;
+
+                var auditLog = new AuditLog
+                {
+                    ActionType = AuditActionType.DeviceLocationUnhidden,
+                    PerformedByUserId = adminId,
+                    EntityName = "DeviceLatestLocation",
+                    EntityPublicId = devicePublicId,
+                    Description = $"Admin/Manager restored the hidden Live Map marker for device {device.DeviceName}."
+                };
+
+                await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                await _locationNotifier.NotifyLocationUnhiddenAsync(devicePublicId, cancellationToken);
+            }
         }
     }
 }

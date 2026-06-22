@@ -40,6 +40,7 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LogoutIcon from '@mui/icons-material/Logout';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
+import MenuIcon from '@mui/icons-material/Menu';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const DRAWER_WIDTH = 260;
@@ -74,7 +75,12 @@ export function DashboardLayout() {
   const { mode, toggleMode, isDark } = useThemeMode();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [notificationsAnchor, setNotificationsAnchor] = useState<null | HTMLElement>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
 
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
@@ -161,29 +167,9 @@ export function DashboardLayout() {
 
   const sidebarBg = SIDEBAR_BACKGROUND;
 
-  return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-
-      <Drawer
-        variant="permanent"
-        aria-label="Main navigation"
-        sx={{
-          width: DRAWER_WIDTH,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: DRAWER_WIDTH,
-            boxSizing: 'border-box',
-            backgroundColor: sidebarBg,
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderRight: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflowX: 'hidden',
-          },
-        }}
-      >
-        <Box
+  const drawerContent = (
+    <>
+      <Box
           sx={{
             px: 2.5,
             py: 2.5,
@@ -255,7 +241,7 @@ export function DashboardLayout() {
                 <Tooltip title={item.labelEn} placement="right" key={item.path}>
                   <ListItemButton
                     selected={isActive}
-                    onClick={() => navigate(item.path)}
+                    onClick={() => { navigate(item.path); setMobileOpen(false); }}
                     aria-label={item.labelEn}
                     aria-current={isActive ? 'page' : undefined}
                     sx={{
@@ -396,6 +382,60 @@ export function DashboardLayout() {
             </Tooltip>
           </Box>
         </Box>
+    </>
+  );
+
+  return (
+    <Box sx={{ display: 'flex', minHeight: '100vh', maxWidth: '100vw', overflowX: 'hidden' }}>
+      
+      {/* Mobile Drawer */}
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        ModalProps={{
+          keepMounted: true, // Better open performance on mobile.
+        }}
+        sx={{
+          display: { xs: 'block', md: 'none' },
+          '& .MuiDrawer-paper': { 
+            boxSizing: 'border-box', 
+            width: DRAWER_WIDTH,
+            backgroundColor: sidebarBg,
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRight: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflowX: 'hidden',
+          },
+        }}
+      >
+        {drawerContent}
+      </Drawer>
+
+      {/* Desktop Drawer */}
+      <Drawer
+        variant="permanent"
+        sx={{
+          display: { xs: 'none', md: 'block' },
+          width: DRAWER_WIDTH,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': { 
+            boxSizing: 'border-box', 
+            width: DRAWER_WIDTH,
+            backgroundColor: sidebarBg,
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRight: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflowX: 'hidden',
+          },
+        }}
+        open
+      >
+        {drawerContent}
       </Drawer>
 
       <Box
@@ -421,16 +461,27 @@ export function DashboardLayout() {
             zIndex: (theme) => theme.zIndex.drawer - 1,
           }}
         >
-          <Toolbar sx={{ minHeight: '60px !important', gap: 2 }}>
-            <Box sx={{ flex: 1 }}>
+          <Toolbar sx={{ minHeight: '60px !important', gap: { xs: 1, sm: 2 } }}>
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: { xs: 1, sm: 2 }, display: { md: 'none' } }}
+            >
+              <MenuIcon />
+            </IconButton>
+
+            <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography
                 variant="subtitle1"
+                noWrap
                 sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1 }}
               >
                 {currentNavItem?.labelEn ?? 'Dashboard'}
               </Typography>
               {currentNavItem && (
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                <Typography variant="caption" noWrap sx={{ color: 'text.secondary', display: 'block' }}>
                   {currentNavItem.label}
                 </Typography>
               )}
@@ -569,14 +620,15 @@ export function DashboardLayout() {
           </List>
         </Popover>
 
-        <Box
+          <Box
           component="main"
           id="main-content"
           tabIndex={-1}
           sx={{
             flex: 1,
-            p: 3,
+            p: { xs: 2, md: 3 },
             overflow: 'auto',
+            width: '100%',
           }}
         >
           <Outlet />

@@ -123,6 +123,7 @@ export function LoginPage() {
         justifyContent: 'center',
         position: 'relative',
         overflow: 'hidden',
+        p: 2,
         background: isDark
           ? 'linear-gradient(-45deg, #0a0804, #120e06, #1c150b, #0f0c05)'
           : 'linear-gradient(-45deg, #fdfbf7, #f6f0e3, #e8dcc4, #f8f5ee)',
@@ -223,7 +224,6 @@ export function LoginPage() {
           zIndex: 2,
           width: '100%',
           maxWidth: 460,
-          mx: 2,
           p: { xs: 4, sm: 6 },
           borderRadius: '28px',
           // Core Deluxe Glass styles

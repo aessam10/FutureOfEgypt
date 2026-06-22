@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Enums;
+using FutureOfEgypt.Domain.Enums;
 
 namespace FutureOfEgypt.Application.Features.Devices
 {
@@ -21,5 +21,7 @@ namespace FutureOfEgypt.Application.Features.Devices
         public DateTime? LastSeenAtUtc { get; set; }
 
         public DateTime CreatedAt { get; set; }
+
+        public string? AssignedEngineerName { get; set; }
     }
 }

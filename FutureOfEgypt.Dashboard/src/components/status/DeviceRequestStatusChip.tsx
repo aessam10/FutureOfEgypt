@@ -17,5 +17,9 @@ export function DeviceRequestStatusChip({ status }: DeviceRequestStatusChipProps
     return <StatusChip label="Rejected" color="error" />;
   }
 
+  if (status === 4) {
+    return <StatusChip label="Cancelled" color="default" />;
+  }
+
   return <StatusChip label="Unknown" color="default" />;
 }

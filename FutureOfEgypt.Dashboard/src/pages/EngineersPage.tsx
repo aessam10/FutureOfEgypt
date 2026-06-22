@@ -127,12 +127,12 @@ export function EngineersPage() {
 
       {/* Search bar */}
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
           <TextField
             placeholder="Search engineers by name or email..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPageNumber(1); }}
-            sx={{ maxWidth: 400 }}
+            sx={{ maxWidth: { xs: 'none', sm: 400 }, flex: 1 }}
             aria-label="Search engineers"
             slotProps={{
               input: {
@@ -167,9 +167,9 @@ export function EngineersPage() {
       )}
 
       {!isLoading && !isError && data && data.items.length > 0 && (
-        <Paper>
-          <TableContainer>
-            <Table aria-label="Engineers table">
+        <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+          <TableContainer sx={{ maxHeight: '100%', overflowX: 'auto' }}>
+            <Table aria-label="Engineers table" sx={{ minWidth: 650 }}>
               <TableHead>
                 <TableRow>
                   <TableCell scope="col">Engineer</TableCell>

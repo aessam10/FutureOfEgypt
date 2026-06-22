@@ -90,5 +90,77 @@ namespace FutureOfEgypt.Controllers
 
             return Ok(result);
         }
+
+        [Authorize(Policy = "AdminOrManager")]
+        [HttpGet("latest/hidden")]
+        public async Task<IActionResult> GetHiddenLatestLocations(CancellationToken cancellationToken)
+        {
+            var locations = await _trackingService.GetHiddenLatestLocationsAsync(cancellationToken);
+            return Ok(locations);
+        }
+
+        [Authorize(Policy = "AdminOrManager")]
+        [HttpPatch("latest/{devicePublicId:guid}/hide")]
+        public async Task<IActionResult> HideLatestLocation(
+            Guid devicePublicId,
+            CancellationToken cancellationToken)
+        {
+            var adminIdValue = User.FindFirstValue("adminId") ?? User.FindFirstValue("managerId");
+            
+            if (string.IsNullOrWhiteSpace(adminIdValue))
+            {
+                var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!string.IsNullOrWhiteSpace(idClaim))
+                {
+                    adminIdValue = idClaim;
+                }
+                else
+                {
+                    return Unauthorized(new { message = "User identity is missing from token." });
+                }
+            }
+
+            if (!Guid.TryParse(adminIdValue, out var adminId))
+                return Unauthorized(new { message = "Invalid user identity in token." });
+
+            await _trackingService.HideLatestLocationAsync(devicePublicId, adminId, cancellationToken);
+
+            return Ok(new
+            {
+                message = "Latest location hidden successfully."
+            });
+        }
+
+        [Authorize(Policy = "AdminOrManager")]
+        [HttpPatch("latest/{devicePublicId:guid}/unhide")]
+        public async Task<IActionResult> UnhideLatestLocation(
+            Guid devicePublicId,
+            CancellationToken cancellationToken)
+        {
+            var adminIdValue = User.FindFirstValue("adminId") ?? User.FindFirstValue("managerId");
+            
+            if (string.IsNullOrWhiteSpace(adminIdValue))
+            {
+                var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!string.IsNullOrWhiteSpace(idClaim))
+                {
+                    adminIdValue = idClaim;
+                }
+                else
+                {
+                    return Unauthorized(new { message = "User identity is missing from token." });
+                }
+            }
+
+            if (!Guid.TryParse(adminIdValue, out var adminId))
+                return Unauthorized(new { message = "Invalid user identity in token." });
+
+            await _trackingService.UnhideLatestLocationAsync(devicePublicId, adminId, cancellationToken);
+
+            return Ok(new
+            {
+                message = "Latest location unhidden successfully."
+            });
+        }
     }
 }

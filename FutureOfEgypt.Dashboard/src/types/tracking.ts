@@ -7,8 +7,13 @@ export interface LatestLocationResponse {
   longitude: number;
   accuracy?: number | null;
   speed?: number | null;
-  recordedAtUtc: string;
+  recordedAt: string;
+  receivedAt: string;
   isMocked?: boolean;
+  isHidden?: boolean;
+  hiddenAt?: string | null;
+  hiddenByUserId?: string | null;
+  hiddenReason?: string | null;
 }
 
 export interface LocationReceivedEvent {
@@ -20,6 +25,7 @@ export interface LocationReceivedEvent {
   longitude: number;
   accuracy?: number | null;
   speed?: number | null;
-  recordedAtUtc: string;
+  recordedAt: string;
+  receivedAt: string;
   isMocked?: boolean;
 }

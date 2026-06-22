@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Features.Tracking;
+using FutureOfEgypt.Application.Features.Tracking;
 using FutureOfEgypt.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
@@ -24,6 +24,29 @@ namespace FutureOfEgypt.Services
                 .SendAsync(
                     "locationReceived",
                     location,
+                    cancellationToken);
+        }
+        public async Task NotifyLocationHiddenAsync(
+            Guid devicePublicId,
+            CancellationToken cancellationToken = default)
+        {
+            await _hubContext.Clients
+                .Group(AdminsGroupName)
+                .SendAsync(
+                    "locationHidden",
+                    devicePublicId,
+                    cancellationToken);
+        }
+
+        public async Task NotifyLocationUnhiddenAsync(
+            Guid devicePublicId,
+            CancellationToken cancellationToken = default)
+        {
+            await _hubContext.Clients
+                .Group(AdminsGroupName)
+                .SendAsync(
+                    "locationUnhidden",
+                    devicePublicId,
                     cancellationToken);
         }
     }

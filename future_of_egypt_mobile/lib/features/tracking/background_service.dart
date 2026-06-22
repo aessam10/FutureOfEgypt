@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_background_service_android/flutter_background_service_android.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../core/network/api_client.dart';
@@ -11,6 +11,23 @@ import 'tracking_intervals.dart';
 class BackgroundTrackingService {
   static Future<void> initialize() async {
     final service = FlutterBackgroundService();
+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'future_of_egypt_tracking', // id
+      'Tracking Service', // name
+      description: 'This channel is used for tracking service notifications.', // description
+      importance: Importance.low, // importance must be at least LOW for foreground service
+    );
+
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+        FlutterLocalNotificationsPlugin();
+
+    final androidImplementation = flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    await androidImplementation?.requestNotificationsPermission();
+    await androidImplementation?.createNotificationChannel(channel);
 
     await service.configure(
       androidConfiguration: AndroidConfiguration(
@@ -64,12 +81,8 @@ void onStart(ServiceInstance service) {
 
   Timer? timer;
 
-  if (service is AndroidServiceInstance) {
-    service.setForegroundNotificationInfo(
-      title: 'Future Of Egypt',
-      content: 'Tracking service is running',
-    );
-  }
+  // Notification is handled by the initial configuration. 
+  // Do not use flutter_background_service_android specific APIs here.
 
   service.on('trackingConfig').listen((event) async {
     token = event?['token']?.toString() ?? '';

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/network/api_client.dart';
 import '../admin/admin_home.dart';
@@ -11,7 +12,8 @@ import '../tracking/tracking_config_service.dart';
 import 'auth_service.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  final String? initialMessage;
+  const LoginPage({super.key, this.initialMessage});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -23,6 +25,12 @@ class _LoginPageState extends State<LoginPage> {
 
   bool loading = false;
   String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    errorMessage = widget.initialMessage;
+  }
 
   Future<void> login() async {
     setState(() {
@@ -52,6 +60,7 @@ class _LoginPageState extends State<LoginPage> {
         token: token,
         engineerPublicId: engineerPublicId,
         devicePublicId: '',
+        roles: roles,
       );
 
       if (!mounted) return;
@@ -159,10 +168,7 @@ class _LoginPageState extends State<LoginPage> {
 
       // ── device not registered in the system ──────────────────────────────
       case DeviceValidationStatus.deviceNotRegistered:
-        _showBlockingAlert(
-          title: 'Device Not Registered',
-          message: 'This device is not registered in the system.',
-        );
+        _showDeviceNotRegisteredAlert(installationId);
         break;
 
       // ── device blocked ───────────────────────────────────────────────────
@@ -250,6 +256,48 @@ class _LoginPageState extends State<LoginPage> {
     _navigateTo(DevicePendingPage(engineerId: engineerPublicId, token: token));
   }
 
+  /// Shows an alert with the installation ID so admins can easily copy it for manual registration.
+  void _showDeviceNotRegisteredAlert(String installationId) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Device Not Registered'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('This device is not registered in the system.'),
+            const SizedBox(height: 16),
+            const Text('Installation ID:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            SelectableText(installationId),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: installationId));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Installation ID copied to clipboard!')),
+                );
+              },
+              icon: const Icon(Icons.copy, size: 18),
+              label: const Text('Copy ID'),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _signOut();
+            },
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Shows a blocking alert with a single Sign Out button that clears the session.
   void _showBlockingAlert({required String title, required String message}) {
     showDialog<void>(
@@ -333,7 +381,7 @@ class _LoginPageState extends State<LoginPage> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.08),
+                    color: Colors.red.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.red),
                   ),

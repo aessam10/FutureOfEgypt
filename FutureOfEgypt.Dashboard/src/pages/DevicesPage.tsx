@@ -41,15 +41,17 @@ import type { CreateDeviceRequest, DeviceResponse } from '../types/devices';
 
 const ACTIVE_STATUS = 1;
 const INACTIVE_STATUS = 2;
+const BLOCKED_STATUS = 3;
 
 interface DeviceFormState {
   deviceName: string;
   serialNumber: string;
   imei: string;
+  installationId: string;
   status: number;
 }
 const initialFormState: DeviceFormState = {
-  deviceName: '', serialNumber: '', imei: '', status: ACTIVE_STATUS,
+  deviceName: '', serialNumber: '', imei: '', installationId: '', status: ACTIVE_STATUS,
 };
 
 export function DevicesPage() {
@@ -100,9 +102,10 @@ export function DevicesPage() {
       deviceName: formState.deviceName.trim(),
       serialNumber: formState.serialNumber.trim(),
       imei: formState.imei.trim(),
+      installationId: formState.installationId.trim(),
       status: formState.status,
     };
-    if (!req.deviceName || !req.serialNumber || !req.imei) {
+    if (!req.deviceName || !req.serialNumber || !req.imei || !req.installationId) {
       setFormError('Please fill all required fields.');
       return;
     }
@@ -125,12 +128,12 @@ export function DevicesPage() {
       />
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
           <TextField
-            placeholder="Search devices by name or serial..."
+            placeholder="Search devices by name, serial, IMEI, or installation ID..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPageNumber(1); }}
-            sx={{ maxWidth: 400 }}
+            sx={{ maxWidth: { xs: 'none', sm: 400 }, flex: 1 }}
             aria-label="Search devices"
             slotProps={{
               input: {
@@ -159,12 +162,14 @@ export function DevicesPage() {
       )}
 
       {!isLoading && !isError && data && data.items.length > 0 && (
-        <Paper>
-          <TableContainer>
-            <Table aria-label="Devices table">
+        <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+          <TableContainer sx={{ maxHeight: '100%', overflowX: 'auto' }}>
+            <Table aria-label="Devices table" sx={{ minWidth: 800 }}>
               <TableHead>
                 <TableRow>
                   <TableCell scope="col">Device</TableCell>
+                  <TableCell scope="col">Installation ID</TableCell>
+                  <TableCell scope="col">Assigned Engineer</TableCell>
                   <TableCell scope="col">Serial Number</TableCell>
                   <TableCell scope="col">IMEI</TableCell>
                   <TableCell scope="col">Status</TableCell>
@@ -180,6 +185,14 @@ export function DevicesPage() {
                       <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
                         {device.publicId}
                       </Typography>
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{device.installationId || '-'}</TableCell>
+                    <TableCell>
+                      {device.assignedEngineerName ? (
+                        <Typography sx={{ fontWeight: 600, fontSize: '0.85rem' }}>{device.assignedEngineerName}</Typography>
+                      ) : (
+                        <Typography sx={{ color: 'text.disabled', fontStyle: 'italic', fontSize: '0.85rem' }}>Unassigned</Typography>
+                      )}
                     </TableCell>
                     <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{device.serialNumber}</TableCell>
                     <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{device.imei}</TableCell>
@@ -231,6 +244,12 @@ export function DevicesPage() {
         >
           Mark as Inactive
         </MenuItem>
+        <MenuItem
+          disabled={selectedDevice?.status === BLOCKED_STATUS || updateStatusMutation.isPending}
+          onClick={() => { if (selectedDevice) updateStatusMutation.mutate({ devicePublicId: selectedDevice.publicId, status: BLOCKED_STATUS }); }}
+        >
+          Mark as Blocked
+        </MenuItem>
       </Menu>
 
       <Dialog
@@ -251,6 +270,8 @@ export function DevicesPage() {
               onChange={(e) => setFormState((s) => ({ ...s, serialNumber: e.target.value }))} sx={{ mb: 2 }} />
             <TextField fullWidth label="IMEI" required value={formState.imei}
               onChange={(e) => setFormState((s) => ({ ...s, imei: e.target.value }))} sx={{ mb: 2 }} />
+            <TextField fullWidth label="Installation ID" required value={formState.installationId}
+              onChange={(e) => setFormState((s) => ({ ...s, installationId: e.target.value }))} sx={{ mb: 2 }} />
             <FormControl fullWidth size="small">
               <InputLabel>Status</InputLabel>
               <Select label="Status" value={formState.status}

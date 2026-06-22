@@ -10,6 +10,7 @@ export interface GetDeviceRequestsParams {
   pageNumber: number;
   pageSize: number;
   search?: string;
+  status?: number;
 }
 
 export async function getDeviceRequests(params: GetDeviceRequestsParams) {

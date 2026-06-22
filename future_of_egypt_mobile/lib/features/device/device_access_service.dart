@@ -49,52 +49,32 @@ class DeviceAccessService {
     return Map<String, dynamic>.from(decoded);
   }
 
-  static bool isApproved(Map<String, dynamic>? request) {
-    if (request == null) {
-      return false;
-    }
-
-    final status = request["status"];
-
-    if (status == null) {
-      return false;
-    }
+  static String _getStatusString(dynamic status) {
+    if (status == null) throw Exception("Status is null");
 
     final statusText = status.toString().toLowerCase();
 
-    return statusText == "approved" || statusText == "1";
+    if (statusText == "pending" || statusText == "1") return "pending";
+    if (statusText == "approved" || statusText == "2") return "approved";
+    if (statusText == "rejected" || statusText == "3") return "rejected";
+    if (statusText == "cancelled" || statusText == "4") return "cancelled";
+
+    throw Exception('Unknown device access request status: $statusText');
+  }
+
+  static bool isApproved(Map<String, dynamic>? request) {
+    if (request == null) return false;
+    return _getStatusString(request["status"]) == "approved";
   }
 
   static bool isPending(Map<String, dynamic>? request) {
-    if (request == null) {
-      return false;
-    }
-
-    final status = request["status"];
-
-    if (status == null) {
-      return false;
-    }
-
-    final statusText = status.toString().toLowerCase();
-
-    return statusText == "pending" || statusText == "0";
+    if (request == null) return false;
+    return _getStatusString(request["status"]) == "pending";
   }
 
   static bool isRejected(Map<String, dynamic>? request) {
-    if (request == null) {
-      return false;
-    }
-
-    final status = request["status"];
-
-    if (status == null) {
-      return false;
-    }
-
-    final statusText = status.toString().toLowerCase();
-
-    return statusText == "rejected" || statusText == "2";
+    if (request == null) return false;
+    return _getStatusString(request["status"]) == "rejected";
   }
 
   static String getCreatedDevicePublicId(Map<String, dynamic>? request) {

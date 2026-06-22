@@ -3,6 +3,8 @@ export interface DeviceResponse {
   deviceName: string;
   serialNumber: string;
   imei: string;
+  installationId?: string;
+  assignedEngineerName?: string | null;
   status: number;
   createdAt: string;
 }
@@ -11,6 +13,7 @@ export interface CreateDeviceRequest {
   deviceName: string;
   serialNumber: string;
   imei: string;
+  installationId: string;
   status: number;
 }
 

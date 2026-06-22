@@ -5,16 +5,18 @@ export interface DeviceAccessRequestResponse {
   devicePublicId?: string | null;
   deviceName?: string | null;
   installationId: string;
+  serialNumber?: string | null;
+  imei?: string | null;
   status: number;
   requestedAtUtc: string;
   reviewedAtUtc?: string | null;
-  rejectionReason?: string | null;
+  reviewNote?: string | null;
 }
 
 export interface ApproveDeviceAccessRequest {
-  devicePublicId: string;
+  reviewNote?: string;
 }
 
 export interface RejectDeviceAccessRequest {
-  rejectionReason: string;
+  reviewNote: string;
 }

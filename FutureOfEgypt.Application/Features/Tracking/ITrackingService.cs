@@ -21,5 +21,11 @@ namespace FutureOfEgypt.Application.Features.Tracking
             Guid devicePublicId,
             LocationHistoryQueryRequest request,
             CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<LatestLocationResponse>> GetHiddenLatestLocationsAsync(CancellationToken cancellationToken = default);
+
+        Task HideLatestLocationAsync(Guid devicePublicId, Guid adminId, CancellationToken cancellationToken = default);
+
+        Task UnhideLatestLocationAsync(Guid devicePublicId, Guid adminId, CancellationToken cancellationToken = default);
     }
 }

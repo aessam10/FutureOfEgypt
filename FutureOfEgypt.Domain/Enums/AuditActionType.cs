@@ -1,4 +1,4 @@
-﻿namespace FutureOfEgypt.Domain.Enums
+namespace FutureOfEgypt.Domain.Enums
 {
     public enum AuditActionType
     {
@@ -17,6 +17,8 @@
         DeviceInactivated = 13,
         DeviceMarkedLost = 14,
         AdminUserCreated = 15,
-        EngineerUserCreated = 16
+        EngineerUserCreated = 16,
+        DeviceLocationHidden = 17,
+        DeviceLocationUnhidden = 18
     }
 }
