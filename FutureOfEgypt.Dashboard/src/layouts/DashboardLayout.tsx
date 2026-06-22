@@ -41,6 +41,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LogoutIcon from '@mui/icons-material/Logout';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import MenuIcon from '@mui/icons-material/Menu';
+import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const DRAWER_WIDTH = 260;
@@ -49,6 +50,7 @@ const NAV_ITEMS = [
   { label: 'نظرة عامة', labelEn: 'Overview', path: routes.dashboard, icon: <DashboardIcon fontSize="small" /> },
   { label: 'المهندسون', labelEn: 'Engineers', path: routes.engineers, icon: <EngineeringIcon fontSize="small" /> },
   { label: 'الأجهزة', labelEn: 'Devices', path: routes.devices, icon: <DevicesIcon fontSize="small" /> },
+  { label: 'تحديثات التطبيق', labelEn: 'App Updates', path: routes.appUpdates, icon: <SystemUpdateAltIcon fontSize="small" /> },
   { label: 'التكليفات', labelEn: 'Assignments', path: routes.assignments, icon: <AssignmentIcon fontSize="small" /> },
   { label: 'طلبات الأجهزة', labelEn: 'Device Requests', path: routes.deviceRequests, icon: <PhoneAndroidIcon fontSize="small" /> },
   { label: 'الخريطة المباشرة', labelEn: 'Live Map', path: routes.liveMap, icon: <MapIcon fontSize="small" /> },

@@ -72,8 +72,10 @@ class BackgroundTrackingService {
 }
 
 @pragma('vm:entry-point')
-void onStart(ServiceInstance service) {
+void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
+  
+  await ApiClient.init();
 
   String token = '';
   String devicePublicId = '';
@@ -167,5 +169,15 @@ Future<void> _sendLocation({
   print('[FOE_BACKGROUND] Latitude: ${position.latitude}');
   print('[FOE_BACKGROUND] Longitude: ${position.longitude}');
 
-  await ApiClient.postWithToken('Tracking/location', body, token);
+  try {
+    await ApiClient.postWithToken('Tracking/location', body, token);
+  } catch (e) {
+    if (e.toString().contains("426 Upgrade Required")) {
+      print('[FOE_BACKGROUND] 426 Upgrade Required caught! Stopping tracking service.');
+      final service = FlutterBackgroundService();
+      service.invoke('stopService');
+    } else {
+      print('[FOE_BACKGROUND] Error sending location: $e');
+    }
+  }
 }

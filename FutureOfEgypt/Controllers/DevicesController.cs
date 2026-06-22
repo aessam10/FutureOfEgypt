@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Security;
+using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.Devices;
 using FutureOfEgypt.Extensions;
 using Microsoft.AspNetCore.Authorization;
@@ -12,10 +12,14 @@ namespace FutureOfEgypt.Controllers
     public sealed class DevicesController : ControllerBase
     {
         private readonly IDeviceService _deviceService;
+        private readonly FutureOfEgypt.Application.Features.AppUpdates.IAppUpdateService _appUpdateService;
 
-        public DevicesController(IDeviceService deviceService)
+        public DevicesController(
+            IDeviceService deviceService,
+            FutureOfEgypt.Application.Features.AppUpdates.IAppUpdateService appUpdateService)
         {
             _deviceService = deviceService;
+            _appUpdateService = appUpdateService;
         }
         [HttpPost]
         public async Task<IActionResult> Create(
@@ -48,9 +52,9 @@ namespace FutureOfEgypt.Controllers
 
         [HttpPatch("{devicePublicId:guid}/status")]
         public async Task<IActionResult> UpdateStatus(
-    Guid devicePublicId,
-    [FromBody] UpdateDeviceStatusRequest request,
-    CancellationToken cancellationToken)
+            Guid devicePublicId,
+            [FromBody] UpdateDeviceStatusRequest request,
+            CancellationToken cancellationToken)
         {
             var adminUserId = User.GetUserId();
             var adminEmail = User.GetUserEmail();
@@ -63,6 +67,16 @@ namespace FutureOfEgypt.Controllers
                 cancellationToken);
 
             return Ok(result);
+        }
+
+        [HttpPost("app-status")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ReportAppStatus(
+            [FromBody] FutureOfEgypt.Application.Features.AppUpdates.DeviceAppStatusRequest request,
+            CancellationToken cancellationToken)
+        {
+            await _appUpdateService.ReportAppStatusAsync(request, cancellationToken);
+            return Ok();
         }
     }
 }

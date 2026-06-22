@@ -13,6 +13,7 @@ import { AuditLogsPage } from '../pages/AuditLogsPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { routes } from './routes';
 import { EmailsPage } from '../pages/EmailsPage';
+import AppUpdatesPage from '../pages/AppUpdatesPage';
 
 export const router = createBrowserRouter([
   {
@@ -64,6 +65,10 @@ export const router = createBrowserRouter([
           {
             path: routes.auditLogs,
             element: <AuditLogsPage />,
+          },
+          {
+            path: routes.appUpdates,
+            element: <AppUpdatesPage />,
           },
           {
             path: '*',

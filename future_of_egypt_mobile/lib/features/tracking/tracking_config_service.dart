@@ -42,6 +42,16 @@ class TrackingConfigService {
     return newId;
   }
 
+  static Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_tokenKey);
+  }
+
+  static Future<String?> getDevicePublicId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_devicePublicIdKey);
+  }
+
   static Future<List<String>> getRoles() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList(_rolesKey) ?? [];

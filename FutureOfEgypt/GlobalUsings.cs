@@ -7,6 +7,7 @@ global using FutureOfEgypt.Application.Features.Devices;
 global using FutureOfEgypt.Application.Features.EngineerDevices;
 global using FutureOfEgypt.Application.Features.Engineers;
 global using FutureOfEgypt.Application.Features.Tracking;
+global using FutureOfEgypt.Application.Features.AppUpdates;
 global using FutureOfEgypt.Hubs;
 global using FutureOfEgypt.Infrastructure.Identity;
 global using FutureOfEgypt.Infrastructure.Persistence;

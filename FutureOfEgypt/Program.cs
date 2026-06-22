@@ -158,6 +158,9 @@ namespace FutureOfEgypt
             builder.Services.AddScoped<INotificationService, NotificationService>();
             builder.Services.AddScoped<INotificationRealtimeNotifier, FutureOfEgypt.Services.SignalRNotificationNotifier>();
             builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+            builder.Services.AddScoped<IAppUpdateService, AppUpdateService>();
+            builder.Services.AddSingleton<IAppReleaseFileService, AppReleaseFileService>();
+            builder.Services.AddMemoryCache();
             builder.Services.AddIdentity<ApplicationUser, ApplicationRole>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
             var jwtKey = builder.Configuration["Jwt:Key"];
 
@@ -244,6 +247,8 @@ namespace FutureOfEgypt
             app.UseCors("Frontend");
 
             app.UseAuthentication();
+
+            app.UseMiddleware<AppVersionEnforcementMiddleware>();
 
             app.UseRateLimiter();
 

@@ -361,3 +361,15 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# FutureOfEgypt Custom Ignores
+dist/
+build/
+.dart_tool/
+*.apk
+*.aab
+*.log
+run_tests*.ps1
+temp_*.ps1
+local_*.ps1
+FutureOfEgypt/AppFiles/AndroidReleases/*.apk
+FutureOfEgypt/AppFiles/AndroidReleases/*.tmp

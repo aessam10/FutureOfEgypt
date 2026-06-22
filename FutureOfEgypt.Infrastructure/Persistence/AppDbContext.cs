@@ -39,6 +39,10 @@ namespace FutureOfEgypt.Infrastructure.Persistence
 
         public DbSet<AppNotification> AppNotifications { get; set; }
 
+        public DbSet<AppRelease> AppReleases { get; set; }
+
+        public DbSet<DeviceAppStatus> DeviceAppStatuses { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

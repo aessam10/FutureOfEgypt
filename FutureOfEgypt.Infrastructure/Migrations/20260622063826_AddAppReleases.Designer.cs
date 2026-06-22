@@ -3,6 +3,7 @@ using System;
 using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FutureOfEgypt.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260622063826_AddAppReleases")]
+    partial class AddAppReleases
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -522,108 +525,6 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .HasFilter("\"InstallationId\" IS NOT NULL AND \"Status\" = 1 AND \"IsDeleted\" = false");
 
                     b.ToTable("DeviceAccessRequests");
-                });
-
-            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceAppStatus", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AppVersionCode")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("AppVersionName")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("DeviceId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("EngineerId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("InstallationId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("LastCheckedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LastError")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<DateTime>("LastReportedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("LastUpdateFailedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("LastUpdatePromptShownAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("LastUpdateStartedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("LatestVersionCode")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("MinimumMandatoryVersionCode")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("MinimumRecommendedVersionCode")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("MinimumRequiredVersionCode")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Platform")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("RequiredReleasePublicId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("UpdateLevel")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DeviceId");
-
-                    b.HasIndex("EngineerId");
-
-                    b.HasIndex("InstallationId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("Platform", "InstallationId")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
-                    b.ToTable("DeviceAppStatuses");
                 });
 
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceLatestLocation", b =>
@@ -1219,23 +1120,6 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("CreatedDevice");
-
-                    b.Navigation("Engineer");
-                });
-
-            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceAppStatus", b =>
-                {
-                    b.HasOne("FutureOfEgypt.Domain.Entities.Device", "Device")
-                        .WithMany()
-                        .HasForeignKey("DeviceId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("FutureOfEgypt.Domain.Entities.Engineer", "Engineer")
-                        .WithMany()
-                        .HasForeignKey("EngineerId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Device");
 
                     b.Navigation("Engineer");
                 });

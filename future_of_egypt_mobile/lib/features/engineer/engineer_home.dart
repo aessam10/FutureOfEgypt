@@ -23,7 +23,7 @@ class EngineerHome extends StatefulWidget {
 }
 
 class _EngineerHomeState extends State<EngineerHome> {
-  bool _isSending = false;
+
 
   @override
   void initState() {
@@ -63,36 +63,7 @@ class _EngineerHomeState extends State<EngineerHome> {
     );
   }
 
-  Future<void> _handleManualSend() async {
-    setState(() => _isSending = true);
-    try {
-      final installationId = await TrackingConfigService.getInstallationId();
-      await LocationService.sendLocationOnce(
-        token: widget.token,
-        devicePublicId: widget.deviceId,
-        installationId: installationId,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location sent successfully.'), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        String msg = 'Failed to send location.';
-        if (e.toString().contains('429')) {
-          msg = 'Too many location updates. Please wait a minute and try again.';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
-      }
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -103,13 +74,7 @@ class _EngineerHomeState extends State<EngineerHome> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text("Engineer Chat", style: TextStyle(fontSize: 22)),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _isSending ? null : _handleManualSend,
-              child: _isSending
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text("Send current location now"),
-            ),
+
           ],
         ),
       ),

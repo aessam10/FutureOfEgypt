@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 
 import 'features/auth/auth_gate.dart';
 import 'features/tracking/background_service.dart';
+import 'features/app_update/update_gate.dart';
+import 'core/network/api_client.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  await ApiClient.init();
 
   if (!kIsWeb) {
     await BackgroundTrackingService.initialize();
@@ -14,14 +18,17 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
-      home: const AuthGate(),
+      home: const UpdateGate(child: AuthGate()),
     );
   }
 }

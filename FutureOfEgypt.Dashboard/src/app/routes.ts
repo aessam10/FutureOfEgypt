@@ -9,4 +9,5 @@ export const routes = {
   chat: '/chat',
   emails: '/emails',
   auditLogs: '/audit-logs',
+  appUpdates: '/app-updates',
 };
