@@ -1,3 +1,5 @@
+using FutureOfEgypt.Middleware;
+
 namespace FutureOfEgypt
 {
     public class Program
@@ -125,6 +127,9 @@ namespace FutureOfEgypt
                     Description = "Enter JWT token only."
                 });
             });
+            builder.Services.Configure<FutureOfEgypt.Application.Common.Models.LiveStatusOptions>(builder.Configuration.GetSection("LiveStatus"));
+            builder.Services.Configure<FutureOfEgypt.Application.Common.Models.TrackingScheduleOptions>(builder.Configuration.GetSection("TrackingSchedule"));
+            builder.Services.Configure<FutureOfEgypt.Options.ProfileImagesOptions>(builder.Configuration.GetSection(FutureOfEgypt.Options.ProfileImagesOptions.ProfileImages));
             builder.Services.Configure<SmtpEmailSettings>(builder.Configuration.GetSection("SmtpEmail"));
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -144,6 +149,7 @@ namespace FutureOfEgypt
                     policy.RequireRole(AppRoles.ADMIN, AppRoles.MANAGER));
             });
             builder.Services.AddScoped<ITrackingService, TrackingService>();
+            builder.Services.AddHostedService<FutureOfEgypt.Services.DeviceStatusMonitorService>();
             builder.Services.AddScoped<IEngineerService, EngineerService>(); 
             builder.Services.AddScoped<IDeviceService, DeviceService>();
             builder.Services.AddScoped<IEngineerDeviceService, EngineerDeviceService>();
@@ -160,6 +166,7 @@ namespace FutureOfEgypt
             builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
             builder.Services.AddScoped<IAppUpdateService, AppUpdateService>();
             builder.Services.AddSingleton<IAppReleaseFileService, AppReleaseFileService>();
+            builder.Services.AddScoped<FutureOfEgypt.Application.Features.Managers.IManagersService, ManagersService>();
             builder.Services.AddMemoryCache();
             builder.Services.AddIdentity<ApplicationUser, ApplicationRole>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
             var jwtKey = builder.Configuration["Jwt:Key"];
@@ -208,7 +215,8 @@ namespace FutureOfEgypt
                             if (!string.IsNullOrEmpty(accessToken) &&
                                 (path.StartsWithSegments("/hubs/locations") ||
                                  path.StartsWithSegments("/hubs/notifications") ||
-                                 path.StartsWithSegments("/hubs/chat")))
+                                 path.StartsWithSegments("/hubs/chat") ||
+                                 path.StartsWithSegments("/api/profile/photo")))
                             {
                                 context.Token = accessToken;
                             }
@@ -247,6 +255,8 @@ namespace FutureOfEgypt
             app.UseCors("Frontend");
 
             app.UseAuthentication();
+
+            app.UseActiveUserCheck();
 
             app.UseMiddleware<AppVersionEnforcementMiddleware>();
 

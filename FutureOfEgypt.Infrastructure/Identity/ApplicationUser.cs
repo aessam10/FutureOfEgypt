@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Entities;
+using FutureOfEgypt.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 
 namespace FutureOfEgypt.Infrastructure.Identity
@@ -12,5 +12,11 @@ namespace FutureOfEgypt.Infrastructure.Identity
         public string? CompanyEmail { get; set; }
 
         public Engineer? Engineer { get; set; }
+
+        public string? ProfilePhotoPath { get; set; }
+
+        public bool IsSuspended { get; set; }
+
+        public bool IsDeleted { get; set; }
     }
 }

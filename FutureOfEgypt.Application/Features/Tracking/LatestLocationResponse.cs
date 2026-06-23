@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -9,6 +9,12 @@ namespace FutureOfEgypt.Application.Features.Tracking
         public Guid EngineerPublicId { get; set; }
 
         public string EngineerName { get; set; } = string.Empty;
+
+        public string? EngineerPhoneNumber { get; set; }
+
+        public string? ProfilePhotoUrl { get; set; }
+
+        public bool IsAuthorized { get; set; }
 
         public Guid DevicePublicId { get; set; }
 
@@ -23,6 +29,8 @@ namespace FutureOfEgypt.Application.Features.Tracking
         public double? Speed { get; set; }
 
         public bool IsMocked { get; set; }
+
+        public bool IsOnline { get; set; }
 
         public DateTime RecordedAt { get; set; }
 

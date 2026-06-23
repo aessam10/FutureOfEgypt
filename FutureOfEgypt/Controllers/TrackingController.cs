@@ -56,15 +56,12 @@ namespace FutureOfEgypt.Controllers
             if (!Guid.TryParse(engineerPublicIdValue, out var engineerPublicId))
                 return Unauthorized(new { message = "Invalid engineer identity in token." });
 
-            await _trackingService.ReceiveLocationUpdateAsync(
+            var response = await _trackingService.ReceiveLocationUpdateAsync(
                 engineerPublicId,
                 request,
                 cancellationToken);
 
-            return Ok(new
-            {
-                message = "Location update received successfully."
-            });
+            return Ok(response);
         }
 
         [Authorize(Policy = "AdminOrManager")]
@@ -86,6 +83,23 @@ namespace FutureOfEgypt.Controllers
             var result = await _trackingService.GetDeviceLocationHistoryAsync(
                 devicePublicId,
                 request,
+                cancellationToken);
+
+            return Ok(result);
+        }
+
+        [Authorize(Policy = "AdminOrManager")]
+        [HttpGet("history/engineer/{engineerPublicId:guid}")]
+        public async Task<IActionResult> GetEngineerLocationHistoryByDate(
+            Guid engineerPublicId,
+            [FromQuery] string date,
+            [FromQuery] int maxPoints = 150,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _trackingService.GetEngineerLocationHistoryByDateAsync(
+                engineerPublicId,
+                date,
+                maxPoints,
                 cancellationToken);
 
             return Ok(result);
@@ -161,6 +175,21 @@ namespace FutureOfEgypt.Controllers
             {
                 message = "Latest location unhidden successfully."
             });
+        }
+
+        [Authorize(Policy = "AdminOrManager")]
+        [HttpGet("analysis/engineer/{engineerPublicId:guid}")]
+        public async Task<IActionResult> GetDailyAnalysis(
+            Guid engineerPublicId,
+            [FromQuery] string date,
+            CancellationToken cancellationToken)
+        {
+            var result = await _trackingService.GetDailyAnalysisAsync(
+                engineerPublicId,
+                date,
+                cancellationToken);
+
+            return Ok(result);
         }
     }
 }

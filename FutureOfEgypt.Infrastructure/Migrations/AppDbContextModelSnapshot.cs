@@ -664,6 +664,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     b.Property<bool>("IsMocked")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("boolean");
+
                     b.Property<double>("Latitude")
                         .HasColumnType("double precision");
 
@@ -873,6 +876,53 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     b.ToTable("EngineerDevices");
                 });
 
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.EngineerStatusHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DeviceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EngineerId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("DeviceId", "ChangedAtUtc");
+
+                    b.HasIndex("EngineerId", "ChangedAtUtc");
+
+                    b.ToTable("EngineerStatusHistories");
+                });
+
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.LocationHistory", b =>
                 {
                     b.Property<int>("Id")
@@ -989,6 +1039,12 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSuspended")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 
@@ -1011,6 +1067,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("ProfilePhotoPath")
+                        .HasColumnType("text");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
@@ -1266,6 +1325,23 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .HasForeignKey("DeviceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Engineer", "Engineer")
+                        .WithMany()
+                        .HasForeignKey("EngineerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Device");
+
+                    b.Navigation("Engineer");
+                });
+
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.EngineerStatusHistory", b =>
+                {
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Device", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId");
 
                     b.HasOne("FutureOfEgypt.Domain.Entities.Engineer", "Engineer")
                         .WithMany()

@@ -14,6 +14,10 @@ export interface LatestLocationResponse {
   hiddenAt?: string | null;
   hiddenByUserId?: string | null;
   hiddenReason?: string | null;
+  isOnline: boolean;
+  profilePhotoUrl?: string;
+  engineerPhoneNumber?: string;
+  isAuthorized?: boolean;
 }
 
 export interface LocationReceivedEvent {
@@ -28,4 +32,14 @@ export interface LocationReceivedEvent {
   recordedAt: string;
   receivedAt: string;
   isMocked?: boolean;
+  isOnline: boolean;
+}
+
+export interface EngineerStatusChangedEvent {
+  engineerPublicId: string;
+  devicePublicId: string;
+  isOnline: boolean;
+  reason?: string;
+  onlineCount: number;
+  offlineCount: number;
 }

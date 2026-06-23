@@ -1,4 +1,4 @@
-﻿namespace FutureOfEgypt.Application.Features.Tracking
+namespace FutureOfEgypt.Application.Features.Tracking
 {
     public sealed class LocationNotificationResponse
     {
@@ -19,6 +19,8 @@
         public double? Speed { get; set; }
 
         public bool IsMocked { get; set; }
+
+        public bool IsOnline { get; set; }
 
         public DateTime RecordedAt { get; set; }
 

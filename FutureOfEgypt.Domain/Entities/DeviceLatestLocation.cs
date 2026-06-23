@@ -27,6 +27,8 @@ namespace FutureOfEgypt.Domain.Entities
 
         public bool IsMocked { get; set; }// in case an Engineer tried to send a fake location, we can detect it.
 
+        public bool IsOnline { get; set; } = true;
+
         public bool IsHidden { get; set; }
 
         public DateTime? HiddenAt { get; set; }

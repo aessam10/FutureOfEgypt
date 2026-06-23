@@ -10,4 +10,6 @@ export const routes = {
   emails: '/emails',
   auditLogs: '/audit-logs',
   appUpdates: '/app-updates',
+  profile: '/profile',
+  managers: '/managers',
 };

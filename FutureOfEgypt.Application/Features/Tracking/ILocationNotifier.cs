@@ -13,5 +13,9 @@ namespace FutureOfEgypt.Application.Features.Tracking
         Task NotifyLocationUnhiddenAsync(
             Guid devicePublicId,
             CancellationToken cancellationToken = default);
+
+        Task NotifyEngineerStatusChangedAsync(
+            EngineerStatusChangedEvent statusEvent,
+            CancellationToken cancellationToken = default);
     }
 }

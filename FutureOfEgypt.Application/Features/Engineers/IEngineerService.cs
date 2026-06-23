@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 
 namespace FutureOfEgypt.Application.Features.Engineers
 {
@@ -20,5 +20,7 @@ namespace FutureOfEgypt.Application.Features.Engineers
             Guid engineerPublicId,
             UpdateEngineerStatusRequest request,
             CancellationToken cancellationToken = default);
+        Task<EngineerResponse> UpdateEngineerAsync(Guid adminUserId, string adminEmail, Guid engineerPublicId, UpdateEngineerRequest request, CancellationToken cancellationToken = default);
+        Task DeleteEngineerAsync(Guid adminUserId, string adminEmail, Guid engineerPublicId, CancellationToken cancellationToken = default);
     }
 }

@@ -4,7 +4,7 @@ namespace FutureOfEgypt.Application.Features.Tracking
 {
     public interface ITrackingService
     {
-        Task ReceiveLocationUpdateAsync(
+        Task<ReceiveLocationUpdateResponse> ReceiveLocationUpdateAsync(
             Guid engineerPublicId,
             ReceiveLocationUpdateRequest request,
             CancellationToken cancellationToken = default);
@@ -22,10 +22,21 @@ namespace FutureOfEgypt.Application.Features.Tracking
             LocationHistoryQueryRequest request,
             CancellationToken cancellationToken = default);
 
+        Task<IReadOnlyList<LocationHistoryResponse>> GetEngineerLocationHistoryByDateAsync(
+            Guid engineerPublicId,
+            string date,
+            int maxPoints,
+            CancellationToken cancellationToken = default);
+
         Task<IReadOnlyList<LatestLocationResponse>> GetHiddenLatestLocationsAsync(CancellationToken cancellationToken = default);
 
         Task HideLatestLocationAsync(Guid devicePublicId, Guid adminId, CancellationToken cancellationToken = default);
 
         Task UnhideLatestLocationAsync(Guid devicePublicId, Guid adminId, CancellationToken cancellationToken = default);
+
+        Task<DailyAnalysisResponse> GetDailyAnalysisAsync(
+            Guid engineerPublicId,
+            string dateString,
+            CancellationToken cancellationToken = default);
     }
 }

@@ -1,9 +1,11 @@
+using FutureOfEgypt.Application.Common.Helpers;
 using FutureOfEgypt.Application.Common.Models;
 using FutureOfEgypt.Application.Features.Tracking;
 using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Domain.Enums;
 using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace FutureOfEgypt.Infrastructure.Services
 {
@@ -11,10 +13,13 @@ namespace FutureOfEgypt.Infrastructure.Services
     {
         private readonly AppDbContext _context;
         private readonly ILocationNotifier _locationNotifier;
-        public TrackingService(AppDbContext context, ILocationNotifier locationNotifier)
+        private readonly TrackingScheduleOptions _scheduleOptions;
+        
+        public TrackingService(AppDbContext context, ILocationNotifier locationNotifier, IOptionsSnapshot<TrackingScheduleOptions> scheduleOptions)
         {
             _context = context;
             _locationNotifier = locationNotifier;
+            _scheduleOptions = scheduleOptions.Value;
         }
 
         public async Task<DeviceValidationResponse> ValidateDeviceAsync(
@@ -106,7 +111,7 @@ namespace FutureOfEgypt.Infrastructure.Services
         }
 
 
-        public async Task ReceiveLocationUpdateAsync(
+        public async Task<ReceiveLocationUpdateResponse> ReceiveLocationUpdateAsync(
             Guid engineerPublicId,
             ReceiveLocationUpdateRequest request,
             CancellationToken cancellationToken = default)
@@ -166,6 +171,52 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (request.Speed.HasValue && request.Speed.Value < 0)
                 throw new InvalidOperationException("Invalid speed.");
 
+            if (!TrackingScheduleHelper.IsWithinWorkingHours(_scheduleOptions, DateTime.UtcNow))
+            {
+                var existingLatest = await _context.DeviceLatestLocations
+                    .FirstOrDefaultAsync(x => x.DeviceId == device.Id && !x.IsDeleted, cancellationToken);
+                    
+                if (existingLatest is not null && existingLatest.IsOnline)
+                {
+                    existingLatest.IsOnline = false;
+                    existingLatest.UpdatedAt = DateTime.UtcNow;
+
+                    await _context.EngineerStatusHistories.AddAsync(new EngineerStatusHistory
+                    {
+                        EngineerId = engineer.Id,
+                        DeviceId = device.Id,
+                        IsOnline = false,
+                        Reason = "Outside working hours",
+                        ChangedAtUtc = DateTime.UtcNow
+                    }, cancellationToken);
+
+                    await _context.SaveChangesAsync(cancellationToken);
+                    
+                    if (!existingLatest.IsHidden)
+                    {
+                        var totalOnline = await _context.DeviceLatestLocations.Where(x => !x.IsDeleted && !x.IsHidden && x.IsOnline).CountAsync(cancellationToken);
+                        var totalOffline = await _context.DeviceLatestLocations.Where(x => !x.IsDeleted && !x.IsHidden && !x.IsOnline).CountAsync(cancellationToken);
+
+                        var statusEvent = new EngineerStatusChangedEvent
+                        {
+                            EngineerPublicId = engineer.PublicId,
+                            DevicePublicId = device.PublicId,
+                            IsOnline = false,
+                            Reason = "Outside working hours",
+                            OnlineCount = totalOnline,
+                            OfflineCount = totalOffline
+                        };
+                        await _locationNotifier.NotifyEngineerStatusChangedAsync(statusEvent, cancellationToken);
+                    }
+                }
+
+                return new ReceiveLocationUpdateResponse
+                {
+                    Accepted = false,
+                    Reason = "OutsideWorkingHours"
+                };
+            }
+
             device.LastSeenAtUtc = DateTime.UtcNow;
             device.UpdatedAt = DateTime.UtcNow;
 
@@ -202,6 +253,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                     Accuracy = request.Accuracy,
                     Speed = request.Speed,
                     IsMocked = request.IsMocked,
+                    IsOnline = true,
                     RecordedAt = request.RecordedAt,
                     ReceivedAt = receivedAtUtc
                 };
@@ -217,6 +269,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 latestLocation.Accuracy = request.Accuracy;
                 latestLocation.Speed = request.Speed;
                 latestLocation.IsMocked = request.IsMocked;
+                latestLocation.IsOnline = true;
                 latestLocation.RecordedAt = request.RecordedAt;
                 latestLocation.ReceivedAt = receivedAtUtc;
                 latestLocation.UpdatedAt = receivedAtUtc;
@@ -225,7 +278,44 @@ namespace FutureOfEgypt.Infrastructure.Services
             device.LastSeenAtUtc = receivedAtUtc;
             device.UpdatedAt = receivedAtUtc;
 
+            var isNewLocation = latestLocation.Id == 0 || _context.Entry(latestLocation).State == EntityState.Added;
+            var wasOnlineValue = isNewLocation ? false : (bool)_context.Entry(latestLocation).OriginalValues["IsOnline"]!;
+
+            if (!wasOnlineValue)
+            {
+                await _context.EngineerStatusHistories.AddAsync(new EngineerStatusHistory
+                {
+                    EngineerId = engineer.Id,
+                    DeviceId = device.Id,
+                    IsOnline = true,
+                    Reason = "Location update received",
+                    ChangedAtUtc = receivedAtUtc
+                }, cancellationToken);
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
+            
+            if (!wasOnlineValue && !latestLocation.IsHidden)
+            {
+                var totalOnline = await _context.DeviceLatestLocations
+                    .Where(x => !x.IsDeleted && !x.IsHidden && x.IsOnline)
+                    .CountAsync(cancellationToken);
+                    
+                var totalOffline = await _context.DeviceLatestLocations
+                    .Where(x => !x.IsDeleted && !x.IsHidden && !x.IsOnline)
+                    .CountAsync(cancellationToken);
+
+                var statusEvent = new EngineerStatusChangedEvent
+                {
+                    EngineerPublicId = engineer.PublicId,
+                    DevicePublicId = device.PublicId,
+                    IsOnline = true,
+                    Reason = "Location update received",
+                    OnlineCount = totalOnline,
+                    OfflineCount = totalOffline
+                };
+                await _locationNotifier.NotifyEngineerStatusChangedAsync(statusEvent, cancellationToken);
+            }
 
             await _locationNotifier.NotifyLocationReceivedAsync(
                  new LocationNotificationResponse
@@ -239,64 +329,102 @@ namespace FutureOfEgypt.Infrastructure.Services
                      Accuracy = request.Accuracy,
                      Speed = request.Speed,
                      IsMocked = request.IsMocked,
+                     IsOnline = true,
                      RecordedAt = request.RecordedAt,
                      ReceivedAt = receivedAtUtc
                  }, cancellationToken);
+                 
+            return new ReceiveLocationUpdateResponse
+            {
+                Accepted = true
+            };
         }
 
 
         public async Task<IReadOnlyList<LatestLocationResponse>> GetLatestLocationsAsync(CancellationToken cancellationToken = default)
         {
-            return await _context.DeviceLatestLocations
-                .AsNoTracking()
-                .Include(x => x.Engineer)
-                .Include(x => x.Device)
-                .Where(x => !x.IsDeleted && !x.IsHidden)
-                .OrderByDescending(x => x.ReceivedAt)
-                .Select(x => new LatestLocationResponse
+            var locationsQuery = from loc in _context.DeviceLatestLocations.AsNoTracking()
+                                 join eng in _context.Engineers.AsNoTracking() on loc.EngineerId equals eng.Id
+                                 join dev in _context.Devices.AsNoTracking() on loc.DeviceId equals dev.Id
+                                 join ed in _context.EngineerDevices.AsNoTracking() on new { EngId = eng.Id, DevId = dev.Id } equals new { EngId = ed.EngineerId, DevId = ed.DeviceId } into edGroup
+                                 from ed in edGroup.DefaultIfEmpty()
+                                 join u in _context.Users.AsNoTracking() on eng.Id equals u.EngineerId into uGroup
+                                 from u in uGroup.DefaultIfEmpty()
+                                 where !loc.IsDeleted && !loc.IsHidden
+                                 orderby loc.ReceivedAt descending
+                                 select new LatestLocationResponse
+                                 {
+                                     EngineerPublicId = eng.PublicId,
+                                     EngineerName = eng.FullName,
+                                     EngineerPhoneNumber = eng.PhoneNumber,
+                                     ProfilePhotoUrl = (u != null && u.ProfilePhotoPath != null) ? $"/api/profile/photo/{u.Id}" : null,
+                                     IsAuthorized = ed != null && ed.IsActive && !ed.IsDeleted,
+                                     DevicePublicId = dev.PublicId,
+                                     DeviceName = dev.DeviceName,
+                                     Latitude = loc.Latitude,
+                                     Longitude = loc.Longitude,
+                                     Accuracy = loc.Accuracy,
+                                     Speed = loc.Speed,
+                                     IsMocked = loc.IsMocked,
+                                     IsOnline = loc.IsOnline,
+                                     RecordedAt = loc.RecordedAt,
+                                     ReceivedAt = loc.ReceivedAt
+                                 };
+
+            var locations = await locationsQuery.ToListAsync(cancellationToken);
+
+            if (!TrackingScheduleHelper.IsWithinWorkingHours(_scheduleOptions, DateTime.UtcNow))
+            {
+                foreach (var loc in locations)
                 {
-                    EngineerPublicId = x.Engineer!.PublicId,
-                    EngineerName = x.Engineer.FullName,
+                    loc.IsOnline = false;
+                }
+            }
 
-                    DevicePublicId = x.Device!.PublicId,
-                    DeviceName = x.Device.DeviceName,
-
-                    Latitude = x.Latitude,
-                    Longitude = x.Longitude,
-                    Accuracy = x.Accuracy,
-                    Speed = x.Speed,
-                    IsMocked = x.IsMocked,
-                    RecordedAt = x.RecordedAt,
-                    ReceivedAt = x.ReceivedAt
-                })
-                .ToListAsync(cancellationToken);
+            return locations;
         }
 
         public async Task<IReadOnlyList<LatestLocationResponse>> GetHiddenLatestLocationsAsync(CancellationToken cancellationToken = default)
         {
-            return await _context.DeviceLatestLocations
-                .AsNoTracking()
-                .Include(x => x.Engineer)
-                .Include(x => x.Device)
-                .Where(x => !x.IsDeleted && x.IsHidden)
-                .OrderByDescending(x => x.ReceivedAt)
-                .Select(x => new LatestLocationResponse
+            var locationsQuery = from loc in _context.DeviceLatestLocations.AsNoTracking()
+                                 join eng in _context.Engineers.AsNoTracking() on loc.EngineerId equals eng.Id
+                                 join dev in _context.Devices.AsNoTracking() on loc.DeviceId equals dev.Id
+                                 join ed in _context.EngineerDevices.AsNoTracking() on new { EngId = eng.Id, DevId = dev.Id } equals new { EngId = ed.EngineerId, DevId = ed.DeviceId } into edGroup
+                                 from ed in edGroup.DefaultIfEmpty()
+                                 join u in _context.Users.AsNoTracking() on eng.Id equals u.EngineerId into uGroup
+                                 from u in uGroup.DefaultIfEmpty()
+                                 where !loc.IsDeleted && loc.IsHidden
+                                 orderby loc.ReceivedAt descending
+                                 select new LatestLocationResponse
+                                 {
+                                     EngineerPublicId = eng.PublicId,
+                                     EngineerName = eng.FullName,
+                                     EngineerPhoneNumber = eng.PhoneNumber,
+                                     ProfilePhotoUrl = (u != null && u.ProfilePhotoPath != null) ? $"/api/profile/photo/{u.Id}" : null,
+                                     IsAuthorized = ed != null && ed.IsActive && !ed.IsDeleted,
+                                     DevicePublicId = dev.PublicId,
+                                     DeviceName = dev.DeviceName,
+                                     Latitude = loc.Latitude,
+                                     Longitude = loc.Longitude,
+                                     Accuracy = loc.Accuracy,
+                                     Speed = loc.Speed,
+                                     IsMocked = loc.IsMocked,
+                                     IsOnline = loc.IsOnline,
+                                     RecordedAt = loc.RecordedAt,
+                                     ReceivedAt = loc.ReceivedAt
+                                 };
+
+            var locations = await locationsQuery.ToListAsync(cancellationToken);
+
+            if (!TrackingScheduleHelper.IsWithinWorkingHours(_scheduleOptions, DateTime.UtcNow))
+            {
+                foreach (var loc in locations)
                 {
-                    EngineerPublicId = x.Engineer!.PublicId,
-                    EngineerName = x.Engineer.FullName,
+                    loc.IsOnline = false;
+                }
+            }
 
-                    DevicePublicId = x.Device!.PublicId,
-                    DeviceName = x.Device.DeviceName,
-
-                    Latitude = x.Latitude,
-                    Longitude = x.Longitude,
-                    Accuracy = x.Accuracy,
-                    Speed = x.Speed,
-                    IsMocked = x.IsMocked,
-                    RecordedAt = x.RecordedAt,
-                    ReceivedAt = x.ReceivedAt
-                })
-                .ToListAsync(cancellationToken);
+            return locations;
         }
 
 
@@ -437,6 +565,193 @@ namespace FutureOfEgypt.Infrastructure.Services
 
                 await _locationNotifier.NotifyLocationUnhiddenAsync(devicePublicId, cancellationToken);
             }
+        }
+
+        public async Task<IReadOnlyList<LocationHistoryResponse>> GetEngineerLocationHistoryByDateAsync(
+            Guid engineerPublicId,
+            string dateString,
+            int maxPoints,
+            CancellationToken cancellationToken = default)
+        {
+            var engineer = await _context.Engineers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.PublicId == engineerPublicId && !x.IsDeleted, cancellationToken);
+
+            if (engineer is null)
+                throw new InvalidOperationException("Engineer does not exist.");
+
+            if (!DateTime.TryParseExact(dateString, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var localDate))
+                throw new ArgumentException("Invalid date format. Expected yyyy-MM-dd.", nameof(dateString));
+
+            maxPoints = Math.Clamp(maxPoints, 1, 150);
+
+            TimeZoneInfo timeZoneInfo = TimeZoneHelper.GetTimeZone("Africa/Cairo");
+            var startOfDayLocal = localDate.Date;
+            var endOfDayLocal = startOfDayLocal.AddDays(1);
+
+            var fromUtc = TimeZoneInfo.ConvertTimeToUtc(startOfDayLocal, timeZoneInfo);
+            var toUtc = TimeZoneInfo.ConvertTimeToUtc(endOfDayLocal, timeZoneInfo);
+
+            var query = _context.LocationHistories
+                .AsNoTracking()
+                .Include(x => x.Engineer)
+                .Include(x => x.Device)
+                .Where(x => x.EngineerId == engineer.Id && !x.IsDeleted)
+                .Where(x => x.RecordedAt >= fromUtc && x.RecordedAt < toUtc)
+                .OrderBy(x => x.RecordedAt);
+
+            var allPoints = await query
+                .Select(x => new LocationHistoryResponse
+                {
+                    PublicId = x.PublicId,
+                    EngineerPublicId = x.Engineer!.PublicId,
+                    EngineerName = x.Engineer.FullName,
+                    DevicePublicId = x.Device!.PublicId,
+                    DeviceName = x.Device.DeviceName,
+                    Latitude = x.Latitude,
+                    Longitude = x.Longitude,
+                    Accuracy = x.Accuracy,
+                    Speed = x.Speed,
+                    IsMocked = x.IsMocked,
+                    RecordedAt = x.RecordedAt,
+                    ReceivedAt = x.ReceivedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            foreach (var p in allPoints)
+            {
+                p.TimestampLocal = TimeZoneInfo.ConvertTimeFromUtc(p.RecordedAt, timeZoneInfo);
+            }
+
+            if (allPoints.Count <= maxPoints)
+            {
+                return allPoints;
+            }
+
+            var result = new List<LocationHistoryResponse>();
+            double step = (double)(allPoints.Count - 1) / (maxPoints - 1);
+            for (int i = 0; i < maxPoints; i++)
+            {
+                int index = (int)Math.Round(i * step);
+                if (index >= allPoints.Count) index = allPoints.Count - 1;
+                result.Add(allPoints[index]);
+            }
+
+            return result;
+        }
+
+        public async Task<DailyAnalysisResponse> GetDailyAnalysisAsync(
+            Guid engineerPublicId,
+            string dateString,
+            CancellationToken cancellationToken = default)
+        {
+            var engineer = await _context.Engineers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.PublicId == engineerPublicId && !x.IsDeleted, cancellationToken);
+
+            if (engineer is null)
+                throw new InvalidOperationException("Engineer does not exist.");
+
+            if (!DateTime.TryParseExact(dateString, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var localDate))
+                throw new ArgumentException("Invalid date format. Expected yyyy-MM-dd.", nameof(dateString));
+
+            TimeZoneInfo timeZoneInfo = TimeZoneHelper.GetTimeZone(_scheduleOptions.TimeZone);
+            
+            DateTime startLocal;
+            DateTime endLocal;
+
+            if (_scheduleOptions.Enabled && TimeSpan.TryParse(_scheduleOptions.StartTime, out var startTime) && TimeSpan.TryParse(_scheduleOptions.EndTime, out var endTime))
+            {
+                startLocal = localDate.Date + startTime;
+                endLocal = localDate.Date + endTime;
+            }
+            else
+            {
+                startLocal = localDate.Date;
+                endLocal = localDate.Date.AddDays(1).AddSeconds(-1);
+            }
+
+            var fromUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, timeZoneInfo);
+            var toUtc = TimeZoneInfo.ConvertTimeToUtc(endLocal, timeZoneInfo);
+
+            var histories = await _context.EngineerStatusHistories
+                .AsNoTracking()
+                .Where(x => x.EngineerId == engineer.Id && x.ChangedAtUtc >= fromUtc && x.ChangedAtUtc <= toUtc)
+                .OrderBy(x => x.ChangedAtUtc)
+                .ToListAsync(cancellationToken);
+
+            var previousHistory = await _context.EngineerStatusHistories
+                .AsNoTracking()
+                .Where(x => x.EngineerId == engineer.Id && x.ChangedAtUtc < fromUtc)
+                .OrderByDescending(x => x.ChangedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            bool isOnline = previousHistory?.IsOnline ?? false;
+            DateTime currentEventTime = fromUtc;
+
+            double onlineMinutes = 0;
+            double offlineMinutes = 0;
+
+            var eventsToProcess = new List<(DateTime Time, bool IsOnline)>();
+            
+            foreach (var history in histories)
+            {
+                eventsToProcess.Add((history.ChangedAtUtc, history.IsOnline));
+            }
+
+            DateTime utcNow = DateTime.UtcNow;
+            DateTime endCalculationTime = toUtc < utcNow ? toUtc : utcNow;
+            
+            if (endCalculationTime < fromUtc)
+            {
+                 // Window is in the future
+                 endCalculationTime = fromUtc;
+            }
+
+            foreach (var evt in eventsToProcess)
+            {
+                if (evt.Time > endCalculationTime)
+                    break;
+
+                var duration = (evt.Time - currentEventTime).TotalMinutes;
+                if (isOnline)
+                    onlineMinutes += duration;
+                else
+                    offlineMinutes += duration;
+
+                isOnline = evt.IsOnline;
+                currentEventTime = evt.Time;
+            }
+
+            if (currentEventTime < endCalculationTime)
+            {
+                var finalDuration = (endCalculationTime - currentEventTime).TotalMinutes;
+                if (isOnline)
+                    onlineMinutes += finalDuration;
+                else
+                    offlineMinutes += finalDuration;
+            }
+
+            return new DailyAnalysisResponse
+            {
+                EngineerPublicId = engineer.PublicId,
+                Date = dateString,
+                AnalysisWindowStartLocal = startLocal,
+                AnalysisWindowEndLocal = endLocal,
+                OnlineDurationMinutes = (int)Math.Round(onlineMinutes),
+                OfflineDurationMinutes = (int)Math.Round(offlineMinutes),
+                OnlineDisplay = FormatDuration((int)Math.Round(onlineMinutes)),
+                OfflineDisplay = FormatDuration((int)Math.Round(offlineMinutes)),
+                HasData = histories.Any() || previousHistory != null,
+                IsPartialData = previousHistory == null && histories.Any()
+            };
+        }
+
+        private string FormatDuration(int minutes)
+        {
+            var hours = minutes / 60;
+            var mins = minutes % 60;
+            return $"{hours}h {mins}m";
         }
     }
 }

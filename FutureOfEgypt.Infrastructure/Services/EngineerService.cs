@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.Engineers;
 using FutureOfEgypt.Domain.Entities;
@@ -7,18 +7,25 @@ using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
+using Microsoft.AspNetCore.Identity;
+using FutureOfEgypt.Infrastructure.Identity;
+
 namespace FutureOfEgypt.Infrastructure.Services
 {
     public sealed class EngineerService : IEngineerService
     {
         private readonly AppDbContext _context;
         private readonly IAuditLogService _auditLogService;
+        private readonly UserManager<ApplicationUser> _userManager;
+        
         public EngineerService(
             AppDbContext context,
-            IAuditLogService auditLogService)
+            IAuditLogService auditLogService,
+            UserManager<ApplicationUser> userManager)
         {
             _context = context;
             _auditLogService = auditLogService;
+            _userManager = userManager;
         }
 
         public async Task<EngineerResponse> CreateEngineerAsync(
@@ -101,14 +108,23 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .OrderBy(x => x.FullName)
                 .Skip((request.PageNumber - 1) * request.PageSize)
                 .Take(request.PageSize)
+                .Select(x => new
+                {
+                    Engineer = x,
+                    User = _context.Users.FirstOrDefault(u => u.EngineerId == x.Id)
+                })
                 .Select(x => new EngineerResponse
                 {
-                    PublicId = x.PublicId,
-                    FullName = x.FullName,
-                    PhoneNumber = x.PhoneNumber,
-                    Email = x.Email,
-                    Status = x.Status,
-                    CreatedAt = x.CreatedAt
+                    PublicId = x.Engineer.PublicId,
+                    FullName = x.Engineer.FullName,
+                    PhoneNumber = x.Engineer.PhoneNumber,
+                    Email = x.Engineer.Email,
+                    Status = x.Engineer.Status,
+                    CreatedAt = x.Engineer.CreatedAt,
+                    UserPublicId = x.User != null ? x.User.Id : null,
+                    ProfilePhotoUrl = x.User != null && !string.IsNullOrEmpty(x.User.ProfilePhotoPath)
+                        ? $"/api/profile/photo/{x.User.Id}?v={x.User.ConcurrencyStamp}"
+                        : null
                 })
                 .ToListAsync(cancellationToken);
 
@@ -155,6 +171,34 @@ namespace FutureOfEgypt.Infrastructure.Services
             engineer.Status = request.Status;
             engineer.UpdatedAt = DateTime.UtcNow;
 
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.EngineerId == engineer.Id, cancellationToken);
+            if (user != null)
+            {
+                user.IsSuspended = request.Status == EngineerStatus.Suspended;
+                await _userManager.UpdateAsync(user);
+            }
+
+            if (request.Status != EngineerStatus.Active)
+            {
+                var latestLocations = await _context.DeviceLatestLocations
+                    .Where(x => x.EngineerId == engineer.Id && x.IsOnline && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
+                
+                foreach (var loc in latestLocations)
+                {
+                    loc.IsOnline = false;
+                    loc.UpdatedAt = DateTime.UtcNow;
+                    _context.EngineerStatusHistories.Add(new EngineerStatusHistory
+                    {
+                        EngineerId = loc.EngineerId,
+                        DeviceId = loc.DeviceId,
+                        IsOnline = false,
+                        Reason = $"Engineer status changed to {request.Status}",
+                        ChangedAtUtc = DateTime.UtcNow
+                    });
+                }
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
 
             var actionType = request.Status switch
@@ -194,6 +238,106 @@ namespace FutureOfEgypt.Infrastructure.Services
                 Status = engineer.Status,
                 CreatedAt = engineer.CreatedAt
             };
+        }
+
+        public async Task<EngineerResponse> UpdateEngineerAsync(
+            Guid adminUserId, string adminEmail, Guid engineerPublicId, UpdateEngineerRequest request, CancellationToken cancellationToken = default)
+        {
+            var engineer = await _context.Engineers.FirstOrDefaultAsync(x => x.PublicId == engineerPublicId && !x.IsDeleted, cancellationToken);
+            if (engineer == null) throw new InvalidOperationException("Engineer does not exist.");
+
+            engineer.FullName = request.FullName.Trim();
+            engineer.PhoneNumber = request.PhoneNumber?.Trim();
+            engineer.Email = request.Email.Trim();
+            engineer.UpdatedAt = DateTime.UtcNow;
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.EngineerId == engineer.Id, cancellationToken);
+            if (user != null)
+            {
+                user.FullName = engineer.FullName;
+                user.PhoneNumber = engineer.PhoneNumber;
+                if (!string.Equals(user.Email, engineer.Email, StringComparison.OrdinalIgnoreCase))
+                {
+                    var existingUser = await _userManager.FindByEmailAsync(engineer.Email);
+                    if (existingUser != null && existingUser.Id != user.Id)
+                        throw new InvalidOperationException("Email is already in use.");
+                    user.Email = engineer.Email;
+                    user.UserName = engineer.Email;
+                }
+                await _userManager.UpdateAsync(user);
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            await _auditLogService.CreateAsync(new CreateAuditLogRequest
+            {
+                ActionType = AuditActionType.EngineerCreated, // generic update
+                PerformedByUserId = adminUserId,
+                PerformedByEmail = adminEmail,
+                EntityName = nameof(Engineer),
+                EntityPublicId = engineer.PublicId,
+                Description = $"Admin updated engineer '{engineer.FullName}'.",
+                MetadataJson = JsonSerializer.Serialize(new { engineerPublicId = engineer.PublicId, email = engineer.Email })
+            }, cancellationToken);
+
+            return new EngineerResponse
+            {
+                PublicId = engineer.PublicId,
+                FullName = engineer.FullName,
+                PhoneNumber = engineer.PhoneNumber,
+                Email = engineer.Email,
+                Status = engineer.Status,
+                CreatedAt = engineer.CreatedAt
+            };
+        }
+
+        public async Task DeleteEngineerAsync(
+            Guid adminUserId, string adminEmail, Guid engineerPublicId, CancellationToken cancellationToken = default)
+        {
+            var engineer = await _context.Engineers.FirstOrDefaultAsync(x => x.PublicId == engineerPublicId && !x.IsDeleted, cancellationToken);
+            if (engineer == null) throw new InvalidOperationException("Engineer does not exist.");
+
+            engineer.IsDeleted = true;
+            engineer.UpdatedAt = DateTime.UtcNow;
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.EngineerId == engineer.Id, cancellationToken);
+            if (user != null)
+            {
+                user.IsDeleted = true;
+                user.IsSuspended = true;
+                await _userManager.UpdateAsync(user);
+            }
+
+            var latestLocations = await _context.DeviceLatestLocations
+                .Where(x => x.EngineerId == engineer.Id && x.IsOnline && !x.IsDeleted)
+                .ToListAsync(cancellationToken);
+            
+            foreach (var loc in latestLocations)
+            {
+                loc.IsOnline = false;
+                loc.UpdatedAt = DateTime.UtcNow;
+                _context.EngineerStatusHistories.Add(new EngineerStatusHistory
+                {
+                    EngineerId = loc.EngineerId,
+                    DeviceId = loc.DeviceId,
+                    IsOnline = false,
+                    Reason = "Engineer deleted",
+                    ChangedAtUtc = DateTime.UtcNow
+                });
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            await _auditLogService.CreateAsync(new CreateAuditLogRequest
+            {
+                ActionType = AuditActionType.EngineerInactivated, // generic delete
+                PerformedByUserId = adminUserId,
+                PerformedByEmail = adminEmail,
+                EntityName = nameof(Engineer),
+                EntityPublicId = engineer.PublicId,
+                Description = $"Admin soft-deleted engineer '{engineer.FullName}'.",
+                MetadataJson = JsonSerializer.Serialize(new { engineerPublicId = engineer.PublicId, email = engineer.Email })
+            }, cancellationToken);
         }
     }
 }

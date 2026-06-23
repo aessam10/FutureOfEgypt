@@ -14,6 +14,8 @@ import { NotFoundPage } from '../pages/NotFoundPage';
 import { routes } from './routes';
 import { EmailsPage } from '../pages/EmailsPage';
 import AppUpdatesPage from '../pages/AppUpdatesPage';
+import { ProfilePage } from '../pages/ProfilePage';
+import { ManagersPage } from '../pages/ManagersPage';
 
 export const router = createBrowserRouter([
   {
@@ -33,6 +35,10 @@ export const router = createBrowserRouter([
           {
             path: routes.dashboard,
             element: <OverviewPage />,
+          },
+          {
+            path: routes.managers,
+            element: <ManagersPage />,
           },
           {
             path: routes.engineers,
@@ -69,6 +75,10 @@ export const router = createBrowserRouter([
           {
             path: routes.appUpdates,
             element: <AppUpdatesPage />,
+          },
+          {
+            path: routes.profile,
+            element: <ProfilePage />,
           },
           {
             path: '*',

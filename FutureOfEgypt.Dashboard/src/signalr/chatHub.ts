@@ -2,7 +2,8 @@ import * as signalR from '@microsoft/signalr';
 import { getAccessToken } from '../auth/tokenStorage';
 import type { ChatRealtimeMessageResponse } from '../types/chat';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL as string;
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL as string;
+const hubBaseURL = apiBaseURL.replace(/\/api\/?$/, '');
 
 export interface ChatHubHandlers {
   onMessageReceived?: (message: ChatRealtimeMessageResponse) => void;
@@ -13,7 +14,7 @@ export interface ChatHubHandlers {
 
 export function createChatHubConnection(handlers: ChatHubHandlers) {
   const connection = new signalR.HubConnectionBuilder()
-    .withUrl(`${baseURL}/hubs/chat`, {
+    .withUrl(`${hubBaseURL}/hubs/chat`, {
       accessTokenFactory: () => getAccessToken() ?? '',
     })
     .withAutomaticReconnect()

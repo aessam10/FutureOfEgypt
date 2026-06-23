@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { Box, Paper, Typography, Button, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, useTheme, GlobalStyles, Snackbar, Alert, Slider, FormControlLabel, Checkbox } from '@mui/material';
-import { Marker, Popup, TileLayer, MapContainer, useMap, Polyline, CircleMarker } from 'react-leaflet';
+import { Box, Paper, Typography, Button, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, useTheme, GlobalStyles, Snackbar, Alert, Slider, FormControlLabel, Checkbox, Divider } from '@mui/material';
+import { Marker, Popup, TileLayer, MapContainer, useMap, Polyline, CircleMarker, Tooltip as LeafletTooltip } from 'react-leaflet';
 import L from 'leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import CloseIcon from '@mui/icons-material/Close';
@@ -10,14 +10,15 @@ import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '../components/common/PageHeader';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
+import { AuthorizedAvatar } from '../components/common/AuthorizedAvatar';
 import { EmptyState } from '../components/common/EmptyState';
-import { getLatestLocations, getDeviceLocationHistory, hideLatestLocation, unhideLatestLocation, getHiddenLatestLocations } from '../api/trackingApi';
+import { getLatestLocations, getEngineerLocationHistoryByDate, hideLatestLocation, unhideLatestLocation, getHiddenLatestLocations, getDailyAnalysis } from '../api/trackingApi';
 import { createLocationHubConnection } from '../signalr/locationHub';
-import type { LatestLocationResponse, LocationReceivedEvent } from '../types/tracking';
+import type { LatestLocationResponse, LocationReceivedEvent, EngineerStatusChangedEvent } from '../types/tracking';
+import { AvatarPreviewModal } from '../components/profile/AvatarPreviewModal';
 
 // ─── Map center (Egypt) ───────────────────────────────────────────────────────
 const DEFAULT_CENTER: [number, number] = [26.8206, 30.8025];
-const ONLINE_THRESHOLD_MINUTES = 15;
 
 // Parse UTC date strings reliably — handles missing 'Z' suffix from API
 function safeDate(utcStr: string | null | undefined): Date | null {
@@ -25,6 +26,13 @@ function safeDate(utcStr: string | null | undefined): Date | null {
   const normalized = /[Zz+\-]\d*$/.test(utcStr.trim()) ? utcStr : `${utcStr}Z`;
   const d = new Date(normalized);
   return isNaN(d.getTime()) ? null : d;
+}
+
+function areTimestampsEqual(dateStr1: string | null | undefined, dateStr2: string | null | undefined): boolean {
+  const d1 = safeDate(dateStr1);
+  const d2 = safeDate(dateStr2);
+  if (!d1 || !d2) return false;
+  return Math.abs(d1.getTime() - d2.getTime()) < 5000;
 }
 
 // ─── Distance Helper ──────────────────────────────────────────────────────────
@@ -77,18 +85,7 @@ function filterAndDownsampleRoute(points: RoutePoint[]): RoutePoint[] {
     filtered.push(pt);
   }
 
-  // 2. Downsample if > 200
-  if (filtered.length <= 200) return filtered;
-
-  const result: RoutePoint[] = [filtered[0]];
-  const step = (filtered.length - 2) / 198; // We need 198 points from the middle
-  for (let i = 1; i <= 198; i++) {
-    const idx = Math.floor(step * i);
-    result.push(filtered[idx]);
-  }
-  result.push(filtered[filtered.length - 1]);
-
-  return result;
+  return filtered;
 }
 
 // ─── Custom marker icons ──────────────────────────────────────────────────────
@@ -111,19 +108,15 @@ function createPinIcon(color: string): L.DivIcon {
 const ONLINE_ICON = createPinIcon('#10b981');   // Green
 const OFFLINE_ICON = createPinIcon('#94a3b8');  // Gray
 const MOCKED_ICON = createPinIcon('#ef4444');   // Red
+const HIDDEN_ICON = createPinIcon('#f59e0b');   // Orange/Amber
 
-function getMarkerIcon(location: LatestLocationResponse): L.DivIcon {
+function getMarkerIcon(location: LatestLocationResponse, currentFilter: FilterType): L.DivIcon {
+  if (currentFilter === 'hidden') return HIDDEN_ICON;
   if (location.isMocked) return MOCKED_ICON;
-  const isOnline = isLocationOnline(location.receivedAt);
-  return isOnline ? ONLINE_ICON : OFFLINE_ICON;
+  return location.isOnline ? ONLINE_ICON : OFFLINE_ICON;
 }
 
-function isLocationOnline(dateStr: string): boolean {
-  const d = safeDate(dateStr);
-  if (!d) return false;
-  const diffMs = Date.now() - d.getTime();
-  return diffMs <= ONLINE_THRESHOLD_MINUTES * 60 * 1000;
-}
+
 
 function formatLastSeen(dateStr: string): string {
   const d = safeDate(dateStr);
@@ -257,6 +250,7 @@ function toLatestLocation(event: LocationReceivedEvent): LatestLocationResponse 
     recordedAt: event.recordedAt,
     receivedAt: event.receivedAt,
     isMocked: event.isMocked,
+    isOnline: event.isOnline,
   };
 }
 
@@ -270,6 +264,11 @@ export function LiveMapPage() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedDevicePublicId, setSelectedDevicePublicId] = useState<string | null>(null);
   const [routeHistory, setRouteHistory] = useState<RoutePoint[]>([]);
+  const [historyDate, setHistoryDate] = useState<string>(() => {
+    // Return today's date in YYYY-MM-DD local format
+    const d = new Date();
+    return new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+  });
   const [showRoutePoints, setShowRoutePoints] = useState(true);
   const [showRouteLine, setShowRouteLine] = useState(true);
   const [routeLineSpeed, setRouteLineSpeed] = useState(500);
@@ -283,6 +282,7 @@ export function LiveMapPage() {
   // For Hide Confirmation Dialog
   const [hideConfirmDevice, setHideConfirmDevice] = useState<string | null>(null);
   const [isHiding, setIsHiding] = useState(false);
+  const [previewAvatar, setPreviewAvatar] = useState<{ url: string; altText: string; fallbackText: string } | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['latest-locations'],
@@ -296,12 +296,26 @@ export function LiveMapPage() {
     refetchInterval: 60_000,
   });
 
+  // Calculate selected engineerPublicId based on selectedDevicePublicId
+  const selectedEngineerPublicId = useMemo(() => {
+    if (!selectedDevicePublicId) return null;
+    const loc = liveLocations.find(l => l.devicePublicId === selectedDevicePublicId);
+    return loc ? loc.engineerPublicId : null;
+  }, [selectedDevicePublicId, liveLocations]);
+
+  const { data: dailyAnalysis, isLoading: isAnalysisLoading } = useQuery({
+    queryKey: ['daily-analysis', selectedEngineerPublicId, historyDate],
+    queryFn: () => getDailyAnalysis(selectedEngineerPublicId!, historyDate),
+    enabled: !!selectedEngineerPublicId && !!historyDate,
+    refetchInterval: 60_000,
+  });
+
   useEffect(() => {
-    if (data) setLiveLocations(data);
+    if (data && Array.isArray(data)) setLiveLocations(data);
   }, [data]);
 
   useEffect(() => {
-    if (hiddenData) setHiddenLocations(hiddenData);
+    if (hiddenData && Array.isArray(hiddenData)) setHiddenLocations(hiddenData);
   }, [hiddenData]);
 
   // SignalR
@@ -317,6 +331,16 @@ export function LiveMapPage() {
         if (idx === -1) return [latestLocation, ...current];
         const updated = [...current];
         updated[idx] = latestLocation;
+        return updated;
+      });
+    });
+
+    connection.on('engineerStatusChanged', (statusEvent: EngineerStatusChangedEvent) => {
+      setLiveLocations((current) => {
+        const idx = current.findIndex((i) => i.devicePublicId === statusEvent.devicePublicId);
+        if (idx === -1) return current;
+        const updated = [...current];
+        updated[idx] = { ...updated[idx], isOnline: statusEvent.isOnline };
         return updated;
       });
     });
@@ -339,20 +363,19 @@ export function LiveMapPage() {
 
   // Filtered visible list
   const filteredVisibleLocations = useMemo(() => {
-    if (filter === 'hidden') return [];
+    if (filter === 'hidden') return hiddenLocations;
 
     return liveLocations.filter((l) => {
       if (l.isHidden) return false;
-      const isOnline = isLocationOnline(l.receivedAt);
-      if (filter === 'online' && !isOnline) return false;
-      if (filter === 'offline' && isOnline) return false;
+      if (filter === 'online' && !l.isOnline) return false;
+      if (filter === 'offline' && l.isOnline) return false;
       return true;
     });
-  }, [liveLocations, filter]);
+  }, [liveLocations, filter, hiddenLocations]);
 
   // Stats
   const onlineCount = useMemo(
-    () => liveLocations.filter((l) => !l.isHidden && isLocationOnline(l.receivedAt)).length,
+    () => liveLocations.filter((l) => !l.isHidden && l.isOnline).length,
     [liveLocations],
   );
   const offlineCount = liveLocations.filter((l) => !l.isHidden).length - onlineCount;
@@ -372,15 +395,25 @@ export function LiveMapPage() {
   const mapCenter = useMemo<[number, number]>(() => {
     if (selectedDevicePublicId) {
       const loc = filteredVisibleLocations.find((l) => l.devicePublicId === selectedDevicePublicId);
-      if (loc) return [loc.latitude, loc.longitude];
+      if (loc && loc.latitude != null && loc.longitude != null && (loc.latitude !== 0 || loc.longitude !== 0)) {
+        return [loc.latitude, loc.longitude];
+      }
     }
-    return filteredVisibleLocations[0]
-      ? [filteredVisibleLocations[0].latitude, filteredVisibleLocations[0].longitude]
+    const validLoc = filteredVisibleLocations.find((l) => l.latitude != null && l.longitude != null && (l.latitude !== 0 || l.longitude !== 0));
+    return validLoc
+      ? [validLoc.latitude, validLoc.longitude]
       : DEFAULT_CENTER;
   }, [filteredVisibleLocations, selectedDevicePublicId]);
 
+  useEffect(() => {
+    // Clear route if date changes so it's not confusing
+    if (routeHistory.length > 0) {
+      setRouteHistory([]);
+    }
+  }, [historyDate]);
+
   // Handle Fetch Route
-  const handleFetchRoute = async (devicePublicId: string) => {
+  const handleFetchRoute = async (engineerPublicId: string, devicePublicId: string) => {
     // If route is already showing for this device, hide it
     if (routeHistory.length > 0 && selectedDevicePublicId === devicePublicId) {
       setRouteHistory([]);
@@ -390,42 +423,31 @@ export function LiveMapPage() {
     try {
       setIsFetchingRoute(true);
       
-      const endDate = new Date().toISOString();
-      const startDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const res = await getEngineerLocationHistoryByDate(engineerPublicId, historyDate, 150);
       
-      console.log('Fetching route for:', devicePublicId, 'startDate:', startDate, 'endDate:', endDate);
-      
-      const res = await getDeviceLocationHistory(devicePublicId, { fromUtc: startDate, toUtc: endDate });
-      
-      if (res && res.items) {
-        console.log('Route points returned:', res.items.length);
-        
-        // Filter out invalid coords and sort by recordedAt
-        const validPoints = res.items
-          .filter(h => typeof h.latitude === 'number' && typeof h.longitude === 'number' && !isNaN(h.latitude) && !isNaN(h.longitude))
-          .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+      if (res && res.length > 0) {
+        // Filter out invalid coords
+        const validPoints = res
+          .filter(h => typeof h.latitude === 'number' && typeof h.longitude === 'number' && !isNaN(h.latitude) && !isNaN(h.longitude));
           
-        if (validPoints.length > 0) {
-          console.log('First point:', validPoints[0].recordedAt, validPoints[0].latitude, validPoints[0].longitude);
-          console.log('Last point:', validPoints[validPoints.length - 1].recordedAt, validPoints[validPoints.length - 1].latitude, validPoints[validPoints.length - 1].longitude);
-        }
-
         if (validPoints.length === 0) {
-          setSnackbar({ open: true, message: 'No route history found for this device in the last 24 hours.', severity: 'error' });
+          setSnackbar({ open: true, message: 'No valid route history found for this date.', severity: 'error' });
           setRouteHistory([]);
         } else {
           const finalPoints = filterAndDownsampleRoute(validPoints);
 
-          if (finalPoints.length === 1) {
+          if (finalPoints.length < 2) {
             setSnackbar({ open: true, message: 'Only one valid route point found. Route needs at least two points.', severity: 'warning' });
-            setRouteHistory([]);
+            // We can still show it as a marker, so let's allow it
+            setRouteHistory(finalPoints);
+            setSelectedDevicePublicId(devicePublicId);
           } else {
             setRouteHistory(finalPoints);
             setSelectedDevicePublicId(devicePublicId); // Ensure the device is selected so we can unselect it later
           }
         }
       } else {
-        setSnackbar({ open: true, message: 'No route history found for this device.', severity: 'error' });
+        setSnackbar({ open: true, message: 'No history found for this date.', severity: 'info' });
         setRouteHistory([]);
       }
     } catch (e: any) {
@@ -642,15 +664,21 @@ export function LiveMapPage() {
                 <MapRecenter center={mapCenter} />
 
                 <MarkerClusterGroup chunkedLoading>
-                  {filteredVisibleLocations.map((location) => (
+                  {filteredVisibleLocations.map((location) => {
+                    const hasValidCoords = location.latitude != null && location.longitude != null && (location.latitude !== 0 || location.longitude !== 0);
+                    if (!hasValidCoords) return null;
+                    return (
                     <Marker
                       key={location.devicePublicId}
                       position={[location.latitude, location.longitude]}
-                      icon={getMarkerIcon(location)}
+                      icon={getMarkerIcon(location, filter)}
                       eventHandlers={{
                          click: () => setSelectedDevicePublicId(location.devicePublicId),
                       }}
                     >
+                      <LeafletTooltip direction="top" offset={[0, -20]} opacity={1}>
+                        {location.engineerName} — {location.isOnline ? 'Online' : 'Offline'}
+                      </LeafletTooltip>
                       <Popup>
                         <Box sx={{ 
                           minWidth: 180, 
@@ -658,9 +686,24 @@ export function LiveMapPage() {
                           color: 'text.primary',
                           bgcolor: 'background.paper',
                         }}>
-                          <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', mb: 0.5 }}>
-                            {location.engineerName}
-                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1.5 }}>
+                            <AuthorizedAvatar 
+                              srcUrl={location.profilePhotoUrl}
+                              fallbackText={location.engineerName.charAt(0).toUpperCase()}
+                              onClick={() => setPreviewAvatar({ url: location.profilePhotoUrl || '', altText: location.engineerName, fallbackText: location.engineerName.charAt(0).toUpperCase() })}
+                              sx={{ width: 40, height: 40, fontSize: '1rem', bgcolor: 'primary.main', cursor: 'pointer' }}
+                            />
+                            <Box>
+                              <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.2 }}>
+                                {location.engineerName}
+                              </Typography>
+                              {location.engineerPhoneNumber && (
+                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                                  {location.engineerPhoneNumber}
+                                </Typography>
+                              )}
+                            </Box>
+                          </Box>
                           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.25 }}>
                             📱 {location.deviceName}
                           </Typography>
@@ -695,26 +738,34 @@ export function LiveMapPage() {
                               ⚠ Mocked GPS
                             </Box>
                           )}
-                          <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: 'text.disabled' }}>
-                            Last ping: {formatLastSeen(location.receivedAt)}
-                          </Typography>
-                          <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: 'text.disabled' }}>
-                            GPS time: {formatLastSeen(location.recordedAt)}
-                          </Typography>
+                          {areTimestampsEqual(location.receivedAt, location.recordedAt) ? (
+                            <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: 'text.disabled' }}>
+                              Last seen: {formatLastSeen(location.receivedAt)}
+                            </Typography>
+                          ) : (
+                            <>
+                              <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: 'text.disabled' }}>
+                                Last ping: {formatLastSeen(location.receivedAt)}
+                              </Typography>
+                              <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: 'text.disabled' }}>
+                                GPS time: {formatLastSeen(location.recordedAt)}
+                              </Typography>
+                            </>
+                          )}
                           
                           <Button 
                             variant="outlined" 
                             size="small" 
                             disabled={isFetchingRoute}
-                            onClick={() => void handleFetchRoute(location.devicePublicId)}
+                            onClick={() => void handleFetchRoute(location.engineerPublicId, location.devicePublicId)}
                             sx={{ mt: 1.5, width: '100%' }}
                           >
-                            {isFetchingRoute ? 'Loading...' : routeHistory.length > 0 && selectedDevicePublicId === location.devicePublicId ? 'Hide Route' : 'Show Route'}
+                            {isFetchingRoute ? 'Loading...' : routeHistory.length > 0 && selectedDevicePublicId === location.devicePublicId ? 'Hide Route' : 'Load History'}
                           </Button>
                         </Box>
                       </Popup>
                     </Marker>
-                  ))}
+                  )})}
                 </MarkerClusterGroup>
                 {routeHistory.length > 0 && (
                   <>
@@ -795,45 +846,44 @@ export function LiveMapPage() {
           >
             <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>
-                {filter === 'hidden' ? hiddenLocations.length : filteredVisibleLocations.length} Engineers
+                {filteredVisibleLocations.length} Engineers
               </Typography>
             </Box>
 
             <Box sx={{ flex: 1, overflowY: 'auto' }}>
-              {(filter === 'hidden' ? hiddenLocations : filteredVisibleLocations).map((location) => {
-                const online = filter === 'hidden' ? false : isLocationOnline(location.receivedAt);
+              {filteredVisibleLocations.map((location) => {
                 const isSelected = selectedDevicePublicId === location.devicePublicId;
 
                 return (
                   <Box
                     key={location.devicePublicId}
-                    component="button"
+                    component={isSelected ? "div" : "button"}
                     onClick={() => {
-                      if (filter !== 'hidden') {
-                        setSelectedDevicePublicId(isSelected ? null : location.devicePublicId);
-                        if (isSelected) setRouteHistory([]); // clear route on deselect
+                      if (!isSelected) {
+                        setSelectedDevicePublicId(location.devicePublicId);
                       }
                     }}
-                    aria-label={`${location.engineerName} — ${online ? 'Online' : 'Offline'}, last ping ${formatLastSeen(location.receivedAt)}`}
+                    aria-label={`${location.engineerName} — ${location.isOnline ? 'Online' : 'Offline'}, last ping ${formatLastSeen(location.receivedAt)}`}
                     aria-pressed={isSelected}
                     role="listitem"
                     sx={{
                       display: 'flex',
+                      flexDirection: isSelected ? 'column' : 'row',
                       width: '100%',
-                      gap: 1.5,
-                      px: 2,
-                      py: 1.5,
+                      gap: isSelected ? 0 : 1.5,
+                      px: isSelected ? 0 : 2,
+                      py: isSelected ? 0 : 1.5,
                       borderBottom: '1px solid',
                       borderColor: 'divider',
                       textAlign: 'left',
-                      cursor: filter === 'hidden' ? 'default' : 'pointer',
+                      cursor: isSelected ? 'default' : 'pointer',
                       fontFamily: 'inherit',
-                      backgroundColor: isSelected ? 'primary.main' : 'transparent',
+                      backgroundColor: isSelected ? 'primary.dark' : 'transparent',
                       transition: 'background-color 0.15s ease',
                       border: 'none',
                       position: 'relative',
                       '&:hover': {
-                        backgroundColor: filter === 'hidden' ? 'transparent' : (isSelected ? 'primary.dark' : 'action.hover'),
+                        backgroundColor: isSelected ? 'primary.dark' : 'action.hover',
                       },
                       '&:hover .hide-btn': {
                         opacity: 1,
@@ -845,99 +895,304 @@ export function LiveMapPage() {
                       },
                     }}
                   >
-                    {/* Hide / Unhide Action Button */}
-                    <Box 
-                      className="hide-btn"
-                      sx={{ 
-                        position: 'absolute', 
-                        right: 8, 
-                        top: '50%', 
-                        transform: 'translateY(-50%)',
-                        opacity: 0,
-                        transition: 'opacity 0.2s',
-                        zIndex: 10,
-                      }}
-                      onClick={(e) => { e.stopPropagation(); }}
-                    >
-                      {filter === 'hidden' ? (
-                        <Button 
-                          size="small" 
-                          variant="contained" 
-                          color="primary"
-                          onClick={() => void handleUnhideMarker(location.devicePublicId)}
-                        >
-                          Restore marker
-                        </Button>
-                      ) : (
-                        <Tooltip title="Hide current marker">
-                          <IconButton 
-                            size="small" 
-                            onClick={() => setHideConfirmDevice(location.devicePublicId)}
-                            sx={{ bgcolor: 'background.paper', boxShadow: 1, '&:hover': { bgcolor: 'error.light', color: 'white' } }}
-                          >
-                            <CloseIcon fontSize="small" color="error" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </Box>
-
-                    {/* Status dot */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                    {isSelected ? (
                       <Box
+                        onClick={(e) => e.stopPropagation()}
                         sx={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          backgroundColor: filter === 'hidden'
-                            ? '#f59e0b'
-                            : location.isMocked
-                            ? '#ef4444'
-                            : online
-                            ? '#10b981'
-                            : '#94a3b8',
-                          boxShadow: online && !location.isMocked
-                            ? '0 0 0 3px rgba(16,185,129,0.2)'
-                            : 'none',
+                          display: 'flex', flexDirection: 'column',
+                          p: 2.5,
+                          gap: 2,
+                          color: '#fff',
                         }}
-                        aria-hidden="true"
-                      />
-                    </Box>
+                      >
+                        {/* 1. Selected Engineer Profile */}
+                        <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
+                          <AuthorizedAvatar 
+                            srcUrl={location.profilePhotoUrl}
+                            fallbackText={location.engineerName.charAt(0)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewAvatar({ url: location.profilePhotoUrl || '', altText: location.engineerName, fallbackText: location.engineerName.charAt(0) });
+                            }}
+                            sx={{ width: 64, height: 64, border: '2px solid white', cursor: 'pointer', flexShrink: 0 }}
+                          />
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+                              <Typography noWrap sx={{ fontWeight: 700, fontSize: '1.1rem', lineHeight: 1.2 }}>
+                                {location.engineerName}
+                              </Typography>
+                              <IconButton 
+                                size="small" 
+                                onClick={(e) => { e.stopPropagation(); setSelectedDevicePublicId(null); setRouteHistory([]); }}
+                                sx={{ color: 'rgba(255,255,255,0.7)', p: 0.5, mt: -0.5, mr: -0.5, '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.1)' } }}
+                              >
+                                <CloseIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                            {location.engineerPhoneNumber && (
+                              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mb: 0.25 }}>
+                                📞 {location.engineerPhoneNumber}
+                              </Typography>
+                            )}
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mb: 1 }}>
+                              📱 {location.deviceName}
+                            </Typography>
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, borderRadius: 1.5, bgcolor: 'rgba(0,0,0,0.25)' }}>
+                              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: location.isOnline ? '#10b981' : '#94a3b8' }} />
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: location.isOnline ? '#10b981' : '#94a3b8', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                                {location.isOnline ? 'Online' : 'Offline'}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
 
-                    <Box sx={{ flex: 1, minWidth: 0, pr: 3 }}>
-                      <Typography
-                        noWrap
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: '0.875rem',
-                          color: isSelected ? '#fff' : 'text.primary',
-                        }}
-                      >
-                        {location.engineerName}
-                      </Typography>
-                      <Typography
-                        noWrap
-                        variant="caption"
-                        sx={{
-                          color: isSelected ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                          display: 'block',
-                          fontSize: '0.75rem',
-                        }}
-                      >
-                        {location.deviceName}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: isSelected ? 'rgba(255,255,255,0.55)' : 'text.disabled',
-                          fontSize: '0.7rem',
-                        }}
-                      >
-                        Last Ping: {formatLastSeen(location.receivedAt)}
-                        <br/>
-                        GPS: {formatLastSeen(location.recordedAt)}
-                        {location.isMocked && ' · ⚠ Mocked'}
-                      </Typography>
-                    </Box>
+                        <Divider sx={{ borderColor: 'rgba(255,255,255,0.15)' }} />
+
+                        {/* 2. Activity Section */}
+                        <Box>
+                          <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.6)', display: 'block', mb: 0.5, lineHeight: 1.2 }}>
+                            Activity
+                          </Typography>
+                          {areTimestampsEqual(location.receivedAt, location.recordedAt) ? (
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', mb: 0.25 }}>
+                              <span style={{ opacity: 0.7, marginRight: '8px' }}>Last Seen:</span> {formatLastSeen(location.receivedAt)}
+                              {location.isMocked && <span style={{ color: '#fca5a5', marginLeft: '8px', fontWeight: 600 }}>⚠ Mocked</span>}
+                            </Typography>
+                          ) : (
+                            <>
+                              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', mb: 0.25 }}>
+                                <span style={{ opacity: 0.7, marginRight: '8px' }}>Last Ping:</span> {formatLastSeen(location.receivedAt)}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                                <span style={{ opacity: 0.7, marginRight: '8px' }}>GPS:</span> {formatLastSeen(location.recordedAt)} 
+                                {location.isMocked && <span style={{ color: '#fca5a5', marginLeft: '8px', fontWeight: 600 }}>⚠ Mocked</span>}
+                              </Typography>
+                            </>
+                          )}
+                          {(!location.latitude || !location.longitude || (location.latitude === 0 && location.longitude === 0)) && (
+                            <Typography variant="caption" sx={{ color: '#fca5a5', display: 'block', mt: 0.5, fontWeight: 600 }}>
+                              ⚠ No last known location
+                            </Typography>
+                          )}
+                        </Box>
+
+                        {/* 2.5. Daily Analysis Section */}
+                        {filter !== 'hidden' && (
+                          <>
+                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.15)' }} />
+                            <Box>
+                              <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.6)', display: 'block', mb: 0.5, lineHeight: 1.2 }}>
+                                Daily Analysis ({historyDate})
+                              </Typography>
+                              {isAnalysisLoading ? (
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' }}>
+                                  Loading analysis...
+                                </Typography>
+                              ) : dailyAnalysis ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                  {!dailyAnalysis.hasData ? (
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' }}>
+                                      No tracking data for this day.
+                                    </Typography>
+                                  ) : (
+                                    <>
+                                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                                        <span style={{ opacity: 0.7, marginRight: '8px' }}>Online:</span> {dailyAnalysis.onlineDisplay}
+                                      </Typography>
+                                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                                        <span style={{ opacity: 0.7, marginRight: '8px' }}>Offline:</span> {dailyAnalysis.offlineDisplay}
+                                      </Typography>
+                                      {dailyAnalysis.isPartialData && (
+                                        <Typography variant="caption" sx={{ color: '#fca5a5', display: 'block', mt: 0.5 }}>
+                                          ⚠ Partial data (history missing before window)
+                                        </Typography>
+                                      )}
+                                    </>
+                                  )}
+                                </Box>
+                              ) : (
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' }}>
+                                  Analysis not available.
+                                </Typography>
+                              )}
+                            </Box>
+                          </>
+                        )}
+
+                        {filter !== 'hidden' && (
+                          <>
+                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.15)' }} />
+                            {/* 3. History Section */}
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                              <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.6)', lineHeight: 1.2 }}>
+                                History
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                <input 
+                                  type="date" 
+                                  value={historyDate}
+                                  onChange={(e) => setHistoryDate(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    flex: 1,
+                                    padding: '8px 12px',
+                                    borderRadius: '6px',
+                                    border: '1px solid rgba(255,255,255,0.3)',
+                                    background: 'rgba(0,0,0,0.15)',
+                                    color: 'white',
+                                    fontFamily: 'inherit',
+                                    fontSize: '0.9rem',
+                                    outline: 'none'
+                                  }}
+                                />
+                                <Button 
+                                  variant="contained" 
+                                  disabled={isFetchingRoute}
+                                  onClick={(e) => { e.stopPropagation(); void handleFetchRoute(location.engineerPublicId, location.devicePublicId); }}
+                                  sx={{ 
+                                    bgcolor: 'white', 
+                                    color: 'primary.dark',
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    px: 3,
+                                    '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } 
+                                  }}
+                                >
+                                  {isFetchingRoute ? '...' : routeHistory.length > 0 ? 'Hide' : 'Load'}
+                                </Button>
+                              </Box>
+                            </Box>
+                          </>
+                        )}
+                      </Box>
+                    ) : (
+                      <>
+                        {/* Hide / Unhide Action Button */}
+                        <Box 
+                          className="hide-btn"
+                          sx={{ 
+                            position: 'absolute', 
+                            right: 8, 
+                            top: '50%', 
+                            transform: 'translateY(-50%)',
+                            opacity: 0,
+                            transition: 'opacity 0.2s',
+                            zIndex: 10,
+                          }}
+                          onClick={(e) => { e.stopPropagation(); }}
+                        >
+                          {filter === 'hidden' ? (
+                            <Button 
+                              size="small" 
+                              variant="contained" 
+                              color="primary"
+                              onClick={() => void handleUnhideMarker(location.devicePublicId)}
+                            >
+                              Restore marker
+                            </Button>
+                          ) : (
+                            <Tooltip title="Hide current marker">
+                              <IconButton 
+                                size="small" 
+                                onClick={() => setHideConfirmDevice(location.devicePublicId)}
+                                sx={{ bgcolor: 'background.paper', boxShadow: 1, '&:hover': { bgcolor: 'error.light', color: 'white' } }}
+                              >
+                                <CloseIcon fontSize="small" color="error" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                          <Box
+                            sx={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: '50%',
+                              backgroundColor: filter === 'hidden'
+                                ? '#f59e0b'
+                                : location.isMocked
+                                ? '#ef4444'
+                                : location.isOnline
+                                ? '#10b981'
+                                : '#94a3b8',
+                              boxShadow: location.isOnline && !location.isMocked
+                                ? '0 0 0 3px rgba(16,185,129,0.2)'
+                                : 'none',
+                              mr: 1.5
+                            }}
+                            aria-hidden="true"
+                          />
+                          <AuthorizedAvatar
+                              srcUrl={location.profilePhotoUrl}
+                              fallbackText={location.engineerName.charAt(0)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewAvatar({ url: location.profilePhotoUrl || '', altText: location.engineerName, fallbackText: location.engineerName.charAt(0) });
+                              }}
+                              sx={{ width: 40, height: 40, border: '2px solid white', cursor: 'pointer' }}
+                            />
+                        </Box>
+
+                        <Box sx={{ flex: 1, minWidth: 0, pr: 3 }}>
+                          <Typography
+                            noWrap
+                            sx={{
+                              fontWeight: 600,
+                              fontSize: '0.875rem',
+                              color: location.isOnline ? '#10b981' : '#94a3b8',
+                            }}
+                          >
+                            {location.engineerName}
+                          </Typography>
+                          {location.engineerPhoneNumber && (
+                            <Typography
+                              noWrap
+                              variant="caption"
+                              sx={{
+                                color: 'text.secondary',
+                                display: 'block',
+                                fontSize: '0.75rem',
+                              }}
+                            >
+                              {location.engineerPhoneNumber}
+                            </Typography>
+                          )}
+                          <Typography
+                            noWrap
+                            variant="caption"
+                            sx={{
+                              color: 'text.secondary',
+                              display: 'block',
+                              fontSize: '0.75rem',
+                            }}
+                          >
+                            {location.deviceName}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: 'text.disabled',
+                              fontSize: '0.7rem',
+                            }}
+                          >
+                            {areTimestampsEqual(location.receivedAt, location.recordedAt) ? (
+                              <>
+                                Last Seen: {formatLastSeen(location.receivedAt)}
+                                {location.isMocked && ' · ⚠ Mocked'}
+                              </>
+                            ) : (
+                              <>
+                                Last Ping: {formatLastSeen(location.receivedAt)}
+                                <br/>
+                                GPS: {formatLastSeen(location.recordedAt)}
+                                {location.isMocked && ' · ⚠ Mocked'}
+                              </>
+                            )}
+                          </Typography>
+                        </Box>
+                      </>
+                    )}
                   </Box>
                 );
               })}
@@ -997,6 +1252,16 @@ export function LiveMapPage() {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {previewAvatar && (
+        <AvatarPreviewModal
+          open={!!previewAvatar}
+          onClose={() => setPreviewAvatar(null)}
+          imageUrl={previewAvatar.url}
+          altText={previewAvatar.altText}
+          fallbackText={previewAvatar.fallbackText}
+        />
+      )}
     </>
   );
 }

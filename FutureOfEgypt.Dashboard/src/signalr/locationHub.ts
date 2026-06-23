@@ -2,7 +2,8 @@ import * as signalR from '@microsoft/signalr';
 import { getAccessToken } from '../auth/tokenStorage';
 import type { LocationReceivedEvent } from '../types/tracking';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL as string;
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL as string;
+const hubBaseURL = apiBaseURL.replace(/\/api\/?$/, '');
 
 export function createLocationHubConnection(
   onLocationReceived: (location: LocationReceivedEvent) => void,
@@ -10,7 +11,7 @@ export function createLocationHubConnection(
   onLocationUnhidden?: (devicePublicId: string) => void,
 ) {
   const connection = new signalR.HubConnectionBuilder()
-    .withUrl(`${baseURL}/hubs/locations`, {
+    .withUrl(`${hubBaseURL}/hubs/locations`, {
       accessTokenFactory: () => getAccessToken() ?? '',
     })
     .withAutomaticReconnect()

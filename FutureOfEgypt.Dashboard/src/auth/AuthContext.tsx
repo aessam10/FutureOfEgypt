@@ -10,6 +10,7 @@ import { login as loginApi, logout as logoutApi } from '../api/authApi';
 import {
   clearAuthStorage,
   getRefreshToken,
+  getAccessToken,
   getSavedUser,
   saveAuthData,
 } from './tokenStorage';
@@ -19,6 +20,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   login: (request: LoginRequest) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (updates: Partial<AuthUser>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -30,6 +32,7 @@ function mapAuthResponseToUser(response: AuthResponse): AuthUser {
     fullName: response.fullName,
     roles: response.roles,
     engineerPublicId: response.engineerPublicId,
+    profilePhotoUrl: response.profilePhotoUrl,
   };
 }
 
@@ -72,6 +75,17 @@ if (!canAccessDashboard) {
             // Ignore logout API errors because local logout already happened.
           }
         }
+      },
+
+      updateUser(updates: Partial<AuthUser>) {
+        setUser((prev) => {
+          if (!prev) return null;
+          const updatedUser = { ...prev, ...updates };
+          const token = getAccessToken() || '';
+          const refreshToken = getRefreshToken() || '';
+          saveAuthData(token, refreshToken, updatedUser);
+          return updatedUser;
+        });
       },
     }),
     [user],

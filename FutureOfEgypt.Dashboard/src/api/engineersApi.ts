@@ -31,3 +31,15 @@ export async function updateEngineerStatus(
 ) {
   await axiosClient.patch(`/api/Engineers/${engineerPublicId}/status`, request);
 }
+
+export async function updateEngineer(
+  engineerPublicId: string,
+  request: import('../types/engineers').UpdateEngineerRequest,
+) {
+  const response = await axiosClient.patch<EngineerResponse>(`/api/Engineers/${engineerPublicId}`, request);
+  return response.data;
+}
+
+export async function deleteEngineer(engineerPublicId: string) {
+  await axiosClient.delete(`/api/Engineers/${engineerPublicId}`);
+}

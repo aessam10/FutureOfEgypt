@@ -38,6 +38,8 @@ import { EmptyState } from '../components/common/EmptyState';
 import { EngineerStatusChip } from '../components/status/EngineerStatusChip';
 import { createEngineer, getEngineers, updateEngineerStatus } from '../api/engineersApi';
 import type { CreateEngineerRequest, EngineerResponse } from '../types/engineers';
+import { AvatarPreviewModal } from '../components/profile/AvatarPreviewModal';
+import { AuthorizedAvatar } from '../components/common/AuthorizedAvatar';
 
 const ACTIVE_STATUS = 1;
 const INACTIVE_STATUS = 2;
@@ -63,6 +65,7 @@ export function EngineersPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [selectedEngineer, setSelectedEngineer] = useState<EngineerResponse | null>(null);
+  const [previewAvatar, setPreviewAvatar] = useState<{ url: string, name: string, fallbackText?: string } | null>(null);
 
   const queryParams = useMemo(
     () => ({ pageNumber, pageSize, search: search.trim() || undefined }),
@@ -74,6 +77,8 @@ export function EngineersPage() {
     queryFn: () => getEngineers(queryParams),
   });
 
+  const [isEditMode, setIsEditMode] = useState(false);
+
   const createMutation = useMutation({
     mutationFn: (req: CreateEngineerRequest) => createEngineer(req),
     onSuccess: async () => {
@@ -83,6 +88,29 @@ export function EngineersPage() {
       setFormError(null);
     },
     onError: () => setFormError('Failed to create engineer.'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (req: import('../types/engineers').UpdateEngineerRequest) => {
+      return import('../api/engineersApi').then(m => m.updateEngineer(selectedEngineer!.publicId, req));
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['engineers'] });
+      setIsCreateDialogOpen(false);
+      setFormState(initialFormState);
+      setFormError(null);
+      setSelectedEngineer(null);
+    },
+    onError: () => setFormError('Failed to update engineer.'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (publicId: string) => import('../api/engineersApi').then(m => m.deleteEngineer(publicId)),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['engineers'] });
+      setMenuAnchor(null);
+      setSelectedEngineer(null);
+    },
   });
 
   const updateStatusMutation = useMutation({
@@ -97,18 +125,26 @@ export function EngineersPage() {
 
   function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const req: CreateEngineerRequest = {
-      fullName: formState.fullName.trim(),
-      phoneNumber: formState.phoneNumber.trim(),
-      email: formState.email.trim(),
-      status: formState.status,
-    };
-    if (!req.fullName || !req.phoneNumber || !req.email) {
+    if (!formState.fullName.trim() || !formState.phoneNumber.trim() || !formState.email.trim()) {
       setFormError('Please fill all required fields.');
       return;
     }
     setFormError(null);
-    createMutation.mutate(req);
+
+    if (isEditMode && selectedEngineer) {
+      updateMutation.mutate({
+        fullName: formState.fullName.trim(),
+        phoneNumber: formState.phoneNumber.trim(),
+        email: formState.email.trim(),
+      });
+    } else {
+      createMutation.mutate({
+        fullName: formState.fullName.trim(),
+        phoneNumber: formState.phoneNumber.trim(),
+        email: formState.email.trim(),
+        status: formState.status,
+      });
+    }
   }
 
   return (
@@ -172,6 +208,7 @@ export function EngineersPage() {
             <Table aria-label="Engineers table" sx={{ minWidth: 650 }}>
               <TableHead>
                 <TableRow>
+                  <TableCell scope="col">Profile</TableCell>
                   <TableCell scope="col">Engineer</TableCell>
                   <TableCell scope="col">Email</TableCell>
                   <TableCell scope="col">Phone</TableCell>
@@ -183,6 +220,21 @@ export function EngineersPage() {
               <TableBody>
                 {data.items.map((engineer) => (
                   <TableRow key={engineer.publicId} hover>
+                    <TableCell>
+                       <AuthorizedAvatar 
+                         srcUrl={engineer.profilePhotoUrl} 
+                         alt={engineer.fullName}
+                         fallbackText={engineer.fullName?.charAt(0) || engineer.email?.charAt(0) || 'U'}
+                         sx={{ cursor: 'pointer', width: 40, height: 40 }}
+                         onClick={() => {
+                             setPreviewAvatar({ 
+                                 url: engineer.profilePhotoUrl || '', 
+                                 name: engineer.fullName,
+                                 fallbackText: engineer.fullName?.charAt(0) || engineer.email?.charAt(0) || 'U'
+                             });
+                         }}
+                       />
+                    </TableCell>
                     <TableCell>
                       <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
                         {engineer.fullName}
@@ -236,6 +288,24 @@ export function EngineersPage() {
         aria-label="Engineer actions"
       >
         <MenuItem
+          onClick={() => {
+            if (selectedEngineer) {
+              setIsEditMode(true);
+              setFormState({
+                fullName: selectedEngineer.fullName,
+                email: selectedEngineer.email,
+                phoneNumber: selectedEngineer.phoneNumber,
+                status: selectedEngineer.status,
+              });
+              setFormError(null);
+              setIsCreateDialogOpen(true);
+              setMenuAnchor(null);
+            }
+          }}
+        >
+          Edit Engineer
+        </MenuItem>
+        <MenuItem
           disabled={selectedEngineer?.status === ACTIVE_STATUS || updateStatusMutation.isPending}
           onClick={() => {
             if (selectedEngineer) {
@@ -255,17 +325,29 @@ export function EngineersPage() {
         >
           Mark as Inactive
         </MenuItem>
+        <MenuItem
+          sx={{ color: 'error.main' }}
+          onClick={() => {
+            if (selectedEngineer) {
+              if (window.confirm(`Are you sure you want to delete ${selectedEngineer.fullName}?`)) {
+                deleteMutation.mutate(selectedEngineer.publicId);
+              }
+            }
+          }}
+        >
+          Delete
+        </MenuItem>
       </Menu>
 
       {/* Create dialog */}
       <Dialog
         open={isCreateDialogOpen}
-        onClose={() => { if (!createMutation.isPending) { setIsCreateDialogOpen(false); setFormError(null); } }}
+        onClose={() => { if (!createMutation.isPending && !updateMutation.isPending) { setIsCreateDialogOpen(false); setFormError(null); } }}
         fullWidth maxWidth="sm"
         aria-labelledby="create-engineer-title"
       >
         <Box component="form" onSubmit={handleCreateSubmit}>
-          <DialogTitle id="create-engineer-title">Add Engineer</DialogTitle>
+          <DialogTitle id="create-engineer-title">{isEditMode ? 'Edit Engineer' : 'Add Engineer'}</DialogTitle>
           <DialogContent>
             {formError && (
               <Typography color="error" sx={{ mb: 2, fontSize: '0.875rem' }}>{formError}</Typography>
@@ -288,28 +370,41 @@ export function EngineersPage() {
               onChange={(e) => setFormState((s) => ({ ...s, email: e.target.value }))}
               sx={{ mb: 2 }}
             />
-            <FormControl fullWidth size="small">
-              <InputLabel>Status</InputLabel>
-              <Select
-                label="Status"
-                value={formState.status}
-                onChange={(e: SelectChangeEvent<number>) =>
-                  setFormState((s) => ({ ...s, status: Number(e.target.value) }))
-                }
-              >
-                <MenuItem value={ACTIVE_STATUS}>Active</MenuItem>
-                <MenuItem value={INACTIVE_STATUS}>Inactive</MenuItem>
-              </Select>
-            </FormControl>
+            {!isEditMode && (
+              <FormControl fullWidth size="small">
+                <InputLabel>Status</InputLabel>
+                <Select
+                  label="Status"
+                  value={formState.status}
+                  onChange={(e: SelectChangeEvent<number>) =>
+                    setFormState((s) => ({ ...s, status: Number(e.target.value) }))
+                  }
+                >
+                  <MenuItem value={ACTIVE_STATUS}>Active</MenuItem>
+                  <MenuItem value={INACTIVE_STATUS}>Inactive</MenuItem>
+                </Select>
+              </FormControl>
+            )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => { setIsCreateDialogOpen(false); setFormError(null); }} disabled={createMutation.isPending}>Cancel</Button>
-            <Button type="submit" variant="contained" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Saving...' : 'Save Engineer'}
+            <Button onClick={() => { setIsCreateDialogOpen(false); setFormError(null); }} disabled={createMutation.isPending || updateMutation.isPending}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={createMutation.isPending || updateMutation.isPending}>
+              {(createMutation.isPending || updateMutation.isPending) ? 'Saving...' : 'Save'}
             </Button>
           </DialogActions>
         </Box>
       </Dialog>
+
+      {/* Avatar Preview */}
+      {previewAvatar && (
+        <AvatarPreviewModal
+           open={!!previewAvatar}
+           onClose={() => setPreviewAvatar(null)}
+           imageUrl={previewAvatar.url}
+           altText={previewAvatar.name}
+           fallbackText={previewAvatar.fallbackText}
+        />
+      )}
     </>
   );
 }

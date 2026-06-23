@@ -3,9 +3,12 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../core/network/api_client.dart';
 import 'tracking_intervals.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 class LocationService {
   static Timer? _timer;
+  static final ValueNotifier<String?> backendReasonNotifier = ValueNotifier(null);
 
   static Future<void> start({
     required String token,
@@ -55,7 +58,7 @@ class LocationService {
     );
 
     // Bypasses the catch block to let UI handle errors (like 429)
-    await ApiClient.postWithToken("Tracking/location", {
+    final response = await ApiClient.postWithToken("Tracking/location", {
       "devicePublicId": devicePublicId,
       "installationId": installationId,
       "latitude": position.latitude,
@@ -65,6 +68,17 @@ class LocationService {
       "isMocked": position.isMocked,
       "recordedAt": DateTime.now().toUtc().toIso8601String(),
     }, token);
+    
+    if (response.statusCode == 200) {
+      try {
+        final body = jsonDecode(response.body);
+        if (body['accepted'] == false) {
+          backendReasonNotifier.value = body['reason'];
+        } else {
+          backendReasonNotifier.value = null;
+        }
+      } catch (_) {}
+    }
   }
 
   static void stop() {
@@ -82,7 +96,7 @@ class LocationService {
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      await ApiClient.postWithToken("Tracking/location", {
+      final response = await ApiClient.postWithToken("Tracking/location", {
         "devicePublicId": devicePublicId,
         "installationId": installationId,
         "latitude": position.latitude,
@@ -92,6 +106,17 @@ class LocationService {
         "isMocked": position.isMocked,
         "recordedAt": DateTime.now().toUtc().toIso8601String(),
       }, token);
+
+      if (response.statusCode == 200) {
+        try {
+          final body = jsonDecode(response.body);
+          if (body['accepted'] == false) {
+            backendReasonNotifier.value = body['reason'];
+          } else {
+            backendReasonNotifier.value = null;
+          }
+        } catch (_) {}
+      }
     } catch (e) {
       // Hidden tracking error.
       // We will add retry queue later.

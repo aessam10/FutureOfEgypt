@@ -49,5 +49,15 @@ namespace FutureOfEgypt.Services
                     devicePublicId,
                     cancellationToken);
         }
+
+        public async Task NotifyEngineerStatusChangedAsync(
+            EngineerStatusChangedEvent statusEvent,
+            CancellationToken cancellationToken = default)
+        {
+            await _hubContext.Clients.All.SendAsync(
+                "engineerStatusChanged",
+                statusEvent,
+                cancellationToken: cancellationToken);
+        }
     }
 }

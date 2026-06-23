@@ -6,8 +6,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
+    port: 5173,
     allowedHosts: [
-      'san-dom-transit-enjoyed.trycloudflare.com',
+      '.trycloudflare.com',
+      '192.168.8.175',
+      'localhost',
     ],
   },
 })

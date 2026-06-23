@@ -6,9 +6,11 @@ namespace FutureOfEgypt.Services
     public class AppReleaseFileService : IAppReleaseFileService
     {
         private readonly string _baseDirectory;
+        private readonly IConfiguration _configuration;
 
         public AppReleaseFileService(IWebHostEnvironment env, IConfiguration configuration)
         {
+            _configuration = configuration;
             var configPath = configuration["AppStorage:AndroidReleasesPath"];
             if (!string.IsNullOrWhiteSpace(configPath))
             {
@@ -62,6 +64,16 @@ namespace FutureOfEgypt.Services
 
         public string GetDownloadUrl(Guid releasePublicId, string requestScheme, string requestHost)
         {
+            var isPublicBaseUrlEnabled = _configuration.GetValue<bool>("PublicBaseUrl:Enabled");
+            if (isPublicBaseUrlEnabled)
+            {
+                var baseUrl = _configuration.GetValue<string>("PublicBaseUrl:BaseUrl");
+                if (!string.IsNullOrWhiteSpace(baseUrl))
+                {
+                    return $"{baseUrl.TrimEnd('/')}/api/app-updates/android/download/{releasePublicId}";
+                }
+            }
+
             // e.g. https://domain.com/api/app-updates/android/download/{guid}
             return $"{requestScheme}://{requestHost}/api/app-updates/android/download/{releasePublicId}";
         }

@@ -13,11 +13,14 @@ export interface AuthUser {
   fullName: string;
   roles: string[];
   engineerPublicId?: string | null;
+  profilePhotoUrl?: string | null;
+  avatarRefreshKey?: number;
 }
 
 export interface AuthResponse {
   userId: string;
   engineerPublicId?: string | null;
+  profilePhotoUrl?: string | null;
   fullName: string;
   email: string;
   roles: string[];

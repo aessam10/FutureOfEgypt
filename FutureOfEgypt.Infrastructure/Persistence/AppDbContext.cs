@@ -23,6 +23,8 @@ namespace FutureOfEgypt.Infrastructure.Persistence
 
         public DbSet<DeviceLatestLocation> DeviceLatestLocations { get; set; }
 
+        public DbSet<EngineerStatusHistory> EngineerStatusHistories { get; set; }
+
         public DbSet<DeviceAccessRequest> DeviceAccessRequests { get; set; }
 
         public DbSet<RefreshToken> RefreshTokens { get; set; }
@@ -57,6 +59,12 @@ namespace FutureOfEgypt.Infrastructure.Persistence
                         .IsUnique();
                 }
             }
+
+            modelBuilder.Entity<EngineerStatusHistory>()
+                .HasIndex(x => new { x.EngineerId, x.ChangedAtUtc });
+
+            modelBuilder.Entity<EngineerStatusHistory>()
+                .HasIndex(x => new { x.DeviceId, x.ChangedAtUtc });
         }
     }
 }

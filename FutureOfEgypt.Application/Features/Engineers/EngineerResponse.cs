@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Enums;
+using FutureOfEgypt.Domain.Enums;
 
 namespace FutureOfEgypt.Application.Features.Engineers
 {
@@ -15,5 +15,9 @@ namespace FutureOfEgypt.Application.Features.Engineers
         public EngineerStatus Status { get; set; }
 
         public DateTime CreatedAt { get; set; }
+
+        public Guid? UserPublicId { get; set; }
+
+        public string? ProfilePhotoUrl { get; set; }
     }
 }

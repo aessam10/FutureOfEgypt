@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Security;
+using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.Auth;
 using FutureOfEgypt.Domain.Enums;
@@ -320,6 +320,12 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (user is null)
                 throw new InvalidOperationException("Invalid email or password.");
 
+            if (user.IsDeleted)
+                throw new InvalidOperationException("Account is deleted.");
+
+            if (user.IsSuspended)
+                throw new InvalidOperationException("Account is suspended.");
+
             var passwordIsValid = await _userManager.CheckPasswordAsync(
                 user,
                 request.Password);
@@ -433,6 +439,12 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             if (user is null)
                 throw new InvalidOperationException("User does not exist.");
+
+            if (user.IsDeleted)
+                throw new InvalidOperationException("Account is deleted.");
+
+            if (user.IsSuspended)
+                throw new InvalidOperationException("Account is suspended.");
 
             var newRefreshToken = GenerateRefreshToken();
             var newRefreshTokenHash = HashRefreshToken(newRefreshToken);

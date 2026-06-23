@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Security;
+using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.Engineers;
 using FutureOfEgypt.Extensions;
 using Microsoft.AspNetCore.Authorization;
@@ -19,6 +19,7 @@ namespace FutureOfEgypt.Controllers
         }
 
         [HttpPost]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> Create(
             [FromBody] CreateEngineerRequest request,
             CancellationToken cancellationToken)
@@ -47,11 +48,28 @@ namespace FutureOfEgypt.Controllers
             return Ok(result);
         }
 
+        [HttpPatch("{engineerPublicId:guid}")]
+        [Authorize(Policy = "AdminOnly")]
+        public async Task<IActionResult> UpdateEngineer(
+            Guid engineerPublicId,
+            [FromBody] UpdateEngineerRequest request,
+            CancellationToken cancellationToken)
+        {
+            var adminUserId = User.GetUserId();
+            var adminEmail = User.GetUserEmail();
+
+            var result = await _engineerService.UpdateEngineerAsync(
+                adminUserId, adminEmail, engineerPublicId, request, cancellationToken);
+
+            return Ok(result);
+        }
+
         [HttpPatch("{engineerPublicId:guid}/status")]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> UpdateStatus(
-    Guid engineerPublicId,
-    [FromBody] UpdateEngineerStatusRequest request,
-    CancellationToken cancellationToken)
+            Guid engineerPublicId,
+            [FromBody] UpdateEngineerStatusRequest request,
+            CancellationToken cancellationToken)
         {
             var adminUserId = User.GetUserId();
             var adminEmail = User.GetUserEmail();
@@ -64,6 +82,19 @@ namespace FutureOfEgypt.Controllers
                 cancellationToken);
 
             return Ok(result);
+        }
+
+        [HttpDelete("{engineerPublicId:guid}")]
+        [Authorize(Policy = "AdminOnly")]
+        public async Task<IActionResult> DeleteEngineer(
+            Guid engineerPublicId,
+            CancellationToken cancellationToken)
+        {
+            var adminUserId = User.GetUserId();
+            var adminEmail = User.GetUserEmail();
+
+            await _engineerService.DeleteEngineerAsync(adminUserId, adminEmail, engineerPublicId, cancellationToken);
+            return NoContent();
         }
     }
 }

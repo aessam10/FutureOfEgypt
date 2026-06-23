@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/network/api_client.dart';
-import '../admin/admin_home.dart';
+import '../admin/admin_block_page.dart';
 import '../device/device_access_service.dart';
 import '../device/device_validation_service.dart';
 import '../engineer/device_pending_page.dart';
 import '../engineer/engineer_home.dart';
-import '../manager/manager_home.dart';
 import '../tracking/tracking_config_service.dart';
 import 'auth_service.dart';
 
@@ -65,14 +64,9 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
 
-      // --- non-engineer roles go directly to their home ---
-      if (roles.contains('Admin')) {
-        _navigateTo(const AdminHome());
-        return;
-      }
-
-      if (roles.contains('Manager')) {
-        _navigateTo(const ManagerHome());
+      // --- non-engineer roles go directly to block page ---
+      if (roles.contains('Admin') || roles.contains('Manager')) {
+        _navigateTo(const AdminBlockPage());
         return;
       }
 

@@ -10,7 +10,6 @@ import {
   Typography,
   IconButton,
   Avatar,
-  Divider,
   AppBar,
   Toolbar,
   Badge,
@@ -25,6 +24,7 @@ import { CommandPalette } from '../components/common/CommandPalette';
 import { createNotificationHubConnection } from '../signalr/notificationHub';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { getNotifications, getUnreadCount, markAllAsRead } from '../api/notificationsApi';
+import { AuthorizedAvatar } from '../components/common/AuthorizedAvatar';
 
 // Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -42,6 +42,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import MenuIcon from '@mui/icons-material/Menu';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const DRAWER_WIDTH = 260;
@@ -49,6 +50,7 @@ const DRAWER_WIDTH = 260;
 const NAV_ITEMS = [
   { label: 'نظرة عامة', labelEn: 'Overview', path: routes.dashboard, icon: <DashboardIcon fontSize="small" /> },
   { label: 'المهندسون', labelEn: 'Engineers', path: routes.engineers, icon: <EngineeringIcon fontSize="small" /> },
+  { label: 'المديرون', labelEn: 'Managers', path: routes.managers, icon: <SupervisorAccountIcon fontSize="small" />, roles: ['Admin'] },
   { label: 'الأجهزة', labelEn: 'Devices', path: routes.devices, icon: <DevicesIcon fontSize="small" /> },
   { label: 'تحديثات التطبيق', labelEn: 'App Updates', path: routes.appUpdates, icon: <SystemUpdateAltIcon fontSize="small" /> },
   { label: 'التكليفات', labelEn: 'Assignments', path: routes.assignments, icon: <AssignmentIcon fontSize="small" /> },
@@ -97,6 +99,23 @@ export function DashboardLayout() {
       setLocalUnreadCount(unreadData);
     }
   }, [unreadData]);
+
+  // Fetch full profile (including photo) and sync with AuthContext
+  const { updateUser: syncUser } = useAuth();
+  useQuery({
+    queryKey: ['myProfile'],
+    queryFn: async () => {
+        const { profileApi } = await import('../api/profileApi');
+        const profile = await profileApi.getMyProfile();
+        syncUser({
+            fullName: profile.fullName,
+            email: profile.email,
+            profilePhotoUrl: profile.profilePhotoUrl
+        });
+        return profile;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   const {
     data: notifData,
@@ -236,7 +255,7 @@ export function DashboardLayout() {
           </Typography>
 
           <List disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.filter(item => !item.roles || (user?.roles && item.roles.some(r => user.roles.includes(r)))).map((item) => {
               const isActive = location.pathname === item.path;
 
               return (
@@ -320,31 +339,47 @@ export function DashboardLayout() {
           }}
         >
           <Box
+            onClick={() => { navigate(routes.profile); setMobileOpen(false); }}
             sx={{
               display: 'flex',
               alignItems: 'center',
               gap: 1.5,
               p: 1,
               borderRadius: '8px',
+              cursor: 'pointer',
               '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' },
               transition: 'background-color 0.2s ease',
             }}
           >
-            <Avatar
-              sx={{
-                width: 34,
-                height: 34,
-                bgcolor: BRAND_CYAN,
-                color: '#000',
-                boxShadow: `0 0 15px rgba(0, 240, 255, 0.4)`,
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                flexShrink: 0,
-              }}
-              aria-label={`User: ${user?.fullName || user?.email}`}
-            >
-              {initials}
-            </Avatar>
+            {user?.profilePhotoUrl ? (
+              <AuthorizedAvatar
+                srcUrl={user.profilePhotoUrl}
+                refreshKey={user?.avatarRefreshKey}
+                alt={user?.fullName || user?.email || 'User'}
+                sx={{
+                  width: 34,
+                  height: 34,
+                  boxShadow: `0 0 15px rgba(0, 240, 255, 0.4)`,
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <Avatar
+                sx={{
+                  width: 34,
+                  height: 34,
+                  bgcolor: BRAND_CYAN,
+                  color: '#000',
+                  boxShadow: `0 0 15px rgba(0, 240, 255, 0.4)`,
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+                aria-label={`User: ${user?.fullName || user?.email}`}
+              >
+                {initials}
+              </Avatar>
+            )}
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography
                 noWrap
@@ -529,21 +564,6 @@ export function DashboardLayout() {
               </IconButton>
             </Tooltip>
 
-            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 24, alignSelf: 'center' }} />
-
-            <Avatar
-              sx={{
-                width: 34,
-                height: 34,
-                bgcolor: 'primary.main',
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                cursor: 'default',
-              }}
-              aria-label={`Logged in as ${user?.fullName || user?.email}`}
-            >
-              {initials}
-            </Avatar>
           </Toolbar>
         </AppBar>
 

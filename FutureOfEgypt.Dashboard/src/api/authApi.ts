@@ -16,3 +16,14 @@ export async function logout(refreshToken: string) {
     refreshToken,
   });
 }
+
+export interface RegisterManagerRequest {
+  fullName: string;
+  email: string;
+  password?: string;
+}
+
+export async function registerManager(request: RegisterManagerRequest) {
+  const response = await axiosClient.post('/api/Auth/register-manager', request);
+  return response.data;
+}

@@ -1,4 +1,4 @@
-﻿namespace FutureOfEgypt.Application.Features.Tracking
+namespace FutureOfEgypt.Application.Features.Tracking
 {
     public sealed class LocationHistoryResponse
     {
@@ -23,6 +23,8 @@
         public bool IsMocked { get; set; }
 
         public DateTime RecordedAt { get; set; }
+
+        public DateTime? TimestampLocal { get; set; }
 
         public DateTime ReceivedAt { get; set; }
     }
