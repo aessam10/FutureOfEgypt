@@ -122,3 +122,10 @@ body,
 .fade-in-up {
   animation: fadeInUp 0.4s ease forwards;
 }
+
+/* ─── Leaflet mobile hide tooltip ───────────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}

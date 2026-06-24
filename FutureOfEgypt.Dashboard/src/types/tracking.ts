@@ -18,6 +18,8 @@ export interface LatestLocationResponse {
   profilePhotoUrl?: string;
   engineerPhoneNumber?: string;
   isAuthorized?: boolean;
+  trackingStatusReason?: string;
+  lastHealthReportAt?: string;
 }
 
 export interface LocationReceivedEvent {

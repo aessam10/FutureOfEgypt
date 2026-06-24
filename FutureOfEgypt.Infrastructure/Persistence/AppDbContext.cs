@@ -23,6 +23,8 @@ namespace FutureOfEgypt.Infrastructure.Persistence
 
         public DbSet<DeviceLatestLocation> DeviceLatestLocations { get; set; }
 
+        public DbSet<DeviceTrackingHealthStatus> DeviceTrackingHealthStatuses { get; set; }
+
         public DbSet<EngineerStatusHistory> EngineerStatusHistories { get; set; }
 
         public DbSet<DeviceAccessRequest> DeviceAccessRequests { get; set; }

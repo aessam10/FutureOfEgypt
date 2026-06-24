@@ -1,26 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 import SendIcon from '@mui/icons-material/Send';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import GroupAddIcon from '@mui/icons-material/GroupAdd';
+import CloseIcon from '@mui/icons-material/Close';
 import {
-  Autocomplete,
-  Avatar,
   Badge,
   Box,
-  Button,
   CircularProgress,
   Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
+  IconButton,
   InputAdornment,
   List,
   ListItemButton,
-  Paper,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -28,35 +21,39 @@ import { PageHeader } from '../components/common/PageHeader';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { EmptyState } from '../components/common/EmptyState';
+import { AuthAvatar } from '../components/AuthAvatar';
 import {
   createDirectConversation,
-  createGroupConversation,
   getConversationMessages,
   getMyConversations,
   markConversationAsRead,
+  searchChatUsers,
   sendChatMessage,
 } from '../api/chatApi';
-import { getEngineers } from '../api/engineersApi';
 import { createChatHubConnection } from '../signalr/chatHub';
 import { useAuth } from '../auth/AuthContext';
 import type {
   ChatConversationResponse,
   ChatMessageResponse,
-  ChatRealtimeMessageResponse,
-  CreateGroupChatRequest,
+  ChatRealtimeMessageResponse
 } from '../types/chat';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function getConversationTitle(conversation: ChatConversationResponse): string {
+function getConversationTitle(conversation: ChatConversationResponse, currentUserId?: string): string {
+  if (conversation.type === 1) { // Direct
+    const otherParticipant = conversation.participants.find(p => p.userId !== currentUserId);
+    return otherParticipant?.displayName ?? 'User';
+  }
   if (conversation.title) return conversation.title;
-  const first = conversation.participants[0];
-  return first?.displayName ?? 'Direct conversation';
+  return 'Group Chat';
 }
 
-function getConversationInitials(title: string): string {
-  const parts = title.split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return title.slice(0, 2).toUpperCase();
+function getConversationAvatarUrl(conversation: ChatConversationResponse, currentUserId?: string): string | null | undefined {
+  if (conversation.type === 1) { // Direct
+    const otherParticipant = conversation.participants.find(p => p.userId !== currentUserId);
+    return otherParticipant?.profileImageUrl;
+  }
+  return null; // Group could have an icon later
 }
 
 function formatMessageTime(utcStr: string): string {
@@ -86,8 +83,40 @@ function convertRealtimeToMessage(
     messageText: msg.messageText,
     type: msg.type,
     sentAtUtc: msg.sentAtUtc,
+    profileImageUrl: msg.profileImageUrl,
     isMine: msg.senderUserId === currentUserId,
   };
+}
+
+// ─── Profile Preview Modal ───────────────────────────────────────────────────
+function ProfilePreviewModal({
+  open,
+  onClose,
+  name,
+  role,
+  url
+}: {
+  open: boolean;
+  onClose: () => void;
+  name: string;
+  role?: string;
+  url?: string | null;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Profile</span>
+        <IconButton onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pb: 4 }}>
+        <AuthAvatar name={name} url={url} size="2xl" className="mb-4 shadow-lg" />
+        <Typography variant="h6" sx={{ fontWeight: 700, mt: 2 }}>{name}</Typography>
+        {role && <Typography variant="body2" color="text.secondary">{role}</Typography>}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -96,38 +125,40 @@ export function ChatPage() {
   const { user } = useAuth();
 
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
   const [selectedConversation, setSelectedConversation] =
     useState<ChatConversationResponse | null>(null);
   const [messageText, setMessageText] = useState('');
-
-  // Direct dialog
-  const [isDirectDialogOpen, setIsDirectDialogOpen] = useState(false);
-  const [selectedEngineerUserId, setSelectedEngineerUserId] = useState<string>('');
-  const [directDialogError, setDirectDialogError] = useState<string | null>(null);
-
-  // Group dialog
-  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
-  const [groupTitle, setGroupTitle] = useState('');
-  const [groupParticipantIds, setGroupParticipantIds] = useState('');
-  const [groupDialogError, setGroupDialogError] = useState<string | null>(null);
+  
+  const [previewProfile, setPreviewProfile] = useState<{name: string, role?: string, url?: string | null} | null>(null);
 
   // Scroll ref for auto-scroll to bottom
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── Queries ────────────────────────────────────────────────────
-  const conversationQueryParams = useMemo(
-    () => ({ pageNumber: 1, pageSize: 30, search: search.trim() || undefined }),
-    [search],
-  );
-
   const {
     data: conversationsData,
     isLoading: isConversationsLoading,
-    isError: isConversationsError,
-    refetch: refetchConversations,
   } = useQuery({
-    queryKey: ['chat-conversations', conversationQueryParams],
-    queryFn: () => getMyConversations(conversationQueryParams),
+    queryKey: ['chat-conversations', debouncedSearch],
+    queryFn: () => getMyConversations({ pageNumber: 1, pageSize: 50, search: debouncedSearch.trim() || undefined }),
+  });
+
+  const {
+    data: usersSearchData,
+    isLoading: isUsersSearchLoading,
+  } = useQuery({
+    queryKey: ['chat-users', debouncedSearch],
+    queryFn: () => searchChatUsers({ pageNumber: 1, pageSize: 20, search: debouncedSearch.trim() || undefined }),
+    enabled: debouncedSearch.trim().length > 0, // only search users if there's a search term
   });
 
   const selectedConversationPublicId = selectedConversation?.publicId;
@@ -146,15 +177,6 @@ export function ChatPage() {
       }),
     enabled: Boolean(selectedConversationPublicId),
   });
-
-  // Engineers list for autocomplete in direct dialog
-  const { data: engineersData } = useQuery({
-    queryKey: ['engineers-all'],
-    queryFn: () => getEngineers({ pageNumber: 1, pageSize: 100 }),
-    staleTime: 5 * 60_000,
-  });
-
-  const engineers = engineersData?.items ?? [];
 
   // ── Mutations ──────────────────────────────────────────────────
   const markReadMutation = useMutation({
@@ -181,24 +203,8 @@ export function ChatPage() {
     onSuccess: async (conversation) => {
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       setSelectedConversation(conversation);
-      setIsDirectDialogOpen(false);
-      setSelectedEngineerUserId('');
-      setDirectDialogError(null);
+      setSearch(''); // clear search
     },
-    onError: () => setDirectDialogError('Failed to create direct conversation.'),
-  });
-
-  const createGroupMutation = useMutation({
-    mutationFn: (request: CreateGroupChatRequest) => createGroupConversation(request),
-    onSuccess: async (conversation) => {
-      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
-      setSelectedConversation(conversation);
-      setIsGroupDialogOpen(false);
-      setGroupTitle('');
-      setGroupParticipantIds('');
-      setGroupDialogError(null);
-    },
-    onError: () => setGroupDialogError('Failed to create group conversation.'),
   });
 
   // ── SignalR ────────────────────────────────────────────────────
@@ -216,7 +222,6 @@ export function ChatPage() {
               if (alreadyExists) return current;
               return {
                 ...current,
-                // Append to end — newest messages at the bottom
                 items: [...current.items, convertRealtimeToMessage(message, user?.userId)],
                 totalCount: current.totalCount + 1,
               };
@@ -225,15 +230,9 @@ export function ChatPage() {
           void markReadMutation.mutateAsync(message.conversationPublicId);
         }
       },
-      onConversationUpdated: () => {
-        void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
-      },
-      onConversationRead: () => {
-        void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
-      },
-      onParticipantsChanged: () => {
-        void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
-      },
+      onConversationUpdated: () => void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] }),
+      onConversationRead: () => void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] }),
+      onParticipantsChanged: () => void queryClient.invalidateQueries({ queryKey: ['chat-conversations'] }),
     });
 
     void connection.start();
@@ -252,21 +251,19 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messagesData?.items]);
 
-  // ── Sorted messages (oldest → newest for display) ─────────────
-  // API returns newest-first (page 1 = most recent), so we reverse for display
   const sortedMessages = useMemo(() => {
     if (!messagesData?.items) return [];
-    // If items are already oldest-first (ascending), use as-is.
-    // We detect order by comparing timestamps of first two items.
     const items = messagesData.items;
     if (items.length < 2) return [...items];
     const first = new Date(items[0].sentAtUtc).getTime();
     const second = new Date(items[1].sentAtUtc).getTime();
-    // If descending (newest first), reverse so oldest is first
     return first > second ? [...items].reverse() : [...items];
   }, [messagesData?.items]);
 
   const conversations = conversationsData?.items ?? [];
+  const searchedUsers = usersSearchData?.items ?? [];
+
+  const showUsersList = debouncedSearch.trim().length > 0;
 
   // ── Handlers ──────────────────────────────────────────────────
   function handleSendMessage(e: React.FormEvent<HTMLFormElement>) {
@@ -289,101 +286,70 @@ export function ChatPage() {
     }
   }
 
-  function handleCreateDirectSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!selectedEngineerUserId.trim()) {
-      setDirectDialogError('Please select an engineer.');
-      return;
-    }
-    setDirectDialogError(null);
-    createDirectMutation.mutate(selectedEngineerUserId.trim());
+  function handleUserClick(targetUserId: string) {
+    createDirectMutation.mutate(targetUserId);
   }
 
-  function handleCreateGroupSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const title = groupTitle.trim();
-    const participantUserIds = groupParticipantIds
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (!title) { setGroupDialogError('Please enter group title.'); return; }
-    if (participantUserIds.length === 0) { setGroupDialogError('Please enter at least one participant.'); return; }
-    setGroupDialogError(null);
-    createGroupMutation.mutate({ title, participantUserIds });
+  function openPreview(name: string, url: string | null | undefined, role?: string | number) {
+    let roleStr = typeof role === 'number' ? getRoleName(role) : role;
+    setPreviewProfile({ name, url, role: roleStr });
+  }
+
+  function getRoleName(roleNum: number) {
+    if (roleNum === 1) return 'Owner';
+    if (roleNum === 2) return 'Admin';
+    if (roleNum === 3) return 'Member';
+    return '';
   }
 
   // ── Render ────────────────────────────────────────────────────
   return (
     <>
       <PageHeader
-        title="Chat"
-        subtitle="Direct and group conversations with engineers and admins."
+        title="Messages"
+        subtitle="Connect with your team instantly"
       />
 
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: '320px 1fr',
-          gap: 2,
+          gridTemplateColumns: '340px 1fr',
+          gap: 0,
           height: 'calc(100vh - 180px)',
           minHeight: 520,
+          borderRadius: 2,
+          overflow: 'hidden',
+          backgroundColor: 'background.paper',
+          border: '1px solid',
+          borderColor: 'divider',
+          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
         }}
       >
         {/* ── Conversations sidebar ────────────────────────────── */}
-        <Paper
+        <Box
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden',
+            borderRight: '1px solid',
+            borderColor: 'divider',
+            bgcolor: '#f8fafc',
           }}
           role="navigation"
-          aria-label="Conversations list"
         >
           {/* Header */}
-          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
-              <Tooltip title="New Direct Chat">
-                <Button
-                  fullWidth
-                  size="small"
-                  variant="contained"
-                  startIcon={<PersonAddIcon />}
-                  onClick={() => {
-                    setSelectedEngineerUserId('');
-                    setDirectDialogError(null);
-                    setIsDirectDialogOpen(true);
-                  }}
-                  aria-label="Start new direct conversation"
-                >
-                  Direct
-                </Button>
-              </Tooltip>
-              <Tooltip title="New Group Chat">
-                <Button
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                  startIcon={<GroupAddIcon />}
-                  onClick={() => {
-                    setGroupTitle('');
-                    setGroupParticipantIds('');
-                    setGroupDialogError(null);
-                    setIsGroupDialogOpen(true);
-                  }}
-                  aria-label="Create new group conversation"
-                >
-                  Group
-                </Button>
-              </Tooltip>
-            </Box>
-
+          <Box sx={{ p: 2, pb: 1 }}>
             <TextField
               fullWidth
               size="small"
-              placeholder="Search conversations..."
+              placeholder="Search people or conversations..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search conversations"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 3,
+                  backgroundColor: '#fff'
+                }
+              }}
               slotProps={{
                 input: {
                   startAdornment: (
@@ -396,488 +362,255 @@ export function ChatPage() {
             />
           </Box>
 
-          {/* Conversation list */}
+          {/* List Area */}
           <Box sx={{ flex: 1, overflowY: 'auto' }}>
-            {isConversationsLoading && <LoadingState message="Loading conversations..." />}
-            {isConversationsError && (
-              <ErrorState
-                message="Failed to load conversations."
-                onRetry={() => { void refetchConversations(); }}
-              />
-            )}
-            {!isConversationsLoading && !isConversationsError && conversations.length === 0 && (
-              <EmptyState title="No conversations" description="Start a direct or group chat." />
-            )}
-            {!isConversationsLoading && !isConversationsError && conversations.length > 0 && (
-              <List disablePadding>
+            {isConversationsLoading && !showUsersList && <LoadingState message="Loading..." />}
+            
+            {/* Conversations Section */}
+            {conversations.length > 0 && (
+               <List disablePadding>
+                {showUsersList && <Typography variant="caption" sx={{ px: 2, py: 1, color: 'text.secondary', fontWeight: 600 }}>CONVERSATIONS</Typography>}
                 {conversations.map((conv) => {
                   const isSelected = selectedConversation?.publicId === conv.publicId;
-                  const title = getConversationTitle(conv);
-                  const initials = getConversationInitials(title);
+                  const title = getConversationTitle(conv, user?.userId);
+                  const avatarUrl = getConversationAvatarUrl(conv, user?.userId);
 
                   return (
                     <ListItemButton
                       key={conv.publicId}
                       selected={isSelected}
                       onClick={() => setSelectedConversation(conv)}
-                      aria-label={`Open conversation: ${title}`}
-                      aria-selected={isSelected}
                       sx={{
                         px: 2,
                         py: 1.5,
                         gap: 1.5,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                        alignItems: 'flex-start',
                         '&.Mui-selected': {
-                          backgroundColor: 'primary.main',
-                          '&:hover': { backgroundColor: 'primary.dark' },
-                          '& .MuiTypography-root': { color: '#fff !important' },
+                          backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                          '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.12)' },
                         },
                       }}
                     >
-                      <Avatar
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          bgcolor: isSelected ? 'rgba(255,255,255,0.25)' : 'primary.main',
-                          fontSize: '0.8rem',
-                          fontWeight: 700,
-                          flexShrink: 0,
+                      <AuthAvatar 
+                        name={title} 
+                        url={avatarUrl} 
+                        size="lg" 
+                        onClick={(e: any) => {
+                          e.stopPropagation();
+                          openPreview(title, avatarUrl);
                         }}
-                        aria-hidden="true"
-                      >
-                        {initials}
-                      </Avatar>
+                      />
 
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: 1,
-                          }}
-                        >
-                          <Typography
-                            noWrap
-                            sx={{
-                              fontWeight: 600,
-                              fontSize: '0.875rem',
-                              color: isSelected ? '#fff' : 'text.primary',
-                            }}
-                          >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography noWrap sx={{ fontWeight: isSelected ? 700 : 600, fontSize: '0.95rem', color: '#1e293b' }}>
                             {title}
                           </Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                            {conv.unreadCount > 0 && (
-                              <Badge
-                                badgeContent={conv.unreadCount}
-                                color={isSelected ? 'default' : 'primary'}
-                                sx={{ '& .MuiBadge-badge': { position: 'static', transform: 'none' } }}
-                                aria-label={`${conv.unreadCount} unread messages`}
-                              />
-                            )}
-                          </Box>
+                          {conv.unreadCount > 0 && (
+                            <Badge
+                              badgeContent={conv.unreadCount}
+                              color="primary"
+                              sx={{ '& .MuiBadge-badge': { position: 'static', transform: 'none' } }}
+                            />
+                          )}
                         </Box>
-
-                        <Typography
-                          noWrap
-                          variant="body2"
-                          sx={{
-                            color: isSelected ? 'rgba(255,255,255,0.75)' : 'text.secondary',
-                            fontSize: '0.8rem',
-                            mt: 0.25,
-                          }}
-                        >
-                          {conv.lastMessage?.messageText ?? 'No messages yet'}
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color: isSelected ? 'rgba(255,255,255,0.55)' : 'text.disabled',
-                            display: 'block',
-                            mt: 0.25,
-                            fontSize: '0.7rem',
-                          }}
-                        >
-                          {formatConversationTime(conv.lastMessageAtUtc)}
-                        </Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                          <Typography noWrap sx={{ color: conv.unreadCount > 0 ? 'text.primary' : 'text.secondary', fontSize: '0.85rem', fontWeight: conv.unreadCount > 0 ? 600 : 400 }}>
+                            {conv.lastMessage?.messageText ?? 'No messages yet'}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.disabled', flexShrink: 0, ml: 1 }}>
+                            {formatConversationTime(conv.lastMessageAtUtc)}
+                          </Typography>
+                        </Box>
                       </Box>
                     </ListItemButton>
                   );
                 })}
               </List>
             )}
+
+            {/* People Section */}
+            {showUsersList && (
+              <List disablePadding sx={{ mt: 1 }}>
+                <Typography variant="caption" sx={{ px: 2, py: 1, color: 'text.secondary', fontWeight: 600 }}>PEOPLE</Typography>
+                
+                {isUsersSearchLoading && <Box sx={{ p: 2, textAlign: 'center' }}><CircularProgress size={24} /></Box>}
+                
+                {!isUsersSearchLoading && searchedUsers.length === 0 && (
+                   <Typography variant="body2" sx={{ px: 2, py: 2, color: 'text.disabled', textAlign: 'center' }}>
+                     No people found
+                   </Typography>
+                )}
+
+                {searchedUsers.map((u) => (
+                  <ListItemButton
+                    key={u.userId}
+                    onClick={() => handleUserClick(u.userId)}
+                    sx={{ px: 2, py: 1, gap: 1.5 }}
+                  >
+                    <AuthAvatar 
+                      name={u.displayName} 
+                      url={u.profileImageUrl} 
+                      size="md" 
+                      onClick={(e: any) => {
+                        e.stopPropagation();
+                        openPreview(u.displayName, u.profileImageUrl);
+                      }}
+                    />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b' }}>
+                        {u.displayName}
+                      </Typography>
+                    </Box>
+                  </ListItemButton>
+                ))}
+              </List>
+            )}
+
+            {!isConversationsLoading && conversations.length === 0 && !showUsersList && (
+              <EmptyState title="No conversations" description="Search people to start a chat" />
+            )}
           </Box>
-        </Paper>
+        </Box>
 
         {/* ── Message area ─────────────────────────────────────── */}
-        <Paper
-          sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-          role="main"
-          aria-label="Chat messages"
-        >
-          {/* No conversation selected */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: '#fff' }}>
           {!selectedConversation && (
-            <Box
-              sx={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                p: 4,
-                gap: 1.5,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: '50%',
-                  backgroundColor: 'action.hover',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                aria-hidden="true"
-              >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, gap: 2 }}>
+              <Box sx={{ width: 80, height: 80, borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                <SendIcon sx={{ fontSize: 36, ml: -0.5 }} />
               </Box>
-              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem' }}>
-                Select a conversation
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                Choose a conversation from the left panel to start chatting.
+              <Typography variant="h6" sx={{ fontWeight: 600, color: '#334155' }}>Your Messages</Typography>
+              <Typography variant="body2" sx={{ color: '#64748b', textAlign: 'center', maxWidth: 300 }}>
+                Select a conversation or search for someone to start chatting.
               </Typography>
             </Box>
           )}
 
-          {/* Conversation selected */}
           {selectedConversation && (
             <>
-              {/* Conversation header */}
-              <Box
-                sx={{
-                  px: 2.5,
-                  py: 1.75,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                }}
-              >
-                <Avatar
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    bgcolor: 'primary.main',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                  }}
-                  aria-hidden="true"
-                >
-                  {getConversationInitials(getConversationTitle(selectedConversation))}
-                </Avatar>
+              {/* Active Header */}
+              <Box sx={{ px: 3, py: 2, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 2, bgcolor: '#fff', boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)' }}>
+                <AuthAvatar 
+                  name={getConversationTitle(selectedConversation, user?.userId)} 
+                  url={getConversationAvatarUrl(selectedConversation, user?.userId)} 
+                  size="xl"
+                  onClick={() => openPreview(getConversationTitle(selectedConversation, user?.userId), getConversationAvatarUrl(selectedConversation, user?.userId))}
+                />
                 <Box>
-                  <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.2 }}>
-                    {getConversationTitle(selectedConversation)}
+                  <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f172a' }}>
+                    {getConversationTitle(selectedConversation, user?.userId)}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
                     {selectedConversation.type === 1 ? 'Direct chat' : `Group chat · ${selectedConversation.participants.length} members`}
                   </Typography>
                 </Box>
               </Box>
 
               {/* Messages container */}
-              <Box
-                className="chat-messages-container"
-                sx={{
-                  flex: 1,
-                  overflowY: 'auto',
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column', // Normal top-to-bottom
-                  gap: 1,
-                  backgroundColor: 'background.default',
-                }}
-                role="log"
-                aria-label="Messages"
-                aria-live="polite"
-              >
-                {isMessagesLoading && <LoadingState message="Loading messages..." />}
-                {isMessagesError && (
-                  <ErrorState
-                    message="Failed to load messages."
-                    onRetry={() => { void refetchMessages(); }}
-                  />
-                )}
+              <Box className="chat-messages-container" sx={{ flex: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 1.5, backgroundColor: '#f8fafc' }}>
+                {isMessagesLoading && <LoadingState message="Loading..." />}
+                {isMessagesError && <ErrorState message="Failed to load messages." onRetry={() => { void refetchMessages(); }} />}
                 {!isMessagesLoading && !isMessagesError && sortedMessages.length === 0 && (
-                  <EmptyState
-                    title="No messages yet"
-                    description="Send the first message to start the conversation."
-                  />
+                  <EmptyState title="No messages yet" description="Say hello!" />
                 )}
 
                 {!isMessagesLoading && !isMessagesError && sortedMessages.map((message, idx) => {
                   const prevMsg = idx > 0 ? sortedMessages[idx - 1] : null;
-                  const showSenderName = !message.isMine &&
-                    (!prevMsg || prevMsg.senderUserId !== message.senderUserId);
+                  const showSenderName = !message.isMine && (!prevMsg || prevMsg.senderUserId !== message.senderUserId) && selectedConversation.type !== 1;
+                  const showAvatar = !message.isMine && (idx === sortedMessages.length - 1 || sortedMessages[idx + 1].senderUserId !== message.senderUserId);
 
                   return (
-                    <Box
-                      key={message.publicId}
-                      sx={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: message.isMine ? 'flex-end' : 'flex-start',
-                      }}
-                    >
-                      {/* Sender name (group chats) */}
+                    <Box key={message.publicId} sx={{ display: 'flex', flexDirection: 'column', alignItems: message.isMine ? 'flex-end' : 'flex-start', mb: showAvatar ? 1 : 0 }}>
                       {showSenderName && (
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color: 'text.secondary',
-                            fontWeight: 600,
-                            mb: 0.5,
-                            ml: 0.5,
-                            fontSize: '0.72rem',
-                          }}
-                        >
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5, ml: 5, fontSize: '0.75rem' }}>
                           {message.senderName}
                         </Typography>
                       )}
-
-                      {/* Bubble */}
-                      <Box
-                        sx={{
-                          maxWidth: '68%',
-                          px: 2,
-                          py: 1,
-                          borderRadius: message.isMine
-                            ? '16px 16px 4px 16px'
-                            : '16px 16px 16px 4px',
-                          backgroundColor: message.isMine ? 'primary.main' : 'background.paper',
-                          border: message.isMine ? 'none' : '1px solid',
-                          borderColor: 'divider',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                        }}
-                        role="article"
-                        aria-label={`${message.isMine ? 'You' : message.senderName}: ${message.messageText}`}
-                      >
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            color: message.isMine ? '#fff' : 'text.primary',
-                            lineHeight: 1.5,
-                            wordBreak: 'break-word',
-                            whiteSpace: 'pre-wrap',
-                          }}
-                        >
-                          {message.messageText}
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            display: 'block',
-                            textAlign: 'right',
-                            mt: 0.5,
-                            opacity: 0.7,
-                            fontSize: '0.68rem',
-                            color: message.isMine ? 'rgba(255,255,255,0.75)' : 'text.disabled',
-                          }}
-                          aria-label={`Sent at ${formatMessageTime(message.sentAtUtc)}`}
-                        >
-                          {formatMessageTime(message.sentAtUtc)}
-                        </Typography>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, maxWidth: '75%' }}>
+                        {!message.isMine && (
+                          <Box sx={{ width: 32, flexShrink: 0 }}>
+                            {showAvatar && (
+                              <AuthAvatar 
+                                name={message.senderName} 
+                                url={message.profileImageUrl} 
+                                size="sm" 
+                                onClick={() => openPreview(message.senderName, message.profileImageUrl)}
+                              />
+                            )}
+                          </Box>
+                        )}
+                        
+                        <Box sx={{
+                          px: 2.5,
+                          py: 1.25,
+                          borderRadius: message.isMine ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
+                          backgroundColor: message.isMine ? '#3b82f6' : '#fff',
+                          color: message.isMine ? '#fff' : '#1e293b',
+                          boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+                          border: message.isMine ? 'none' : '1px solid #e2e8f0',
+                        }}>
+                          <Typography variant="body1" sx={{ lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap', fontSize: '0.95rem' }}>
+                            {message.messageText}
+                          </Typography>
+                          <Typography variant="caption" sx={{ display: 'block', textAlign: 'right', mt: 0.5, fontSize: '0.7rem', color: message.isMine ? 'rgba(255,255,255,0.8)' : '#94a3b8' }}>
+                            {formatMessageTime(message.sentAtUtc)}
+                          </Typography>
+                        </Box>
                       </Box>
                     </Box>
                   );
                 })}
-
-                {/* Scroll anchor */}
-                <div ref={messagesEndRef} aria-hidden="true" />
+                <div ref={messagesEndRef} />
               </Box>
 
-              <Divider />
-
               {/* Message input */}
-              <Box
-                component="form"
-                onSubmit={handleSendMessage}
-                sx={{ p: 2, display: 'flex', gap: 1.5, alignItems: 'flex-end' }}
-              >
+              <Box component="form" onSubmit={handleSendMessage} sx={{ p: 2, px: 3, display: 'flex', gap: 2, alignItems: 'center', bgcolor: '#fff', borderTop: '1px solid', borderColor: 'divider' }}>
                 <TextField
                   fullWidth
                   multiline
                   maxRows={4}
-                  placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+                  placeholder="Type a message..."
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
                   onKeyDown={handleKeyDown}
                   disabled={sendMessageMutation.isPending}
-                  aria-label="Message input"
-                  slotProps={{ input: { style: { fontSize: '0.9rem' } } }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 4,
+                      backgroundColor: '#f1f5f9',
+                      '& fieldset': { border: 'none' },
+                    }
+                  }}
                 />
-
-                <Button
+                <IconButton
                   type="submit"
-                  variant="contained"
-                  aria-label="Send message"
                   disabled={sendMessageMutation.isPending || !messageText.trim()}
                   sx={{
-                    minWidth: 48,
-                    width: 48,
-                    height: 40,
-                    p: 0,
-                    borderRadius: '10px',
-                    flexShrink: 0,
+                    bgcolor: messageText.trim() ? '#3b82f6' : '#e2e8f0',
+                    color: '#fff',
+                    p: 1.5,
+                    '&:hover': { bgcolor: messageText.trim() ? '#2563eb' : '#e2e8f0' },
+                    '&.Mui-disabled': { color: '#94a3b8', bgcolor: '#f1f5f9' }
                   }}
                 >
-                  {sendMessageMutation.isPending ? (
-                    <CircularProgress size={18} color="inherit" />
-                  ) : (
-                    <SendIcon sx={{ fontSize: '1rem' }} />
-                  )}
-                </Button>
+                  {sendMessageMutation.isPending ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
+                </IconButton>
               </Box>
             </>
           )}
-        </Paper>
+        </Box>
       </Box>
 
-      {/* ── Direct Chat Dialog ─────────────────────────────────── */}
-      <Dialog
-        open={isDirectDialogOpen}
-        onClose={() => {
-          if (createDirectMutation.isPending) return;
-          setIsDirectDialogOpen(false);
-          setSelectedEngineerUserId('');
-          setDirectDialogError(null);
-        }}
-        fullWidth
-        maxWidth="sm"
-        aria-labelledby="direct-dialog-title"
-      >
-        <Box component="form" onSubmit={handleCreateDirectSubmit}>
-          <DialogTitle id="direct-dialog-title">New Direct Conversation</DialogTitle>
-          <DialogContent>
-            {directDialogError && (
-              <Typography color="error" sx={{ mb: 2, fontSize: '0.875rem' }}>
-                {directDialogError}
-              </Typography>
-            )}
-
-            <Autocomplete
-              options={engineers}
-              getOptionLabel={(opt) => `${opt.fullName} (${opt.email ?? opt.publicId})`}
-              onChange={(_, val) => setSelectedEngineerUserId(val?.publicId ?? '')}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Select Engineer"
-                  placeholder="Search by name..."
-                  sx={{ mt: 1 }}
-                />
-              )}
-              noOptionsText="No engineers found"
-              aria-label="Select engineer for direct chat"
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button
-              onClick={() => {
-                setIsDirectDialogOpen(false);
-                setSelectedEngineerUserId('');
-                setDirectDialogError(null);
-              }}
-              disabled={createDirectMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={createDirectMutation.isPending || !selectedEngineerUserId}
-            >
-              {createDirectMutation.isPending ? 'Creating...' : 'Start Chat'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
-
-      {/* ── Group Chat Dialog ──────────────────────────────────── */}
-      <Dialog
-        open={isGroupDialogOpen}
-        onClose={() => {
-          if (createGroupMutation.isPending) return;
-          setIsGroupDialogOpen(false);
-          setGroupTitle('');
-          setGroupParticipantIds('');
-          setGroupDialogError(null);
-        }}
-        fullWidth
-        maxWidth="sm"
-        aria-labelledby="group-dialog-title"
-      >
-        <Box component="form" onSubmit={handleCreateGroupSubmit}>
-          <DialogTitle id="group-dialog-title">New Group Conversation</DialogTitle>
-          <DialogContent>
-            {groupDialogError && (
-              <Typography color="error" sx={{ mb: 2, fontSize: '0.875rem' }}>
-                {groupDialogError}
-              </Typography>
-            )}
-
-            <TextField
-              fullWidth
-              label="Group Title"
-              value={groupTitle}
-              onChange={(e) => setGroupTitle(e.target.value)}
-              sx={{ mt: 1, mb: 2 }}
-              required
-            />
-
-            <TextField
-              fullWidth
-              label="Participant User IDs"
-              placeholder="id1, id2, id3"
-              value={groupParticipantIds}
-              onChange={(e) => setGroupParticipantIds(e.target.value)}
-              multiline
-              minRows={3}
-              helperText="Separate multiple IDs with commas"
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button
-              onClick={() => {
-                setIsGroupDialogOpen(false);
-                setGroupTitle('');
-                setGroupParticipantIds('');
-                setGroupDialogError(null);
-              }}
-              disabled={createGroupMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={createGroupMutation.isPending}
-            >
-              {createGroupMutation.isPending ? 'Creating...' : 'Create Group'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+      {previewProfile && (
+        <ProfilePreviewModal 
+          open={!!previewProfile} 
+          onClose={() => setPreviewProfile(null)} 
+          name={previewProfile.name} 
+          role={previewProfile.role} 
+          url={previewProfile.url} 
+        />
+      )}
     </>
   );
 }

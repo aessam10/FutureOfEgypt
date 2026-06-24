@@ -35,4 +35,35 @@ class AuthService {
 
     return decoded;
   }
+
+  static Future<Map<String, dynamic>> refresh(
+    String token,
+    String refreshToken,
+  ) async {
+    final response = await ApiClient.post(
+      "Auth/refresh",
+      {
+        "token": token,
+        "refreshToken": refreshToken,
+      },
+    );
+
+    final body = response.body;
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception("Refresh failed: ${response.statusCode}");
+    }
+
+    if (body.trim().isEmpty) {
+      throw Exception("Refresh failed: empty response from server");
+    }
+
+    final decoded = jsonDecode(body);
+
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception("Refresh failed: invalid response format");
+    }
+
+    return decoded;
+  }
 }

@@ -19,6 +19,7 @@ import MapIcon from '@mui/icons-material/Map';
 import HistoryIcon from '@mui/icons-material/History';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import { useNavigate } from 'react-router-dom';
+import { useThemeMode } from '../../app/ThemeContext';
 
 const SEARCH_ROUTES = [
   { path: '/overview', name: 'Dashboard Overview', icon: <DashboardIcon /> },
@@ -33,6 +34,7 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
+  const { isDark } = useThemeMode();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -68,16 +70,16 @@ export function CommandPalette() {
       slotProps={{
         paper: {
           sx: {
-            background: 'rgba(10, 15, 30, 0.95)',
+            background: isDark ? 'rgba(10, 15, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
             backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(0, 240, 255, 0.2)',
-            boxShadow: '0 0 40px rgba(0, 240, 255, 0.1)',
+            border: isDark ? '1px solid rgba(0, 240, 255, 0.2)' : '1px solid rgba(0, 0, 0, 0.1)',
+            boxShadow: isDark ? '0 0 40px rgba(0, 240, 255, 0.1)' : '0 10px 40px rgba(0, 0, 0, 0.1)',
             borderRadius: 3,
           }
         }
       }}
     >
-      <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 240, 255, 0.1)' }}>
+      <Box sx={{ p: 2, borderBottom: isDark ? '1px solid rgba(0, 240, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)' }}>
         <TextField
           autoFocus
           fullWidth
@@ -90,10 +92,10 @@ export function CommandPalette() {
               disableUnderline: true,
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon sx={{ color: '#00F0FF' }} />
+                  <SearchIcon sx={{ color: 'primary.main' }} />
                 </InputAdornment>
               ),
-              sx: { fontSize: '1.2rem', color: '#FFF' }
+              sx: { fontSize: '1.2rem', color: isDark ? '#FFF' : '#000' }
             }
           }}
         />
@@ -107,23 +109,23 @@ export function CommandPalette() {
                 onClick={() => handleNavigate(route.path)}
                 sx={{
                   '&:hover': {
-                    background: 'rgba(0, 240, 255, 0.1)',
+                    background: isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(24, 119, 242, 0.08)',
                   }
                 }}
               >
-                <ListItemIcon sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                <ListItemIcon sx={{ color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary' }}>
                   {route.icon}
                 </ListItemIcon>
                 <ListItemText 
                   primary={route.name} 
-                  slotProps={{ primary: { sx: { color: '#FFF', fontWeight: 500 } } }}
+                  slotProps={{ primary: { sx: { color: isDark ? '#FFF' : 'text.primary', fontWeight: 500 } } }}
                 />
               </ListItemButton>
             ))}
           </List>
         ) : (
           <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Typography sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>No results found</Typography>
+            <Typography sx={{ color: isDark ? 'rgba(255, 255, 255, 0.5)' : 'text.secondary' }}>No results found</Typography>
           </Box>
         )}
       </DialogContent>

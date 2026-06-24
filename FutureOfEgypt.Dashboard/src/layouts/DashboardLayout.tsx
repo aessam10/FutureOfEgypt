@@ -19,7 +19,6 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useThemeMode } from '../app/ThemeContext';
 import { routes } from '../app/routes';
-import { BRAND_CYAN, SIDEBAR_BACKGROUND } from '../app/theme';
 import { CommandPalette } from '../components/common/CommandPalette';
 import { createNotificationHubConnection } from '../signalr/notificationHub';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
@@ -186,7 +185,7 @@ export function DashboardLayout() {
     }
   }
 
-  const sidebarBg = SIDEBAR_BACKGROUND;
+
 
   const drawerContent = (
     <>
@@ -208,31 +207,31 @@ export function DashboardLayout() {
             style={{ 
               width: '42px', 
               height: 'auto',
-              filter: 'brightness(0) invert(1) drop-shadow(0 0 6px rgba(0, 240, 255, 0.5))'
-            }} 
+              filter: isDark ? 'brightness(0) invert(1) drop-shadow(0 0 6px rgba(0, 240, 255, 0.5))' : 'none'
+            }}
           />
           <Box sx={{ textAlign: 'left' }}>
             <Typography
-              sx={{
-                color: BRAND_CYAN,
+              sx={(theme) => ({
+                color: 'primary.main',
                 fontWeight: 800,
                 fontSize: '0.9rem',
                 lineHeight: 1.2,
                 letterSpacing: '0.02em',
-                textShadow: '0 0 10px rgba(0, 240, 255, 0.3)',
-              }}
+                textShadow: theme.palette.mode === 'dark' ? '0 0 10px rgba(0, 240, 255, 0.3)' : 'none',
+              })}
             >
               Future of Egypt
             </Typography>
             <Typography
-              sx={{
-                color: 'rgba(0, 240, 255, 0.6)',
+              sx={(theme) => ({
+                color: theme.palette.mode === 'dark' ? 'rgba(0, 240, 255, 0.6)' : 'text.secondary',
                 fontSize: '0.7rem',
                 lineHeight: 1.2,
                 fontWeight: 500,
                 letterSpacing: '0.05em',
                 textTransform: 'uppercase',
-              }}
+              })}
             >
               Workspace
             </Typography>
@@ -241,15 +240,15 @@ export function DashboardLayout() {
 
         <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', py: 1.5, px: 1.5 }}>
           <Typography
-            sx={{
-              color: 'rgba(255,255,255,0.25)',
+            sx={(theme) => ({
+              color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.25)' : 'text.secondary',
               fontSize: '0.65rem',
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.1em',
               px: 1,
               mb: 1,
-            }}
+            })}
           >
             القائمة الرئيسية
           </Typography>
@@ -265,25 +264,25 @@ export function DashboardLayout() {
                     onClick={() => { navigate(item.path); setMobileOpen(false); }}
                     aria-label={item.labelEn}
                     aria-current={isActive ? 'page' : undefined}
-                    sx={{
+                    sx={(theme) => ({
                       position: 'relative',
                       borderRadius: '8px',
                       px: 1.5,
                       py: 1,
                       minHeight: 42,
                       backgroundColor: isActive
-                        ? 'rgba(0, 240, 255, 0.1)'
+                        ? (theme.palette.mode === 'dark' ? 'rgba(0, 240, 255, 0.1)' : 'rgba(24, 119, 242, 0.08)')
                         : 'transparent',
                       '&:hover': {
                         backgroundColor: isActive
-                          ? 'rgba(0, 240, 255, 0.15)'
-                          : 'rgba(255,255,255,0.05)',
+                          ? (theme.palette.mode === 'dark' ? 'rgba(0, 240, 255, 0.15)' : 'rgba(24, 119, 242, 0.12)')
+                          : (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'),
                       },
                       '&.Mui-selected': {
-                        backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0, 240, 255, 0.1)' : 'rgba(24, 119, 242, 0.08)',
                       },
                       '&.Mui-selected:hover': {
-                        backgroundColor: 'rgba(0, 240, 255, 0.15)',
+                        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0, 240, 255, 0.15)' : 'rgba(24, 119, 242, 0.12)',
                       },
                       '&::before': isActive ? {
                         content: '""',
@@ -292,38 +291,40 @@ export function DashboardLayout() {
                         top: '15%',
                         height: '70%',
                         width: 4,
-                        backgroundColor: BRAND_CYAN,
+                        backgroundColor: theme.palette.mode === 'dark' ? '#00F0FF' : 'primary.main',
                         borderRadius: '0 4px 4px 0',
-                        boxShadow: `0 0 10px ${BRAND_CYAN}`,
+                        boxShadow: theme.palette.mode === 'dark' ? '0 0 10px rgba(0,240,255,0.5)' : 'none',
                       } : {},
-                    }}
+                    })}
                   >
                     <ListItemIcon
-                      sx={{
+                      sx={(theme) => ({
                         minWidth: 36,
-                        color: isActive ? BRAND_CYAN : 'rgba(255,255,255,0.5)',
+                        color: isActive ? 'primary.main' : (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'text.secondary'),
                         transition: 'all 0.3s ease',
-                        filter: isActive ? `drop-shadow(0 0 5px ${BRAND_CYAN})` : 'none',
+                        filter: isActive && theme.palette.mode === 'dark' ? 'drop-shadow(0 0 5px rgba(0, 240, 255, 0.5))' : 'none',
                         '& svg': { fontSize: '1.15rem' },
-                      }}
+                      })}
                     >
                       {item.icon}
                     </ListItemIcon>
                     <ListItemText
-                      primary={item.labelEn}
-                      slotProps={{
-                        primary: {
-                          style: {
+                      disableTypography
+                      primary={
+                        <Typography
+                          sx={(theme) => ({
                             fontSize: '0.875rem',
                             fontWeight: isActive ? 600 : 400,
-                            color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
+                            color: isActive ? (theme.palette.mode === 'dark' ? '#fff' : 'primary.main') : (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.6)' : 'text.primary'),
                             transition: 'color 0.2s ease',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
-                          },
-                        },
-                      }}
+                          })}
+                        >
+                          {item.labelEn}
+                        </Typography>
+                      }
                     />
                   </ListItemButton>
                 </Tooltip>
@@ -340,41 +341,41 @@ export function DashboardLayout() {
         >
           <Box
             onClick={() => { navigate(routes.profile); setMobileOpen(false); }}
-            sx={{
+            sx={(theme) => ({
               display: 'flex',
               alignItems: 'center',
               gap: 1.5,
               p: 1,
               borderRadius: '8px',
               cursor: 'pointer',
-              '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' },
+              '&:hover': { backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' },
               transition: 'background-color 0.2s ease',
-            }}
+            })}
           >
             {user?.profilePhotoUrl ? (
               <AuthorizedAvatar
                 srcUrl={user.profilePhotoUrl}
                 refreshKey={user?.avatarRefreshKey}
                 alt={user?.fullName || user?.email || 'User'}
-                sx={{
+                sx={(theme) => ({
                   width: 34,
                   height: 34,
-                  boxShadow: `0 0 15px rgba(0, 240, 255, 0.4)`,
+                  boxShadow: theme.palette.mode === 'dark' ? '0 0 15px rgba(0, 240, 255, 0.4)' : '0 1px 3px rgba(0,0,0,0.1)',
                   flexShrink: 0,
-                }}
+                })}
               />
             ) : (
               <Avatar
-                sx={{
+                sx={(theme) => ({
                   width: 34,
                   height: 34,
-                  bgcolor: BRAND_CYAN,
-                  color: '#000',
-                  boxShadow: `0 0 15px rgba(0, 240, 255, 0.4)`,
+                  bgcolor: 'primary.main',
+                  color: theme.palette.mode === 'dark' ? '#000' : '#fff',
+                  boxShadow: theme.palette.mode === 'dark' ? '0 0 15px rgba(0, 240, 255, 0.4)' : 'none',
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   flexShrink: 0,
-                }}
+                })}
                 aria-label={`User: ${user?.fullName || user?.email}`}
               >
                 {initials}
@@ -383,21 +384,21 @@ export function DashboardLayout() {
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography
                 noWrap
-                sx={{
-                  color: '#fff',
+                sx={(theme) => ({
+                  color: theme.palette.mode === 'dark' ? '#fff' : 'text.primary',
                   fontSize: '0.82rem',
                   fontWeight: 600,
                   lineHeight: 1.2,
-                }}
+                })}
               >
                 {user?.fullName || 'Admin'}
               </Typography>
               <Typography
                 noWrap
-                sx={{
-                  color: 'rgba(255,255,255,0.4)',
+                sx={(theme) => ({
+                  color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.4)' : 'text.secondary',
                   fontSize: '0.7rem',
-                }}
+                })}
               >
                 {user?.roles?.[0] || 'Administrator'}
               </Typography>
@@ -408,11 +409,11 @@ export function DashboardLayout() {
                 onClick={() => void handleLogout()}
                 disabled={isLoggingOut}
                 aria-label="Logout"
-                sx={{
-                  color: 'rgba(255,255,255,0.4)',
-                  '&:hover': { color: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)' },
+                sx={(theme) => ({
+                  color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.4)' : 'text.secondary',
+                  '&:hover': { color: '#ef4444', backgroundColor: theme.palette.mode === 'dark' ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.05)' },
                   transition: 'all 0.2s ease',
-                }}
+                })}
               >
                 <LogoutIcon sx={{ fontSize: '1rem' }} />
               </IconButton>
@@ -433,20 +434,19 @@ export function DashboardLayout() {
         ModalProps={{
           keepMounted: true, // Better open performance on mobile.
         }}
-        sx={{
-          display: { xs: 'block', md: 'none' },
+        sx={(theme) => ({
           '& .MuiDrawer-paper': { 
             boxSizing: 'border-box', 
             width: DRAWER_WIDTH,
-            backgroundColor: sidebarBg,
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderRight: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
+            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(5, 11, 20, 0.85)' : '#FFFFFF',
+            backdropFilter: theme.palette.mode === 'dark' ? 'blur(20px)' : 'none',
+            WebkitBackdropFilter: theme.palette.mode === 'dark' ? 'blur(20px)' : 'none',
+            borderRight: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
             display: 'flex',
             flexDirection: 'column',
             overflowX: 'hidden',
           },
-        }}
+        })}
       >
         {drawerContent}
       </Drawer>
@@ -454,22 +454,22 @@ export function DashboardLayout() {
       {/* Desktop Drawer */}
       <Drawer
         variant="permanent"
-        sx={{
+        sx={(theme) => ({
           display: { xs: 'none', md: 'block' },
           width: DRAWER_WIDTH,
           flexShrink: 0,
           '& .MuiDrawer-paper': { 
             boxSizing: 'border-box', 
             width: DRAWER_WIDTH,
-            backgroundColor: sidebarBg,
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderRight: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
+            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(5, 11, 20, 0.85)' : '#FFFFFF',
+            backdropFilter: theme.palette.mode === 'dark' ? 'blur(20px)' : 'none',
+            WebkitBackdropFilter: theme.palette.mode === 'dark' ? 'blur(20px)' : 'none',
+            borderRight: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
             display: 'flex',
             flexDirection: 'column',
             overflowX: 'hidden',
           },
-        }}
+        })}
         open
       >
         {drawerContent}
@@ -489,14 +489,18 @@ export function DashboardLayout() {
         <AppBar
           position="sticky"
           elevation={0}
-          sx={{
-            backgroundColor: isDark ? 'rgba(10, 15, 26, 0.65)' : 'rgba(255, 255, 255, 0.8)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
+          sx={(theme) => ({
+            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(10, 15, 26, 0.65)' : 'background.paper',
+            backdropFilter: theme.palette.mode === 'dark' ? 'blur(20px)' : 'none',
+            WebkitBackdropFilter: theme.palette.mode === 'dark' ? 'blur(20px)' : 'none',
+            borderBottom: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)',
             color: 'text.primary',
-            zIndex: (theme) => theme.zIndex.drawer - 1,
-          }}
+            zIndex: theme.zIndex.drawer - 1,
+            transition: theme.transitions.create(['width', 'margin'], {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.leavingScreen,
+            }),
+          })}
         >
           <Toolbar sx={{ minHeight: '60px !important', gap: { xs: 1, sm: 2 } }}>
             <IconButton
@@ -551,12 +555,12 @@ export function DashboardLayout() {
                 onClick={handleOpenNotifications}
                 size="small"
                 aria-label="Notifications"
-                sx={{
-                  color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)',
-                  '&:hover': { color: BRAND_CYAN, background: isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0, 240, 255, 0.2)' },
+                sx={(theme) => ({
+                  color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                  '&:hover': { color: 'primary.main', background: theme.palette.mode === 'dark' ? 'rgba(0, 240, 255, 0.1)' : 'rgba(24, 119, 242, 0.08)' },
                   width: 36,
                   height: 36,
-                }}
+                })}
               >
                 <Badge badgeContent={localUnreadCount} color="error">
                   <NotificationsNoneIcon sx={{ fontSize: '1.1rem' }} />
@@ -575,44 +579,44 @@ export function DashboardLayout() {
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
           slotProps={{
             paper: {
-              sx: {
+              sx: (theme) => ({
                 mt: 1.5,
                 width: 320,
                 maxHeight: 400,
-                background: isDark ? 'rgba(10, 15, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                backdropFilter: 'blur(20px)',
-                border: isDark ? '1px solid rgba(0, 240, 255, 0.2)' : '1px solid rgba(0,0,0,0.1)',
-                boxShadow: isDark ? '0 8px 32px rgba(0, 0, 0, 0.5)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(10, 15, 26, 0.95)' : 'background.paper',
+                backdropFilter: theme.palette.mode === 'dark' ? 'blur(20px)' : 'none',
+                border: theme.palette.mode === 'dark' ? '1px solid rgba(0, 240, 255, 0.2)' : '1px solid rgba(0,0,0,0.1)',
+                boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.5)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
                 borderRadius: 2,
-              }
+              })
             }
           }}
         >
-          <Box sx={{ p: 2, borderBottom: isDark ? '1px solid rgba(0, 240, 255, 0.1)' : '1px solid rgba(0,0,0,0.05)' }}>
-            <Typography sx={{ color: isDark ? '#fff' : '#000', fontWeight: 600 }}>Notifications</Typography>
+          <Box sx={(theme) => ({ p: 2, borderBottom: theme.palette.mode === 'dark' ? '1px solid rgba(0, 240, 255, 0.1)' : '1px solid rgba(0,0,0,0.05)' })}>
+            <Typography sx={(theme) => ({ color: theme.palette.mode === 'dark' ? '#fff' : '#000', fontWeight: 600 })}>Notifications</Typography>
           </Box>
-          <List sx={{ p: 0, overflowY: 'auto', flex: 1, '&::-webkit-scrollbar': { width: '6px' }, '&::-webkit-scrollbar-thumb': { background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', borderRadius: '10px' } }}>
+          <List sx={(theme) => ({ p: 0, overflowY: 'auto', flex: 1, '&::-webkit-scrollbar': { width: '6px' }, '&::-webkit-scrollbar-thumb': { background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', borderRadius: '10px' } })}>
             {isLoadingNotifs ? (
               <Box sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="body2" sx={{ color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>Loading...</Typography>
+                <Typography variant="body2" sx={(theme) => ({ color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' })}>Loading...</Typography>
               </Box>
             ) : allNotifications.length === 0 ? (
               <Box sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="body2" sx={{ color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>No new notifications</Typography>
+                <Typography variant="body2" sx={(theme) => ({ color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' })}>No new notifications</Typography>
               </Box>
             ) : (
               <>
                 {allNotifications.map((notif) => (
-                  <ListItemButton key={notif.id} sx={{ borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)', display: 'block', py: 1.5 }}>
+                  <ListItemButton key={notif.id} sx={(theme) => ({ borderBottom: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(0,0,0,0.05)', display: 'block', py: 1.5 })}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography sx={{ color: isDark ? BRAND_CYAN : '#0891B2', fontWeight: 600, fontSize: '0.85rem' }}>
+                      <Typography sx={(theme) => ({ color: theme.palette.mode === 'dark' ? 'primary.main' : 'primary.dark', fontWeight: 600, fontSize: '0.85rem' })}>
                         {notif.title}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)', fontSize: '0.7rem' }}>
+                      <Typography variant="caption" sx={(theme) => ({ color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)', fontSize: '0.7rem' })}>
                         {new Date(notif.createdAtUtc).toLocaleTimeString()}
                       </Typography>
                     </Box>
-                    <Typography variant="body2" sx={{ color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontSize: '0.8rem', lineHeight: 1.4 }}>
+                    <Typography variant="body2" sx={(theme) => ({ color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontSize: '0.8rem', lineHeight: 1.4 })}>
                       {notif.message}
                     </Typography>
                   </ListItemButton>
@@ -622,7 +626,7 @@ export function DashboardLayout() {
                     <Typography
                       component="div"
                       sx={{
-                        color: BRAND_CYAN,
+                        color: 'primary.main',
                         fontSize: '0.8rem',
                         cursor: 'pointer',
                         fontWeight: 600,

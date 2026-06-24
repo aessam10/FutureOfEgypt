@@ -72,7 +72,10 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (existingPendingRequest is not null)
-                return Map(existingPendingRequest);
+            {
+                var matched = await FindMatchedDeviceAsync(existingPendingRequest, cancellationToken);
+                return Map(existingPendingRequest, matched);
+            }
 
             // NOTE: InstallationId may already exist in Devices — that is expected in the new flow.
             // A device must exist before an assignment request is created. No guard needed here.
@@ -119,7 +122,8 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             accessRequest.Engineer = engineer;
 
-            return Map(accessRequest);
+            var accessMatched = await FindMatchedDeviceAsync(accessRequest, cancellationToken);
+            return Map(accessRequest, accessMatched);
         }
 
         public async Task<DeviceAccessRequestResponse?> GetLatestForEngineerAsync(
@@ -136,7 +140,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .OrderByDescending(x => x.RequestedAtUtc)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            return latestRequest is null ? null : MapProjection(latestRequest);
+            if (latestRequest is null) return null;
+            var matched = await FindMatchedDeviceAsync(latestRequest, cancellationToken);
+            return MapProjection(latestRequest, matched);
         }
 
         public async Task<PagedResponse<DeviceAccessRequestResponse>> GetRequestsAsync(
@@ -209,12 +215,20 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var totalPages = (int)Math.Ceiling(totalCount / (double)request.PageSize);
 
-            var items = await query
+            var itemsWithMatch = await query
                 .OrderByDescending(x => x.RequestedAtUtc)
                 .Skip((request.PageNumber - 1) * request.PageSize)
                 .Take(request.PageSize)
-                .Select(x => MapProjection(x))
+                .Select(x => new 
+                {
+                    Request = x,
+                    MatchedDevice = _context.Devices.FirstOrDefault(d => !d.IsDeleted && 
+                        ((!string.IsNullOrEmpty(x.InstallationId) && d.InstallationId == x.InstallationId) ||
+                         d.SerialNumber == x.SerialNumber))
+                })
                 .ToListAsync(cancellationToken);
+
+            var items = itemsWithMatch.Select(i => MapProjection(i.Request, i.MatchedDevice)).ToList();
 
             return new PagedResponse<DeviceAccessRequestResponse>
             {
@@ -278,7 +292,11 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (device is null)
                 throw new InvalidOperationException("Requested device no longer exists or is not registered.");
 
-            device.DeviceName = accessRequest.DeviceName;
+            if (string.IsNullOrWhiteSpace(device.DeviceName))
+            {
+                device.DeviceName = accessRequest.DeviceName;
+            }
+            
             device.Imei = accessRequest.Imei;
 
             if (!string.IsNullOrWhiteSpace(accessRequest.InstallationId))
@@ -408,7 +426,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 },
                 cancellationToken);
 
-            return Map(accessRequest);
+            return Map(accessRequest, device);
         }
 
         public async Task<DeviceAccessRequestResponse> RejectAsync(
@@ -463,10 +481,20 @@ namespace FutureOfEgypt.Infrastructure.Services
                 },
                 cancellationToken);
 
-            return Map(accessRequest);
+            var matched = await FindMatchedDeviceAsync(accessRequest, cancellationToken);
+            return Map(accessRequest, matched);
         }
 
-        private static DeviceAccessRequestResponse Map(DeviceAccessRequest request)
+        private async Task<Device?> FindMatchedDeviceAsync(DeviceAccessRequest request, CancellationToken cancellationToken)
+        {
+            return await _context.Devices
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => !d.IsDeleted && 
+                    ((!string.IsNullOrEmpty(request.InstallationId) && d.InstallationId == request.InstallationId) ||
+                     d.SerialNumber == request.SerialNumber), cancellationToken);
+        }
+
+        private static DeviceAccessRequestResponse Map(DeviceAccessRequest request, Device? matchedDevice)
         {
             return new DeviceAccessRequestResponse
             {
@@ -475,7 +503,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                 EngineerPublicId = request.Engineer!.PublicId,
                 EngineerName = request.Engineer.FullName,
 
-                DeviceName = request.DeviceName,
+                RequestedDeviceName = request.DeviceName,
+                MatchedDeviceName = matchedDevice?.DeviceName,
+                MatchedDevicePublicId = matchedDevice?.PublicId,
                 SerialNumber = request.SerialNumber,
                 Imei = request.Imei,
                 InstallationId = request.InstallationId,
@@ -491,7 +521,7 @@ namespace FutureOfEgypt.Infrastructure.Services
             };
         }
 
-        private static DeviceAccessRequestResponse MapProjection(DeviceAccessRequest request)
+        private static DeviceAccessRequestResponse MapProjection(DeviceAccessRequest request, Device? matchedDevice)
         {
             return new DeviceAccessRequestResponse
             {
@@ -500,7 +530,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                 EngineerPublicId = request.Engineer!.PublicId,
                 EngineerName = request.Engineer.FullName,
 
-                DeviceName = request.DeviceName,
+                RequestedDeviceName = request.DeviceName,
+                MatchedDeviceName = matchedDevice?.DeviceName,
+                MatchedDevicePublicId = matchedDevice?.PublicId,
                 SerialNumber = request.SerialNumber,
                 Imei = request.Imei,
                 InstallationId = request.InstallationId,

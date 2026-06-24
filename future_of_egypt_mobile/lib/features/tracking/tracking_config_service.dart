@@ -7,9 +7,11 @@ class TrackingConfigService {
   static const String _devicePublicIdKey = "device_public_id";
   static const String _installationIdKey = "installation_id";
   static const String _rolesKey = "user_roles";
+  static const String _refreshTokenKey = "refresh_token";
 
   static Future<void> saveLoginData({
     required String token,
+    required String refreshToken,
     required String engineerPublicId,
     required String devicePublicId,
     required List<String> roles,
@@ -17,6 +19,7 @@ class TrackingConfigService {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.setString(_tokenKey, token);
+    await prefs.setString(_refreshTokenKey, refreshToken);
     await prefs.setString(_engineerPublicIdKey, engineerPublicId);
     await prefs.setString(_devicePublicIdKey, devicePublicId);
     await prefs.setStringList(_rolesKey, roles);
@@ -47,6 +50,11 @@ class TrackingConfigService {
     return prefs.getString(_tokenKey);
   }
 
+  static Future<String?> getRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_refreshTokenKey);
+  }
+
   static Future<String?> getDevicePublicId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_devicePublicIdKey);
@@ -64,6 +72,7 @@ class TrackingConfigService {
 
     return {
       "token": prefs.getString(_tokenKey) ?? "",
+      "refreshToken": prefs.getString(_refreshTokenKey) ?? "",
       "engineerPublicId": prefs.getString(_engineerPublicIdKey) ?? "",
       "devicePublicId": prefs.getString(_devicePublicIdKey) ?? "",
       "installationId": installationId,
@@ -75,6 +84,7 @@ class TrackingConfigService {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.remove(_tokenKey);
+    await prefs.remove(_refreshTokenKey);
     await prefs.remove(_engineerPublicIdKey);
     await prefs.remove(_devicePublicIdKey);
     await prefs.remove(_rolesKey);

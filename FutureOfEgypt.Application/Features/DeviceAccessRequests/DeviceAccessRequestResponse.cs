@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Enums;
+using FutureOfEgypt.Domain.Enums;
 
 namespace FutureOfEgypt.Application.Features.DeviceAccessRequests
 {
@@ -10,7 +10,11 @@ namespace FutureOfEgypt.Application.Features.DeviceAccessRequests
 
         public string EngineerName { get; set; } = string.Empty;
 
-        public string DeviceName { get; set; } = string.Empty;
+        public string RequestedDeviceName { get; set; } = string.Empty;
+
+        public string? MatchedDeviceName { get; set; }
+
+        public Guid? MatchedDevicePublicId { get; set; }
 
         public string SerialNumber { get; set; } = string.Empty;
 

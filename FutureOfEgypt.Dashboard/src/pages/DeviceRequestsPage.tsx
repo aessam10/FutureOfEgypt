@@ -241,15 +241,15 @@ export function DeviceRequestsPage() {
                     </TableCell>
                     <TableCell>
                       <Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                        {request.deviceName || (
+                        {(request.matchedDeviceName ?? request.requestedDeviceName) || (
                           <Box component="span" sx={{ color: 'text.disabled', fontStyle: 'italic', fontWeight: 400 }}>
                             Not assigned
                           </Box>
                         )}
                       </Typography>
-                      {request.devicePublicId && (
-                        <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }}>
-                          {request.devicePublicId}
+                      {(request.matchedDevicePublicId || request.devicePublicId) && (
+                        <Typography variant="caption" sx={{ display: 'block', color: 'text.disabled', fontFamily: 'monospace' }}>
+                          {request.matchedDevicePublicId || request.devicePublicId}
                         </Typography>
                       )}
                     </TableCell>
@@ -361,9 +361,16 @@ export function DeviceRequestsPage() {
                 </Box>
                 <Box>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    Requested Device
+                    {selectedRequest.matchedDeviceName ? 'Matched Device' : 'Device'}
                   </Typography>
-                  <Typography sx={{ fontWeight: 600 }}>{selectedRequest.deviceName || 'Unknown Device Name'}</Typography>
+                  <Typography sx={{ fontWeight: 600 }}>{(selectedRequest.matchedDeviceName ?? selectedRequest.requestedDeviceName) || 'Unknown Device Name'}</Typography>
+                  
+                  {selectedRequest.matchedDeviceName && (
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.5 }}>
+                      Requested name: {selectedRequest.requestedDeviceName}
+                    </Typography>
+                  )}
+
                   <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontFamily: 'monospace', mt: 0.5 }}>
                     Installation ID: {selectedRequest.installationId}
                   </Typography>

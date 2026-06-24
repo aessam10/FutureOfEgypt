@@ -13,6 +13,7 @@ import '../../core/network/api_client.dart';
 import '../tracking/background_service.dart';
 import '../tracking/location_service.dart';
 import '../tracking/tracking_config_service.dart';
+import '../tracking/device_health_service.dart';
 import '../chat/chat_list_page.dart';
 
 class EngineerHome extends StatefulWidget {
@@ -40,16 +41,17 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
   bool _hasLocationPermission = false;
   bool _hasLocationService = false;
   bool _hasBackgroundPermission = false;
+  bool _hasNotificationPermission = false;
   bool _isAuthorized = true; // They passed the gate if they are here
   bool _isSendingLocation = false;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('[FOE_BACKGROUND] EngineerHome initState');
     WidgetsBinding.instance.addObserver(this);
     LocationService.backendReasonNotifier.addListener(_onBackendReasonChanged);
     _loadDataAndCheckPermissions();
-    _startBackgroundTasksIfReady();
   }
 
   @override
@@ -137,6 +139,7 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
 
     await _fetchProfile();
     await _checkPermissions();
+    await _startBackgroundTasksIfReady();
   }
 
   Future<void> _checkPermissions() async {
@@ -164,11 +167,19 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
 
     // 4. Background Location Check (Required on Android 10+)
     bool hasBg = false;
+    bool hasNotif = false;
     if (!kIsWeb && Platform.isAndroid) {
       final bgStatus = await Permission.locationAlways.status;
       hasBg = bgStatus.isGranted;
+
+      final notifStatus = await Permission.notification.status;
+      hasNotif = notifStatus.isGranted;
+      if (!hasNotif && !notifStatus.isPermanentlyDenied) {
+        hasNotif = (await Permission.notification.request()).isGranted;
+      }
     } else {
       hasBg = true; // Assume true for iOS/Web for now
+      hasNotif = true;
     }
 
     if (mounted) {
@@ -177,8 +188,17 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
         _hasLocationPermission = hasLoc;
         _hasLocationService = hasGps;
         _hasBackgroundPermission = hasBg;
+        _hasNotificationPermission = hasNotif;
         _isLoading = false;
       });
+    }
+
+    if (!kIsWeb && widget.token.isNotEmpty && widget.deviceId.isNotEmpty) {
+      await DeviceHealthService.reportHealth(
+        token: widget.token,
+        engineerPublicId: widget.engineerId,
+        devicePublicId: widget.deviceId,
+      );
     }
   }
 
@@ -188,6 +208,18 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
     }
 
     if (widget.token.isEmpty || widget.deviceId.isEmpty) {
+      return;
+    }
+
+    if (!_hasNotificationPermission) {
+      debugPrint('[FOE_BACKGROUND] Notifications denied; service start skipped safely');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        debugPrint('[FOE_BACKGROUND] startup SnackBar scheduled after first frame');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Notification permission is required for background tracking.')),
+        );
+      });
       return;
     }
 
@@ -207,18 +239,35 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
   }
 
   Future<void> _sendCurrentLocation() async {
+    debugPrint('[FOE_BACKGROUND] manual send pressed');
     setState(() => _isSendingLocation = true);
     try {
       if (!_hasLocationPermission) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permission required')),
+        await DeviceHealthService.reportHealth(
+          token: widget.token,
+          engineerPublicId: widget.engineerId,
+          devicePublicId: widget.deviceId,
+          fallbackReason: 'LocationPermissionDenied',
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission required')),
+          );
+        }
         return;
       }
       if (!_hasLocationService) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location service required (GPS is off)')),
+        await DeviceHealthService.reportHealth(
+          token: widget.token,
+          engineerPublicId: widget.engineerId,
+          devicePublicId: widget.deviceId,
+          fallbackReason: 'LocationServiceDisabled',
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location service required (GPS is off)')),
+          );
+        }
         return;
       }
       

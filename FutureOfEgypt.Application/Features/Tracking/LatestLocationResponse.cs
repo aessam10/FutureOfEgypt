@@ -35,5 +35,9 @@ namespace FutureOfEgypt.Application.Features.Tracking
         public DateTime RecordedAt { get; set; }
 
         public DateTime ReceivedAt { get; set; }
+
+        public string? TrackingStatusReason { get; set; }
+
+        public DateTime? LastHealthReportAt { get; set; }
     }
 }

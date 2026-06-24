@@ -34,12 +34,14 @@ class ChatParticipant {
   final String userId;
   final String displayName;
   final String? email;
+  final String? profileImageUrl;
   final int role;
 
   ChatParticipant({
     required this.userId,
     required this.displayName,
     this.email,
+    this.profileImageUrl,
     required this.role,
   });
 
@@ -48,6 +50,7 @@ class ChatParticipant {
       userId: json['userId'],
       displayName: json['displayName'],
       email: json['email'],
+      profileImageUrl: json['profileImageUrl'],
       role: json['role'] ?? 0,
     );
   }
@@ -57,6 +60,7 @@ class ChatMessagePreview {
   final String publicId;
   final String senderUserId;
   final String senderName;
+  final String? profileImageUrl;
   final String messageText;
   final DateTime sentAtUtc;
 
@@ -64,6 +68,7 @@ class ChatMessagePreview {
     required this.publicId,
     required this.senderUserId,
     required this.senderName,
+    this.profileImageUrl,
     required this.messageText,
     required this.sentAtUtc,
   });
@@ -73,6 +78,7 @@ class ChatMessagePreview {
       publicId: json['publicId'],
       senderUserId: json['senderUserId'],
       senderName: json['senderName'],
+      profileImageUrl: json['profileImageUrl'],
       messageText: json['messageText'],
       sentAtUtc: DateTime.parse(json['sentAtUtc']).toLocal(),
     );
@@ -83,6 +89,7 @@ class ChatMessage {
   final String publicId;
   final String senderUserId;
   final String senderName;
+  final String? profileImageUrl;
   final String messageText;
   final int type;
   final DateTime sentAtUtc;
@@ -92,6 +99,7 @@ class ChatMessage {
     required this.publicId,
     required this.senderUserId,
     required this.senderName,
+    this.profileImageUrl,
     required this.messageText,
     required this.type,
     required this.sentAtUtc,
@@ -103,6 +111,7 @@ class ChatMessage {
       publicId: json['publicId'],
       senderUserId: json['senderUserId'],
       senderName: json['senderName'],
+      profileImageUrl: json['profileImageUrl'],
       messageText: json['messageText'],
       type: json['type'] ?? 0,
       sentAtUtc: DateTime.parse(json['sentAtUtc']).toLocal(),
@@ -116,6 +125,7 @@ class ChatRealtimeMessage {
   final String conversationPublicId;
   final String senderUserId;
   final String senderName;
+  final String? profileImageUrl;
   final String messageText;
   final int type;
   final DateTime sentAtUtc;
@@ -125,6 +135,7 @@ class ChatRealtimeMessage {
     required this.conversationPublicId,
     required this.senderUserId,
     required this.senderName,
+    this.profileImageUrl,
     required this.messageText,
     required this.type,
     required this.sentAtUtc,
@@ -136,9 +147,33 @@ class ChatRealtimeMessage {
       conversationPublicId: json['conversationPublicId'],
       senderUserId: json['senderUserId'],
       senderName: json['senderName'],
+      profileImageUrl: json['profileImageUrl'],
       messageText: json['messageText'],
       type: json['type'] ?? 0,
       sentAtUtc: DateTime.parse(json['sentAtUtc']).toLocal(),
+    );
+  }
+}
+
+class ChatUserSearch {
+  final String userId;
+  final String displayName;
+  final String? email;
+  final String? profileImageUrl;
+
+  ChatUserSearch({
+    required this.userId,
+    required this.displayName,
+    this.email,
+    this.profileImageUrl,
+  });
+
+  factory ChatUserSearch.fromJson(Map<String, dynamic> json) {
+    return ChatUserSearch(
+      userId: json['userId'],
+      displayName: json['displayName'],
+      email: json['email'],
+      profileImageUrl: json['profileImageUrl'],
     );
   }
 }

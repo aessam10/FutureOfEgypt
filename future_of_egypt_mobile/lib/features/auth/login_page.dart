@@ -45,6 +45,7 @@ class _LoginPageState extends State<LoginPage> {
 
       // --- extract login response fields ---
       final token = result['token']?.toString() ?? '';
+      final refreshToken = result['refreshToken']?.toString() ?? '';
       final roles = List<String>.from(result['roles'] ?? []);
       final engineerPublicId = result['engineerPublicId']?.toString() ?? '';
 
@@ -57,6 +58,7 @@ class _LoginPageState extends State<LoginPage> {
       // save base login data (devicePublicId left empty until validation completes)
       await TrackingConfigService.saveLoginData(
         token: token,
+        refreshToken: refreshToken,
         engineerPublicId: engineerPublicId,
         devicePublicId: '',
         roles: roles,

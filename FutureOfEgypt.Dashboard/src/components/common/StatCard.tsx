@@ -12,13 +12,7 @@ interface StatCardProps {
   trend?: 'up' | 'down' | 'neutral';
 }
 
-const ACCENT_COLORS = {
-  success: { bg: 'rgba(16, 185, 129, 0.1)', icon: '#34D399', text: '#34D399', glow: 'rgba(16, 185, 129, 0.3)' },
-  error:   { bg: 'rgba(239, 68, 68, 0.1)',  icon: '#F87171', text: '#F87171', glow: 'rgba(239, 68, 68, 0.3)' },
-  warning: { bg: 'rgba(245, 158, 11, 0.1)', icon: '#FBBF24', text: '#FBBF24', glow: 'rgba(245, 158, 11, 0.3)' },
-  info:    { bg: 'rgba(37, 99, 235, 0.1)',  icon: '#60A5FA', text: '#60A5FA', glow: 'rgba(37, 99, 235, 0.3)' },
-  default: { bg: 'rgba(0, 240, 255, 0.1)',  icon: '#00F0FF', text: '#00F0FF', glow: 'rgba(0, 240, 255, 0.3)' },
-};
+import { useThemeMode } from '../../app/ThemeContext';
 
 const TREND_SYMBOLS = {
   up:      { symbol: '↑', color: '#10b981' },
@@ -34,6 +28,16 @@ export function StatCard({
   accent = 'default',
   trend,
 }: StatCardProps) {
+  const { isDark } = useThemeMode();
+
+  const ACCENT_COLORS = {
+    success: { bg: isDark ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.05)', icon: isDark ? '#34D399' : '#10b981', glow: isDark ? 'rgba(16, 185, 129, 0.3)' : 'transparent', border: isDark ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.15)' },
+    error:   { bg: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)',  icon: isDark ? '#F87171' : '#ef4444', glow: isDark ? 'rgba(239, 68, 68, 0.3)' : 'transparent', border: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.15)' },
+    warning: { bg: isDark ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.05)', icon: isDark ? '#FBBF24' : '#f59e0b', glow: isDark ? 'rgba(245, 158, 11, 0.3)' : 'transparent', border: isDark ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.15)' },
+    info:    { bg: isDark ? 'rgba(37, 99, 235, 0.1)' : 'rgba(37, 99, 235, 0.05)',  icon: isDark ? '#60A5FA' : '#3b82f6', glow: isDark ? 'rgba(37, 99, 235, 0.3)' : 'transparent', border: isDark ? 'rgba(37, 99, 235, 0.3)' : 'rgba(37, 99, 235, 0.15)' },
+    default: { bg: isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(24, 119, 242, 0.05)',  icon: isDark ? '#00F0FF' : '#1877F2', glow: isDark ? 'rgba(0, 240, 255, 0.3)' : 'transparent', border: isDark ? 'rgba(0, 240, 255, 0.3)' : 'rgba(24, 119, 242, 0.15)' },
+  };
+
   const colors = ACCENT_COLORS[accent];
 
   return (
@@ -47,9 +51,9 @@ export function StatCard({
         cursor: 'default',
         transition: 'transform 0.3s ease, box-shadow 0.3s ease',
         '&:hover': {
-          transform: 'translateY(-4px)',
-          boxShadow: `0 10px 30px ${colors.glow}`,
-          '&::after': { opacity: 1 },
+          transform: isDark ? 'translateY(-4px)' : 'translateY(-2px)',
+          boxShadow: isDark ? `0 10px 30px ${colors.glow}` : '0 4px 12px rgba(0,0,0,0.05)',
+          '&::after': { opacity: isDark ? 1 : 0 },
         },
         // Subtle top border accent
         '&::before': {
@@ -87,13 +91,13 @@ export function StatCard({
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              boxShadow: `inset 0 0 10px ${colors.glow}, 0 0 15px ${colors.glow}`,
-              border: `1px solid ${colors.glow}`,
+              boxShadow: isDark ? `inset 0 0 10px ${colors.glow}, 0 0 15px ${colors.glow}` : 'none',
+              border: `1px solid ${colors.border}`,
               position: 'relative',
               zIndex: 2,
               '& svg': { 
                 fontSize: '1.4rem',
-                filter: `drop-shadow(0 0 4px ${colors.icon})`
+                filter: isDark ? `drop-shadow(0 0 4px ${colors.icon})` : 'none'
               },
             }}
             aria-hidden="true"

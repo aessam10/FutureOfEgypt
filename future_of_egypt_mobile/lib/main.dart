@@ -8,6 +8,7 @@ import 'core/network/api_client.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('[FOE_BACKGROUND] main() started');
   
   await ApiClient.init();
 

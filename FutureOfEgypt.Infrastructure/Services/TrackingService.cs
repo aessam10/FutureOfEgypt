@@ -110,6 +110,65 @@ namespace FutureOfEgypt.Infrastructure.Services
             return new DeviceValidationResponse { Status = DeviceValidationStatus.DeviceNotAssigned };
         }
 
+        public async Task ReceiveDeviceHealthAsync(
+            Guid engineerPublicId,
+            DeviceHealthRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var engineer = await _context.Engineers
+                .FirstOrDefaultAsync(
+                    x => x.PublicId == engineerPublicId && !x.IsDeleted,
+                    cancellationToken);
+
+            if (engineer is null || engineer.Status != EngineerStatus.Active)
+                return;
+
+            var device = await _context.Devices
+                .FirstOrDefaultAsync(
+                    x => x.PublicId == request.DevicePublicId && !x.IsDeleted,
+                    cancellationToken);
+
+            if (device is null || device.Status != DeviceStatus.Active)
+                return;
+
+            var assignmentExists = await _context.EngineerDevices
+                .AnyAsync(
+                    x => x.EngineerId == engineer.Id
+                         && x.DeviceId == device.Id
+                         && x.IsActive
+                         && !x.IsDeleted,
+                     cancellationToken);
+
+            if (!assignmentExists)
+                return;
+
+            var healthStatus = await _context.DeviceTrackingHealthStatuses
+                .FirstOrDefaultAsync(x => x.DeviceId == device.Id, cancellationToken);
+
+            if (healthStatus == null)
+            {
+                healthStatus = new DeviceTrackingHealthStatus
+                {
+                    DeviceId = device.Id,
+                    EngineerId = engineer.Id,
+                };
+                await _context.DeviceTrackingHealthStatuses.AddAsync(healthStatus, cancellationToken);
+            }
+
+            healthStatus.EngineerId = engineer.Id;
+            healthStatus.TrackingStatusReason = request.Reason;
+            healthStatus.LastHealthReportAt = request.ReportedAtUtc;
+            healthStatus.HealthAuthState = request.AuthState;
+            healthStatus.LocationPermissionState = request.LocationPermission;
+            healthStatus.LocationServiceEnabled = request.LocationServiceEnabled;
+            healthStatus.BackgroundPermissionState = request.BackgroundPermission;
+            healthStatus.BatteryOptimizationState = request.BatteryOptimizationIgnored;
+            healthStatus.InternetAvailable = request.InternetAvailable;
+            healthStatus.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
 
         public async Task<ReceiveLocationUpdateResponse> ReceiveLocationUpdateAsync(
             Guid engineerPublicId,
@@ -278,6 +337,24 @@ namespace FutureOfEgypt.Infrastructure.Services
             device.LastSeenAtUtc = receivedAtUtc;
             device.UpdatedAt = receivedAtUtc;
 
+            var healthStatus = await _context.DeviceTrackingHealthStatuses
+                .FirstOrDefaultAsync(x => x.DeviceId == device.Id, cancellationToken);
+            
+            if (healthStatus != null && healthStatus.LastHealthReportAt < receivedAtUtc)
+            {
+                var reason = healthStatus.TrackingStatusReason;
+                if (reason == "LocationPermissionDenied" ||
+                    reason == "LocationServiceDisabled" ||
+                    reason == "AuthExpired" ||
+                    reason == "RefreshFailed" ||
+                    reason == "DeviceRevoked" ||
+                    reason == "DeviceUnassigned" ||
+                    reason == "InternetUnavailable")
+                {
+                    healthStatus.TrackingStatusReason = "Valid";
+                }
+            }
+
             var isNewLocation = latestLocation.Id == 0 || _context.Entry(latestLocation).State == EntityState.Added;
             var wasOnlineValue = isNewLocation ? false : (bool)_context.Entry(latestLocation).OriginalValues["IsOnline"]!;
 
@@ -331,7 +408,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                      IsMocked = request.IsMocked,
                      IsOnline = true,
                      RecordedAt = request.RecordedAt,
-                     ReceivedAt = receivedAtUtc
+                     ReceivedAt = receivedAtUtc,
+                     TrackingStatusReason = healthStatus?.TrackingStatusReason,
+                     LastHealthReportAt = healthStatus?.LastHealthReportAt
                  }, cancellationToken);
                  
             return new ReceiveLocationUpdateResponse
@@ -350,6 +429,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                                  from ed in edGroup.DefaultIfEmpty()
                                  join u in _context.Users.AsNoTracking() on eng.Id equals u.EngineerId into uGroup
                                  from u in uGroup.DefaultIfEmpty()
+                                 join health in _context.DeviceTrackingHealthStatuses.AsNoTracking() on loc.DeviceId equals health.DeviceId into healthGroup
+                                 from health in healthGroup.DefaultIfEmpty()
                                  where !loc.IsDeleted && !loc.IsHidden
                                  orderby loc.ReceivedAt descending
                                  select new LatestLocationResponse
@@ -368,7 +449,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      IsMocked = loc.IsMocked,
                                      IsOnline = loc.IsOnline,
                                      RecordedAt = loc.RecordedAt,
-                                     ReceivedAt = loc.ReceivedAt
+                                     ReceivedAt = loc.ReceivedAt,
+                                     TrackingStatusReason = health != null ? health.TrackingStatusReason : null,
+                                     LastHealthReportAt = health != null ? health.LastHealthReportAt : null
                                  };
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);
@@ -393,6 +476,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                                  from ed in edGroup.DefaultIfEmpty()
                                  join u in _context.Users.AsNoTracking() on eng.Id equals u.EngineerId into uGroup
                                  from u in uGroup.DefaultIfEmpty()
+                                 join health in _context.DeviceTrackingHealthStatuses.AsNoTracking() on loc.DeviceId equals health.DeviceId into healthGroup
+                                 from health in healthGroup.DefaultIfEmpty()
                                  where !loc.IsDeleted && loc.IsHidden
                                  orderby loc.ReceivedAt descending
                                  select new LatestLocationResponse
@@ -411,7 +496,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      IsMocked = loc.IsMocked,
                                      IsOnline = loc.IsOnline,
                                      RecordedAt = loc.RecordedAt,
-                                     ReceivedAt = loc.ReceivedAt
+                                     ReceivedAt = loc.ReceivedAt,
+                                     TrackingStatusReason = health != null ? health.TrackingStatusReason : null,
+                                     LastHealthReportAt = health != null ? health.LastHealthReportAt : null
                                  };
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);

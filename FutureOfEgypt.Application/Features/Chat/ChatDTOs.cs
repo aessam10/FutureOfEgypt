@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -46,6 +46,8 @@ namespace FutureOfEgypt.Application.Features.Chat
 
         public string? Email { get; set; }
 
+        public string? ProfileImageUrl { get; set; }
+
         public int Role { get; set; }
     }
 
@@ -56,6 +58,8 @@ namespace FutureOfEgypt.Application.Features.Chat
         public Guid SenderUserId { get; set; }
 
         public string SenderName { get; set; } = string.Empty;
+
+        public string? ProfileImageUrl { get; set; }
 
         public string MessageText { get; set; } = string.Empty;
 
@@ -74,6 +78,8 @@ namespace FutureOfEgypt.Application.Features.Chat
 
         public string SenderName { get; set; } = string.Empty;
 
+        public string? ProfileImageUrl { get; set; }
+
         public string MessageText { get; set; } = string.Empty;
 
         public DateTime SentAtUtc { get; set; }
@@ -85,6 +91,8 @@ namespace FutureOfEgypt.Application.Features.Chat
         public string DisplayName { get; set; } = string.Empty;
 
         public string? Email { get; set; }
+
+        public string? ProfileImageUrl { get; set; }
     }
 
     public sealed class AddChatParticipantsRequest
@@ -101,6 +109,8 @@ namespace FutureOfEgypt.Application.Features.Chat
         public Guid SenderUserId { get; set; }
 
         public string SenderName { get; set; } = string.Empty;
+
+        public string? ProfileImageUrl { get; set; }
 
         public string MessageText { get; set; } = string.Empty;
 

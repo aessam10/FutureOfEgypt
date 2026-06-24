@@ -2,6 +2,7 @@ export interface ChatParticipantResponse {
   userId: string;
   displayName: string;
   email?: string | null;
+  profileImageUrl?: string | null;
   role: number;
 }
 
@@ -10,6 +11,7 @@ export interface ChatMessagePreviewResponse {
   senderUserId: string;
   senderName: string;
   messageText: string;
+  profileImageUrl?: string | null;
   sentAtUtc: string;
 }
 
@@ -29,6 +31,7 @@ export interface ChatMessageResponse {
   senderName: string;
   messageText: string;
   type: number;
+  profileImageUrl?: string | null;
   sentAtUtc: string;
   isMine: boolean;
 }
@@ -40,6 +43,7 @@ export interface ChatRealtimeMessageResponse {
   senderName: string;
   messageText: string;
   type: number;
+  profileImageUrl?: string | null;
   sentAtUtc: string;
 }
 
@@ -60,6 +64,7 @@ export interface ChatUserSearchResponse {
   userId: string;
   displayName: string;
   email?: string | null;
+  profileImageUrl?: string | null;
 }
 
 export interface AddChatParticipantsRequest {

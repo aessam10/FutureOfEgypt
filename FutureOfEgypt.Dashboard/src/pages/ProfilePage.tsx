@@ -5,14 +5,15 @@ import { profileApi } from '../api/profileApi';
 import { PageHeader } from '../components/common/PageHeader';
 import { AuthorizedAvatar } from '../components/common/AuthorizedAvatar';
 import { AvatarPreviewModal } from '../components/profile/AvatarPreviewModal';
-import { BRAND_CYAN } from '../app/theme';
 import UploadIcon from '@mui/icons-material/Upload';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useAuth } from '../auth/AuthContext';
+import { useThemeMode } from '../app/ThemeContext';
 
 export function ProfilePage() {
+    const { isDark } = useThemeMode();
     const queryClient = useQueryClient();
     const { user, updateUser } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,7 +138,8 @@ export function ProfilePage() {
                                 width: 150,
                                 height: 150,
                                 mb: 2,
-                                border: `4px solid ${BRAND_CYAN}`,
+                                border: 4,
+                                borderColor: 'primary.main',
                                 fontSize: '4rem',
                                 cursor: 'pointer',
                                 '&:hover': {
@@ -152,12 +154,11 @@ export function ProfilePage() {
                             onClick={(e) => setMenuAnchorEl(e.currentTarget)}
                             disabled={uploadMutation.isPending || removeMutation.isPending}
                             sx={{
-                                borderRadius: 8,
-                                borderColor: BRAND_CYAN,
-                                color: BRAND_CYAN,
+                                borderColor: 'primary.main',
+                                color: 'primary.main',
                                 '&:hover': {
-                                    borderColor: BRAND_CYAN,
-                                    backgroundColor: 'rgba(0, 240, 255, 0.1)'
+                                    borderColor: 'primary.dark',
+                                    backgroundColor: isDark ? 'rgba(0, 240, 255, 0.05)' : 'rgba(24, 119, 242, 0.04)'
                                 }
                             }}
                         >
@@ -279,7 +280,7 @@ export function ProfilePage() {
 
                             <Box>
                                 <Typography variant="caption" color="text.secondary">Role</Typography>
-                                <Typography variant="body1" sx={{ fontWeight: 500, color: BRAND_CYAN }}>{profile.role}</Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 500, color: 'primary.main' }}>{profile.role}</Typography>
                             </Box>
                         </Box>
                     </Box>

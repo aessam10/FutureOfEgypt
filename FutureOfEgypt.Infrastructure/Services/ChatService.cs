@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 using FutureOfEgypt.Application.Features.Chat;
 using FutureOfEgypt.Domain;
 using FutureOfEgypt.Domain.Entities;
@@ -65,7 +65,10 @@ namespace FutureOfEgypt.Infrastructure.Services
                             : !string.IsNullOrWhiteSpace(x.UserName)
                                 ? x.UserName
                                 : x.Email ?? x.Id.ToString(),
-                    Email = x.Email
+                    Email = x.Email,
+                    ProfileImageUrl = string.IsNullOrWhiteSpace(x.ProfilePhotoPath)
+                        ? null
+                        : $"/api/profile/photo/{x.Id}"
                 })
                 .ToListAsync(cancellationToken);
 
@@ -430,6 +433,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 PublicId = message.PublicId,
                 SenderUserId = message.SenderUserId,
                 SenderName = GetDisplayName(users, message.SenderUserId),
+                ProfileImageUrl = GetProfileImageUrl(users, message.SenderUserId),
                 MessageText = message.MessageText,
                 Type = (int)message.Type,
                 SentAtUtc = message.SentAtUtc,
@@ -510,6 +514,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 PublicId = message.PublicId,
                 SenderUserId = message.SenderUserId,
                 SenderName = senderName,
+                ProfileImageUrl = GetProfileImageUrl(users, message.SenderUserId),
                 MessageText = message.MessageText,
                 Type = (int)message.Type,
                 SentAtUtc = message.SentAtUtc,
@@ -522,6 +527,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 ConversationPublicId = conversation.PublicId,
                 SenderUserId = message.SenderUserId,
                 SenderName = senderName,
+                ProfileImageUrl = GetProfileImageUrl(users, message.SenderUserId),
                 MessageText = message.MessageText,
                 Type = (int)message.Type,
                 SentAtUtc = message.SentAtUtc
@@ -677,6 +683,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                     PublicId = lastMessage.PublicId,
                     SenderUserId = lastMessage.SenderUserId,
                     SenderName = GetDisplayName(users, lastMessage.SenderUserId),
+                    ProfileImageUrl = GetProfileImageUrl(users, lastMessage.SenderUserId),
                     MessageText = lastMessage.MessageText,
                     SentAtUtc = lastMessage.SentAtUtc
                 };
@@ -695,6 +702,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                     UserId = participant.UserId,
                     DisplayName = GetDisplayName(users, participant.UserId),
                     Email = users.TryGetValue(participant.UserId, out var userInfo) ? userInfo.Email : null,
+                    ProfileImageUrl = GetProfileImageUrl(users, participant.UserId),
                     Role = (int)participant.Role
                 }).ToList()
             };
@@ -717,7 +725,10 @@ namespace FutureOfEgypt.Infrastructure.Services
                             : !string.IsNullOrWhiteSpace(x.UserName)
                                 ? x.UserName
                                 : x.Email ?? x.Id.ToString(),
-                    Email = x.Email
+                    Email = x.Email,
+                    ProfileImageUrl = string.IsNullOrWhiteSpace(x.ProfilePhotoPath)
+                        ? null
+                        : $"/api/profile/photo/{x.Id}"
                 })
                 .ToListAsync(cancellationToken);
 
@@ -733,6 +744,15 @@ namespace FutureOfEgypt.Infrastructure.Services
                 : userId.ToString();
         }
 
+        private static string? GetProfileImageUrl(
+            Dictionary<Guid, UserDisplayInfo> users,
+            Guid userId)
+        {
+            return users.TryGetValue(userId, out var user)
+                ? user.ProfileImageUrl
+                : null;
+        }
+
         private sealed class UserDisplayInfo
         {
             public Guid UserId { get; set; }
@@ -740,6 +760,8 @@ namespace FutureOfEgypt.Infrastructure.Services
             public string DisplayName { get; set; } = string.Empty;
 
             public string? Email { get; set; }
+
+            public string? ProfileImageUrl { get; set; }
         }
     }
 }

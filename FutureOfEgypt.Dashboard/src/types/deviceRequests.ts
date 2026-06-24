@@ -3,7 +3,9 @@ export interface DeviceAccessRequestResponse {
   engineerPublicId: string;
   engineerName: string;
   devicePublicId?: string | null;
-  deviceName?: string | null;
+  requestedDeviceName: string;
+  matchedDeviceName?: string | null;
+  matchedDevicePublicId?: string | null;
   installationId: string;
   serialNumber?: string | null;
   imei?: string | null;

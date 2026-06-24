@@ -119,13 +119,6 @@ namespace FutureOfEgypt.Controllers
         }
 
         [HttpGet("photo/{userId}")]
-        [AllowAnonymous] // We can't use AllowAnonymous based on requirements! The requirement says:
-        // "Admin/Manager can view engineer/user photos needed for dashboard and Live Map."
-        // Wait, if it's strictly authorized, the mobile app and dashboard must send Bearer token.
-        // I will keep it Authorize, but if Mobile app Image widget doesn't easily send tokens, that might be tricky.
-        // For Dashboard, standard fetch can send tokens, but `<img src="...">` cannot natively send Bearer headers easily!
-        // This is a common issue. Often people use a short-lived query token.
-        // Let's remove [AllowAnonymous] and see if it works. If not, I might need to adjust.
         public async Task<IActionResult> GetProfilePhoto(Guid userId)
         {
             // For now, allow any authenticated user to view photos.

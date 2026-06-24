@@ -64,6 +64,29 @@ namespace FutureOfEgypt.Controllers
             return Ok(response);
         }
 
+        [EnableRateLimiting("TrackingPolicy")]
+        [Authorize(Roles = AppRoles.ENGINEER)]
+        [HttpPost("device-health")]
+        public async Task<IActionResult> ReceiveDeviceHealth(
+            [FromBody] DeviceHealthRequest request,
+            CancellationToken cancellationToken)
+        {
+            var engineerPublicIdValue = User.FindFirstValue("engineerPublicId");
+
+            if (string.IsNullOrWhiteSpace(engineerPublicIdValue))
+                return Unauthorized(new { message = "Engineer identity is missing from token." });
+
+            if (!Guid.TryParse(engineerPublicIdValue, out var engineerPublicId))
+                return Unauthorized(new { message = "Invalid engineer identity in token." });
+
+            await _trackingService.ReceiveDeviceHealthAsync(
+                engineerPublicId,
+                request,
+                cancellationToken);
+
+            return Ok(new { message = "Health report received." });
+        }
+
         [Authorize(Policy = "AdminOrManager")]
         [HttpGet("latest")]
         public async Task<IActionResult> GetLatestLocations(CancellationToken cancellationToken)

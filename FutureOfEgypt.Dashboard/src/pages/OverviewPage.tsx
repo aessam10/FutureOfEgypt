@@ -116,7 +116,7 @@ export function OverviewPage() {
 
       {/* Charts Section */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 2.5, mt: 3 }}>
-        <Paper sx={{ p: { xs: 2, sm: 3 }, background: isDark ? 'rgba(10, 15, 30, 0.4)' : 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)', border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0,0,0,0.05)'}`, borderRadius: 3, display: 'flex', flexDirection: 'column' }}>
+        <Paper sx={{ p: { xs: 2, sm: 3 }, background: isDark ? 'rgba(10, 15, 30, 0.4)' : 'background.paper', backdropFilter: isDark ? 'blur(10px)' : 'none', border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0,0,0,0.05)'}`, borderRadius: 3, display: 'flex', flexDirection: 'column' }}>
           <Typography variant="h6" sx={{ color: isDark ? '#fff' : '#000', mb: 3, fontWeight: 600 }}>Resource Utilization</Typography>
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, width: '100%', flex: 1, minHeight: 250, gap: 2 }}>
 
@@ -128,8 +128,8 @@ export function OverviewPage() {
                   <PieChart>
                     <Pie
                       data={data ? [
-                        { name: 'Assigned', value: data.activeAssignments, color: '#00F0FF' },
-                        { name: 'Unassigned', value: Math.max(0, data.totalDevices - data.activeAssignments), color: isDark ? 'rgba(0, 240, 255, 0.15)' : 'rgba(0, 240, 255, 0.3)' },
+                        { name: 'Assigned', value: data.activeAssignments, color: isDark ? '#00F0FF' : theme.palette.primary.main },
+                        { name: 'Unassigned', value: Math.max(0, data.totalDevices - data.activeAssignments), color: isDark ? 'rgba(0, 240, 255, 0.15)' : theme.palette.primary.light },
                       ] : []}
                       cx="50%"
                       cy="50%"
@@ -141,7 +141,7 @@ export function OverviewPage() {
                       cornerRadius={6}
                     >
                       {(data ? [1, 2] : []).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={index === 0 ? '#00F0FF' : (isDark ? 'rgba(0, 240, 255, 0.15)' : 'rgba(0, 240, 255, 0.3)')} />
+                        <Cell key={`cell-${index}`} fill={index === 0 ? (isDark ? '#00F0FF' : theme.palette.primary.main) : (isDark ? 'rgba(0, 240, 255, 0.15)' : theme.palette.primary.light)} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -151,7 +151,7 @@ export function OverviewPage() {
                   </PieChart>
                 </ResponsiveContainer>
                 <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                  <Typography variant="h5" sx={{ color: '#00F0FF', fontWeight: 700 }}>
+                  <Typography variant="h5" sx={{ color: isDark ? '#00F0FF' : 'primary.main', fontWeight: 700 }}>
                     {data && data.totalDevices > 0 ? Math.round((data.activeAssignments / data.totalDevices) * 100) : 0}%
                   </Typography>
                 </Box>
@@ -168,7 +168,7 @@ export function OverviewPage() {
                     <Pie
                       data={data ? [
                         { name: 'Active', value: data.activeEngineers, color: '#8b5cf6' },
-                        { name: 'Inactive', value: Math.max(0, data.totalEngineers - data.activeEngineers), color: isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.3)' },
+                        { name: 'Inactive', value: Math.max(0, data.totalEngineers - data.activeEngineers), color: isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.1)' },
                       ] : []}
                       cx="50%"
                       cy="50%"
@@ -180,7 +180,7 @@ export function OverviewPage() {
                       cornerRadius={6}
                     >
                       {(data ? [1, 2] : []).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={index === 0 ? '#8b5cf6' : (isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.3)')} />
+                        <Cell key={`cell-${index}`} fill={index === 0 ? '#8b5cf6' : (isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.1)')} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -201,7 +201,7 @@ export function OverviewPage() {
           </Box>
         </Paper>
 
-        <Paper sx={{ p: { xs: 2, sm: 3 }, background: isDark ? 'rgba(10, 15, 30, 0.4)' : 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)', border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0,0,0,0.05)'}`, borderRadius: 3, overflow: 'hidden' }}>
+        <Paper sx={{ p: { xs: 2, sm: 3 }, background: isDark ? 'rgba(10, 15, 30, 0.4)' : 'background.paper', backdropFilter: isDark ? 'blur(10px)' : 'none', border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0,0,0,0.05)'}`, borderRadius: 3, overflow: 'hidden' }}>
           <Typography variant="h6" sx={{ color: isDark ? '#fff' : '#000', mb: 3, fontWeight: 600 }}>Current Status</Typography>
           <Box sx={{ width: '100%', height: 300 }}>
             <ResponsiveContainer>

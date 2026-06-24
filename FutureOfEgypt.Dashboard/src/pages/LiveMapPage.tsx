@@ -1,9 +1,10 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { Box, Paper, Typography, Button, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, useTheme, GlobalStyles, Snackbar, Alert, Slider, FormControlLabel, Checkbox, Divider } from '@mui/material';
+import { Box, Paper, Typography, Button, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, useTheme, GlobalStyles, Snackbar, Alert, Slider, FormControlLabel, Checkbox, Divider, useMediaQuery } from '@mui/material';
 import { Marker, Popup, TileLayer, MapContainer, useMap, Polyline, CircleMarker, Tooltip as LeafletTooltip } from 'react-leaflet';
 import L from 'leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import CloseIcon from '@mui/icons-material/Close';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useQuery } from '@tanstack/react-query';
@@ -68,16 +69,16 @@ function filterAndDownsampleRoute(points: RoutePoint[]): RoutePoint[] {
   const filtered: RoutePoint[] = [];
   for (let i = 0; i < points.length; i++) {
     const pt = points[i];
-    
+
     // Ignore points with accuracy > 50m (if accuracy exists)
     if (pt.accuracy != null && pt.accuracy > 50) continue;
-    
+
     if (filtered.length > 0) {
       const prev = filtered[filtered.length - 1];
-      
+
       // Exact duplicate
       if (pt.latitude === prev.latitude && pt.longitude === prev.longitude) continue;
-      
+
       // Distance < 10m
       const dist = calculateDistance(prev.latitude, prev.longitude, pt.latitude, pt.longitude);
       if (dist < 10) continue;
@@ -86,6 +87,37 @@ function filterAndDownsampleRoute(points: RoutePoint[]): RoutePoint[] {
   }
 
   return filtered;
+}
+
+// ─── Status Display Helper ────────────────────────────────────────────────────
+function getDashboardStatus(location: LatestLocationResponse): { label: string, color: string, isBlocked: boolean } {
+  const reason = location.trackingStatusReason;
+
+  if (reason === 'LocationPermissionDenied') {
+    return { label: 'Blocked — Location permission denied', color: '#ef4444', isBlocked: true };
+  }
+  if (reason === 'LocationServiceDisabled') {
+    return { label: 'Blocked — Location service off', color: '#ef4444', isBlocked: true };
+  }
+  if (reason === 'BackgroundPermissionMissing') {
+    return { label: 'Blocked — Background permission missing', color: '#ef4444', isBlocked: true };
+  }
+  if (reason === 'BatteryOptimizationIgnored' || reason === 'BatteryOptimizationEnabled') { // Handling potential backend values
+    return { label: 'Blocked — Battery optimization enabled', color: '#ef4444', isBlocked: true };
+  }
+  if (reason === 'AuthExpired' || reason === 'DeviceRevoked') {
+    return { label: 'Blocked — Device revoked', color: '#ef4444', isBlocked: true };
+  }
+
+  if (location.isOnline) {
+    return { label: 'Online', color: '#10b981', isBlocked: false };
+  }
+
+  if (!reason || reason === 'Valid') {
+    return { label: 'Offline — App stopped or permission may have changed', color: '#94a3b8', isBlocked: false };
+  }
+
+  return { label: 'Offline — App possibly stopped', color: '#94a3b8', isBlocked: false };
 }
 
 // ─── Custom marker icons ──────────────────────────────────────────────────────
@@ -187,13 +219,13 @@ function AnimatedRoutePath({ points, speedMs }: { points: RoutePoint[], speedMs:
         } else {
           const p1 = points[currentSegmentIndex];
           const p2 = points[currentSegmentIndex + 1];
-          
+
           if (p1 && p2) {
             const interpolatedPoint: [number, number] = [
               p1.latitude + (p2.latitude - p1.latitude) * segmentProgress,
               p1.longitude + (p2.longitude - p1.longitude) * segmentProgress,
             ];
-            
+
             setVisiblePoints([
               ...points.slice(0, currentSegmentIndex + 1).map(p => [p.latitude, p.longitude] as [number, number]),
               interpolatedPoint,
@@ -214,20 +246,20 @@ function AnimatedRoutePath({ points, speedMs }: { points: RoutePoint[], speedMs:
 
   return (
     <>
-      <Polyline 
-        positions={visiblePoints} 
-        color="#00B4D8" 
-        weight={12} 
-        opacity={0.35} 
+      <Polyline
+        positions={visiblePoints}
+        color="#00B4D8"
+        weight={12}
+        opacity={0.35}
         lineCap="round"
         lineJoin="round"
         interactive={false}
       />
-      <Polyline 
-        positions={visiblePoints} 
-        color="#90E0EF" 
-        weight={4} 
-        opacity={1} 
+      <Polyline
+        positions={visiblePoints}
+        color="#90E0EF"
+        weight={4}
+        opacity={1}
         lineCap="round"
         lineJoin="round"
         interactive={false}
@@ -263,6 +295,49 @@ export function LiveMapPage() {
   const [hiddenLocations, setHiddenLocations] = useState<LatestLocationResponse[]>([]);
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedDevicePublicId, setSelectedDevicePublicId] = useState<string | null>(null);
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
+  const [showRouteSettings, setShowRouteSettings] = useState(true);
+
+  // Custom drag state for Route Settings on mobile
+  const [routeSettingsPos, setRouteSettingsPos] = useState({ x: 0, y: 0 });
+  const dragStartPos = React.useRef({ x: 0, y: 0 });
+  const isDragging = React.useRef(false);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    isDragging.current = true;
+    dragStartPos.current = {
+      x: e.clientX - routeSettingsPos.x,
+      y: e.clientY - routeSettingsPos.y,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+
+    let newX = e.clientX - dragStartPos.current.x;
+    let newY = e.clientY - dragStartPos.current.y;
+
+    // It's anchored top-right (right: 8, top: 8 on mobile).
+    // Max X is 8 (so it hits the right edge). Min X is roughly -(window.innerWidth - 240).
+    const maxX = 8;
+    const minX = -window.innerWidth + 240;
+
+    // Min Y is -8 (so it hits top edge). Max Y is window.innerHeight - 200.
+    const minY = -8;
+    const maxY = window.innerHeight - 200;
+
+    newX = Math.max(minX, Math.min(newX, maxX));
+    newY = Math.max(minY, Math.min(newY, maxY));
+
+    setRouteSettingsPos({ x: newX, y: newY });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    isDragging.current = false;
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+  };
+
   const [routeHistory, setRouteHistory] = useState<RoutePoint[]>([]);
   const [historyDate, setHistoryDate] = useState<string>(() => {
     // Return today's date in YYYY-MM-DD local format
@@ -283,6 +358,7 @@ export function LiveMapPage() {
   const [hideConfirmDevice, setHideConfirmDevice] = useState<string | null>(null);
   const [isHiding, setIsHiding] = useState(false);
   const [previewAvatar, setPreviewAvatar] = useState<{ url: string; altText: string; fallbackText: string } | null>(null);
+  const isTouchDevice = useMediaQuery('(hover: none) and (pointer: coarse)');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['latest-locations'],
@@ -330,7 +406,7 @@ export function LiveMapPage() {
         const idx = current.findIndex((i) => i.devicePublicId === latestLocation.devicePublicId);
         if (idx === -1) return [latestLocation, ...current];
         const updated = [...current];
-        updated[idx] = latestLocation;
+        updated[idx] = { ...current[idx], ...latestLocation };
         return updated;
       });
     });
@@ -412,24 +488,26 @@ export function LiveMapPage() {
     }
   }, [historyDate]);
 
-  // Handle Fetch Route
   const handleFetchRoute = async (engineerPublicId: string, devicePublicId: string) => {
     // If route is already showing for this device, hide it
     if (routeHistory.length > 0 && selectedDevicePublicId === devicePublicId) {
       setRouteHistory([]);
+      if (isTouchDevice) setShowMobilePanel(false);
       return;
     }
 
+    if (isTouchDevice) setShowMobilePanel(false);
+
     try {
       setIsFetchingRoute(true);
-      
+
       const res = await getEngineerLocationHistoryByDate(engineerPublicId, historyDate, 150);
-      
+
       if (res && res.length > 0) {
         // Filter out invalid coords
         const validPoints = res
           .filter(h => typeof h.latitude === 'number' && typeof h.longitude === 'number' && !isNaN(h.latitude) && !isNaN(h.longitude));
-          
+
         if (validPoints.length === 0) {
           setSnackbar({ open: true, message: 'No valid route history found for this date.', severity: 'error' });
           setRouteHistory([]);
@@ -444,6 +522,8 @@ export function LiveMapPage() {
           } else {
             setRouteHistory(finalPoints);
             setSelectedDevicePublicId(devicePublicId); // Ensure the device is selected so we can unselect it later
+            setShowRouteSettings(true); // Always show settings when loading a new route
+            if (isTouchDevice) setShowMobilePanel(false);
           }
         }
       } else {
@@ -492,6 +572,99 @@ export function LiveMapPage() {
   // Dark mode hook
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
+
+  const renderActionPanelContent = (location: LatestLocationResponse, isMobile: boolean) => (
+    <>
+      {isMobile && (
+        <IconButton
+          size="small"
+          onClick={(e) => { e.stopPropagation(); setSelectedDevicePublicId(null); }}
+          sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      )}
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1.5, pr: isMobile ? 4 : 0 }}>
+        <AuthorizedAvatar
+          srcUrl={location.profilePhotoUrl}
+          fallbackText={location.engineerName.charAt(0).toUpperCase()}
+          onClick={() => setPreviewAvatar({ url: location.profilePhotoUrl || '', altText: location.engineerName, fallbackText: location.engineerName.charAt(0).toUpperCase() })}
+          sx={{ width: 40, height: 40, fontSize: '1rem', bgcolor: 'primary.main', cursor: 'pointer' }}
+        />
+        <Box>
+          <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.2 }}>
+            {location.engineerName}
+          </Typography>
+          {location.engineerPhoneNumber && (
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {location.engineerPhoneNumber}
+            </Typography>
+          )}
+        </Box>
+      </Box>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.25 }}>
+        📱 {location.deviceName}
+      </Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.25 }}>
+        📍 {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
+      </Typography>
+      {location.accuracy != null && (
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.25 }}>
+          Accuracy: {location.accuracy.toFixed(1)}m
+        </Typography>
+      )}
+      {location.speed != null && (
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.25 }}>
+          Speed: {location.speed.toFixed(1)} km/h
+        </Typography>
+      )}
+      {location.isMocked && (
+        <Box
+          sx={{
+            mt: 0.5,
+            px: 1,
+            py: 0.25,
+            borderRadius: '4px',
+            backgroundColor: 'rgba(239,68,68,0.1)',
+            color: '#ef4444',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            display: 'inline-block',
+            mb: 1
+          }}
+        >
+          ⚠ Mocked GPS
+        </Box>
+      )}
+      {areTimestampsEqual(location.receivedAt, location.recordedAt) ? (
+        <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: 'text.disabled' }}>
+          Last seen: {formatLastSeen(location.receivedAt)}
+        </Typography>
+      ) : (
+        <>
+          <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: 'text.disabled' }}>
+            Last ping: {formatLastSeen(location.receivedAt)}
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: 'text.disabled' }}>
+            GPS time: {formatLastSeen(location.recordedAt)}
+          </Typography>
+        </>
+      )}
+
+      <Button
+        variant="outlined"
+        size="small"
+        disabled={isFetchingRoute}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleFetchRoute(location.engineerPublicId, location.devicePublicId);
+        }}
+        sx={{ mt: 1.5, width: '100%', height: { xs: 40, sm: 'auto' } }}
+      >
+        {isFetchingRoute ? 'Loading...' : routeHistory.length > 0 && selectedDevicePublicId === location.devicePublicId ? 'Hide Route' : 'Show Route'}
+      </Button>
+    </>
+  );
 
   return (
     <>
@@ -601,38 +774,65 @@ export function LiveMapPage() {
             </Box>
 
             <Paper sx={{ position: 'relative', overflow: 'hidden', height: { xs: '50vh', lg: 580 }, minHeight: 300, p: 0, border: 'none' }}>
-              {routeHistory.length > 0 && (
+              {routeHistory.length > 0 && showRouteSettings && (
                 <Paper
                   sx={{
                     position: 'absolute',
-                    top: 16,
-                    right: 16,
+                    top: { xs: 8, sm: 16 },
+                    right: { xs: 8, sm: 16 },
                     zIndex: 1000,
-                    p: 2,
+                    p: { xs: 1, sm: 2 },
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 0.5,
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(4px)',
+                    gap: { xs: 0, sm: 0.5 },
+                    backgroundColor: 'background.paper',
+                    backdropFilter: isDarkMode ? 'blur(4px)' : 'none',
                     borderRadius: 2,
                     boxShadow: 3,
-                    minWidth: 220,
+                    minWidth: { xs: 220, sm: 220 },
+                    maxWidth: { xs: 260, sm: 300 },
+                    transform: `translate(${routeSettingsPos.x}px, ${routeSettingsPos.y}px)`,
+                    touchAction: 'none' // Important to prevent map scrolling while dragging
                   }}
                 >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5, color: 'text.primary' }}>Route Settings</Typography>
+                  <Box
+                    className="route-settings-drag-handle"
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      mb: { xs: 0.25, sm: 0.5 },
+                      cursor: isDragging.current ? 'grabbing' : 'grab',
+                      pb: { xs: 0.5, sm: 0 },
+                      borderBottom: { xs: '1px solid rgba(0,0,0,0.05)', sm: 'none' },
+                      touchAction: 'none'
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <DragIndicatorIcon sx={{ fontSize: '1.2rem', color: 'text.disabled' }} />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary', fontSize: { xs: '0.75rem', sm: '0.875rem' }, textTransform: { xs: 'uppercase', sm: 'none' }, letterSpacing: { xs: '0.02em', sm: 'normal' } }}>Route Settings</Typography>
+                    </Box>
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); setShowRouteSettings(false); }} sx={{ padding: '2px', mr: -0.5 }}>
+                      <CloseIcon fontSize="small" sx={{ fontSize: { xs: '1.2rem', sm: '1rem' } }} />
+                    </IconButton>
+                  </Box>
                   <FormControlLabel
-                    control={<Checkbox size="small" checked={showRoutePoints} onChange={(e) => setShowRoutePoints(e.target.checked)} />}
-                    label={<Typography variant="body2" sx={{ color: 'text.primary' }}>Show Points</Typography>}
-                    sx={{ m: 0 }}
+                    control={<Checkbox size="small" checked={showRoutePoints} onChange={(e) => setShowRoutePoints(e.target.checked)} sx={{ p: { xs: 0.5, sm: 1 } }} />}
+                    label={<Typography variant="body2" sx={{ color: 'text.primary', fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>Show Points</Typography>}
+                    sx={{ m: 0, ml: { xs: -0.5, sm: 0 } }}
                   />
                   <FormControlLabel
-                    control={<Checkbox size="small" checked={showRouteLine} onChange={(e) => setShowRouteLine(e.target.checked)} />}
-                    label={<Typography variant="body2" sx={{ color: 'text.primary' }}>Show Animated Line</Typography>}
-                    sx={{ m: 0 }}
+                    control={<Checkbox size="small" checked={showRouteLine} onChange={(e) => setShowRouteLine(e.target.checked)} sx={{ p: { xs: 0.5, sm: 1 } }} />}
+                    label={<Typography variant="body2" sx={{ color: 'text.primary', fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>Show Animated Line</Typography>}
+                    sx={{ m: 0, ml: { xs: -0.5, sm: 0 } }}
                   />
                   {showRouteLine && (
-                    <Box sx={{ mt: 1, px: 1 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                    <Box sx={{ mt: { xs: 0.5, sm: 1 }, px: { xs: 0.5, sm: 1 } }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: { xs: 0, sm: 0.5 }, fontSize: { xs: '0.65rem', sm: '0.75rem' } }}>
                         Speed: {routeLineSpeed}ms / point
                       </Typography>
                       <Slider
@@ -642,7 +842,7 @@ export function LiveMapPage() {
                         max={1000}
                         step={50}
                         onChange={(_, val) => setRouteLineSpeed(val as number)}
-                        sx={{ p: 0 }}
+                        sx={{ p: 0, py: { xs: 1, sm: 0 }, '& .MuiSlider-thumb': { width: { xs: 14, sm: 20 }, height: { xs: 14, sm: 20 } } }}
                       />
                     </Box>
                   )}
@@ -656,116 +856,91 @@ export function LiveMapPage() {
               >
                 <TileLayer
                   attribution="&copy; OpenStreetMap contributors"
-                  url={isDarkMode 
+                  url={isDarkMode
                     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                     : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   }
                 />
                 <MapRecenter center={mapCenter} />
 
+                {isTouchDevice && selectedDevicePublicId && showMobilePanel && (
+                  (() => {
+                    const selectedLocation = filteredVisibleLocations.find(l => l.devicePublicId === selectedDevicePublicId);
+                    if (!selectedLocation) return null;
+                    return (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          bottom: 24,
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          width: 'calc(100% - 32px)',
+                          maxWidth: 400,
+                          zIndex: 1000,
+                        }}
+                      >
+                        <Paper
+                          elevation={6}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            position: 'relative',
+                            bgcolor: 'background.paper',
+                            color: 'text.primary',
+                          }}
+                        >
+                          {renderActionPanelContent(selectedLocation, true)}
+                        </Paper>
+                      </Box>
+                    );
+                  })()
+                )}
+
                 <MarkerClusterGroup chunkedLoading>
                   {filteredVisibleLocations.map((location) => {
                     const hasValidCoords = location.latitude != null && location.longitude != null && (location.latitude !== 0 || location.longitude !== 0);
                     if (!hasValidCoords) return null;
                     return (
-                    <Marker
-                      key={location.devicePublicId}
-                      position={[location.latitude, location.longitude]}
-                      icon={getMarkerIcon(location, filter)}
-                      eventHandlers={{
-                         click: () => setSelectedDevicePublicId(location.devicePublicId),
-                      }}
-                    >
-                      <LeafletTooltip direction="top" offset={[0, -20]} opacity={1}>
-                        {location.engineerName} — {location.isOnline ? 'Online' : 'Offline'}
-                      </LeafletTooltip>
-                      <Popup>
-                        <Box sx={{ 
-                          minWidth: 180, 
-                          fontFamily: 'Inter, sans-serif',
-                          color: 'text.primary',
-                          bgcolor: 'background.paper',
-                        }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1.5 }}>
-                            <AuthorizedAvatar 
-                              srcUrl={location.profilePhotoUrl}
-                              fallbackText={location.engineerName.charAt(0).toUpperCase()}
-                              onClick={() => setPreviewAvatar({ url: location.profilePhotoUrl || '', altText: location.engineerName, fallbackText: location.engineerName.charAt(0).toUpperCase() })}
-                              sx={{ width: 40, height: 40, fontSize: '1rem', bgcolor: 'primary.main', cursor: 'pointer' }}
-                            />
-                            <Box>
-                              <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.2 }}>
-                                {location.engineerName}
-                              </Typography>
-                              {location.engineerPhoneNumber && (
-                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                                  {location.engineerPhoneNumber}
-                                </Typography>
-                              )}
-                            </Box>
-                          </Box>
-                          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.25 }}>
-                            📱 {location.deviceName}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.25 }}>
-                            📍 {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
-                          </Typography>
-                          {location.accuracy != null && (
-                            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.25 }}>
-                              Accuracy: {location.accuracy.toFixed(1)}m
-                            </Typography>
-                          )}
-                          {location.speed != null && (
-                            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.25 }}>
-                              Speed: {location.speed.toFixed(1)} km/h
-                            </Typography>
-                          )}
-                          {location.isMocked && (
+                      <Marker
+                        key={location.devicePublicId}
+                        position={[location.latitude, location.longitude]}
+                        icon={getMarkerIcon(location, filter)}
+                        eventHandlers={{
+                          click: (e) => {
+                            e.originalEvent?.stopPropagation();
+                            setSelectedDevicePublicId(location.devicePublicId);
+                            if (isTouchDevice) {
+                              setShowMobilePanel(true);
+                            }
+                            if (routeHistory.length > 0 && selectedDevicePublicId === location.devicePublicId) {
+                              setShowRouteSettings(true);
+                            }
+                          },
+                        }}
+                      >
+                        <LeafletTooltip direction="top" offset={[0, -20]} opacity={1} className="hide-on-mobile">
+                          {location.engineerName} — {location.isOnline ? 'Online' : 'Offline'}
+                        </LeafletTooltip>
+                        {!isTouchDevice && (
+                          <Popup closeOnClick={false}>
                             <Box
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
                               sx={{
-                                mt: 0.5,
-                                px: 1,
-                                py: 0.25,
-                                borderRadius: '4px',
-                                backgroundColor: 'rgba(239,68,68,0.1)',
-                                color: '#ef4444',
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                display: 'inline-block',
-                                mb: 1
-                              }}
-                            >
-                              ⚠ Mocked GPS
+                                minWidth: 180,
+                                fontFamily: 'Inter, sans-serif',
+                                color: 'text.primary',
+                                bgcolor: 'background.paper',
+                              }}>
+                              {renderActionPanelContent(location, false)}
                             </Box>
-                          )}
-                          {areTimestampsEqual(location.receivedAt, location.recordedAt) ? (
-                            <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: 'text.disabled' }}>
-                              Last seen: {formatLastSeen(location.receivedAt)}
-                            </Typography>
-                          ) : (
-                            <>
-                              <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: 'text.disabled' }}>
-                                Last ping: {formatLastSeen(location.receivedAt)}
-                              </Typography>
-                              <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: 'text.disabled' }}>
-                                GPS time: {formatLastSeen(location.recordedAt)}
-                              </Typography>
-                            </>
-                          )}
-                          
-                          <Button 
-                            variant="outlined" 
-                            size="small" 
-                            disabled={isFetchingRoute}
-                            onClick={() => void handleFetchRoute(location.engineerPublicId, location.devicePublicId)}
-                            sx={{ mt: 1.5, width: '100%' }}
-                          >
-                            {isFetchingRoute ? 'Loading...' : routeHistory.length > 0 && selectedDevicePublicId === location.devicePublicId ? 'Hide Route' : 'Load History'}
-                          </Button>
-                        </Box>
-                      </Popup>
-                    </Marker>
-                  )})}
+                          </Popup>
+                        )}
+                      </Marker>
+                    )
+                  })}
                 </MarkerClusterGroup>
                 {routeHistory.length > 0 && (
                   <>
@@ -825,9 +1000,9 @@ export function LiveMapPage() {
                     ))}
                   </>
                 )}
-                <MapRouteFitter 
-                  routeHistory={routeHistory} 
-                  liveLocation={selectedDevicePublicId ? liveLocations.find(l => l.devicePublicId === selectedDevicePublicId) : undefined} 
+                <MapRouteFitter
+                  routeHistory={routeHistory}
+                  liveLocation={selectedDevicePublicId ? liveLocations.find(l => l.devicePublicId === selectedDevicePublicId) : undefined}
                 />
               </MapContainer>
             </Paper>
@@ -907,7 +1082,7 @@ export function LiveMapPage() {
                       >
                         {/* 1. Selected Engineer Profile */}
                         <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
-                          <AuthorizedAvatar 
+                          <AuthorizedAvatar
                             srcUrl={location.profilePhotoUrl}
                             fallbackText={location.engineerName.charAt(0)}
                             onClick={(e) => {
@@ -921,8 +1096,8 @@ export function LiveMapPage() {
                               <Typography noWrap sx={{ fontWeight: 700, fontSize: '1.1rem', lineHeight: 1.2 }}>
                                 {location.engineerName}
                               </Typography>
-                              <IconButton 
-                                size="small" 
+                              <IconButton
+                                size="small"
                                 onClick={(e) => { e.stopPropagation(); setSelectedDevicePublicId(null); setRouteHistory([]); }}
                                 sx={{ color: 'rgba(255,255,255,0.7)', p: 0.5, mt: -0.5, mr: -0.5, '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.1)' } }}
                               >
@@ -938,9 +1113,9 @@ export function LiveMapPage() {
                               📱 {location.deviceName}
                             </Typography>
                             <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, borderRadius: 1.5, bgcolor: 'rgba(0,0,0,0.25)' }}>
-                              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: location.isOnline ? '#10b981' : '#94a3b8' }} />
-                              <Typography variant="caption" sx={{ fontWeight: 600, color: location.isOnline ? '#10b981' : '#94a3b8', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                                {location.isOnline ? 'Online' : 'Offline'}
+                              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: getDashboardStatus(location).color }} />
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: getDashboardStatus(location).color, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                                {getDashboardStatus(location).label}
                               </Typography>
                             </Box>
                           </Box>
@@ -964,7 +1139,7 @@ export function LiveMapPage() {
                                 <span style={{ opacity: 0.7, marginRight: '8px' }}>Last Ping:</span> {formatLastSeen(location.receivedAt)}
                               </Typography>
                               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                                <span style={{ opacity: 0.7, marginRight: '8px' }}>GPS:</span> {formatLastSeen(location.recordedAt)} 
+                                <span style={{ opacity: 0.7, marginRight: '8px' }}>GPS:</span> {formatLastSeen(location.recordedAt)}
                                 {location.isMocked && <span style={{ color: '#fca5a5', marginLeft: '8px', fontWeight: 600 }}>⚠ Mocked</span>}
                               </Typography>
                             </>
@@ -972,6 +1147,11 @@ export function LiveMapPage() {
                           {(!location.latitude || !location.longitude || (location.latitude === 0 && location.longitude === 0)) && (
                             <Typography variant="caption" sx={{ color: '#fca5a5', display: 'block', mt: 0.5, fontWeight: 600 }}>
                               ⚠ No last known location
+                            </Typography>
+                          )}
+                          {location.lastHealthReportAt && (
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', mt: 0.25 }}>
+                              <span style={{ opacity: 0.7, marginRight: '8px' }}>Health:</span> {formatLastSeen(location.lastHealthReportAt)}
                             </Typography>
                           )}
                         </Box>
@@ -1027,9 +1207,9 @@ export function LiveMapPage() {
                               <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.6)', lineHeight: 1.2 }}>
                                 History
                               </Typography>
-                              <Box sx={{ display: 'flex', gap: 1 }}>
-                                <input 
-                                  type="date" 
+                              <Box sx={{ display: 'flex', gap: 1, flexDirection: { xs: 'column', sm: 'row' } }}>
+                                <input
+                                  type="date"
                                   value={historyDate}
                                   onChange={(e) => setHistoryDate(e.target.value)}
                                   onClick={(e) => e.stopPropagation()}
@@ -1042,20 +1222,23 @@ export function LiveMapPage() {
                                     color: 'white',
                                     fontFamily: 'inherit',
                                     fontSize: '0.9rem',
-                                    outline: 'none'
+                                    outline: 'none',
+                                    height: '40px'
                                   }}
                                 />
-                                <Button 
-                                  variant="contained" 
+                                <Button
+                                  variant="contained"
                                   disabled={isFetchingRoute}
                                   onClick={(e) => { e.stopPropagation(); void handleFetchRoute(location.engineerPublicId, location.devicePublicId); }}
-                                  sx={{ 
-                                    bgcolor: 'white', 
+                                  sx={{
+                                    bgcolor: 'white',
                                     color: 'primary.dark',
                                     fontWeight: 700,
                                     textTransform: 'none',
                                     px: 3,
-                                    '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } 
+                                    height: '40px',
+                                    minWidth: { xs: '100%', sm: 'auto' },
+                                    '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' }
                                   }}
                                 >
                                   {isFetchingRoute ? '...' : routeHistory.length > 0 ? 'Hide' : 'Load'}
@@ -1068,12 +1251,12 @@ export function LiveMapPage() {
                     ) : (
                       <>
                         {/* Hide / Unhide Action Button */}
-                        <Box 
+                        <Box
                           className="hide-btn"
-                          sx={{ 
-                            position: 'absolute', 
-                            right: 8, 
-                            top: '50%', 
+                          sx={{
+                            position: 'absolute',
+                            right: 8,
+                            top: '50%',
                             transform: 'translateY(-50%)',
                             opacity: 0,
                             transition: 'opacity 0.2s',
@@ -1082,9 +1265,9 @@ export function LiveMapPage() {
                           onClick={(e) => { e.stopPropagation(); }}
                         >
                           {filter === 'hidden' ? (
-                            <Button 
-                              size="small" 
-                              variant="contained" 
+                            <Button
+                              size="small"
+                              variant="contained"
                               color="primary"
                               onClick={() => void handleUnhideMarker(location.devicePublicId)}
                             >
@@ -1092,8 +1275,8 @@ export function LiveMapPage() {
                             </Button>
                           ) : (
                             <Tooltip title="Hide current marker">
-                              <IconButton 
-                                size="small" 
+                              <IconButton
+                                size="small"
                                 onClick={() => setHideConfirmDevice(location.devicePublicId)}
                                 sx={{ bgcolor: 'background.paper', boxShadow: 1, '&:hover': { bgcolor: 'error.light', color: 'white' } }}
                               >
@@ -1112,10 +1295,8 @@ export function LiveMapPage() {
                               backgroundColor: filter === 'hidden'
                                 ? '#f59e0b'
                                 : location.isMocked
-                                ? '#ef4444'
-                                : location.isOnline
-                                ? '#10b981'
-                                : '#94a3b8',
+                                  ? '#ef4444'
+                                  : getDashboardStatus(location).color,
                               boxShadow: location.isOnline && !location.isMocked
                                 ? '0 0 0 3px rgba(16,185,129,0.2)'
                                 : 'none',
@@ -1124,14 +1305,14 @@ export function LiveMapPage() {
                             aria-hidden="true"
                           />
                           <AuthorizedAvatar
-                              srcUrl={location.profilePhotoUrl}
-                              fallbackText={location.engineerName.charAt(0)}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewAvatar({ url: location.profilePhotoUrl || '', altText: location.engineerName, fallbackText: location.engineerName.charAt(0) });
-                              }}
-                              sx={{ width: 40, height: 40, border: '2px solid white', cursor: 'pointer' }}
-                            />
+                            srcUrl={location.profilePhotoUrl}
+                            fallbackText={location.engineerName.charAt(0)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewAvatar({ url: location.profilePhotoUrl || '', altText: location.engineerName, fallbackText: location.engineerName.charAt(0) });
+                            }}
+                            sx={{ width: 40, height: 40, border: '2px solid white', cursor: 'pointer' }}
+                          />
                         </Box>
 
                         <Box sx={{ flex: 1, minWidth: 0, pr: 3 }}>
@@ -1184,9 +1365,15 @@ export function LiveMapPage() {
                             ) : (
                               <>
                                 Last Ping: {formatLastSeen(location.receivedAt)}
-                                <br/>
+                                <br />
                                 GPS: {formatLastSeen(location.recordedAt)}
                                 {location.isMocked && ' · ⚠ Mocked'}
+                              </>
+                            )}
+                            {location.lastHealthReportAt && (
+                              <>
+                                <br />
+                                Health: {formatLastSeen(location.lastHealthReportAt)}
                               </>
                             )}
                           </Typography>
