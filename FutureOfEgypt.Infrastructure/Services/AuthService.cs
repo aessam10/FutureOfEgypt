@@ -1,6 +1,7 @@
 using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.Auth;
+using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Domain.Enums;
 using FutureOfEgypt.Infrastructure.Identity;
 using FutureOfEgypt.Infrastructure.Persistence;
@@ -53,8 +54,6 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(request.Password))
                 throw new InvalidOperationException("Password is required.");
 
-            await EnsureRoleExistsAsync(AppRoles.ADMIN);
-
             var email = request.Email.Trim();
 
             var existingUser = await _userManager.FindByEmailAsync(email);
@@ -62,64 +61,79 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (existingUser is not null)
                 throw new InvalidOperationException("Email is already registered.");
 
-            var user = new ApplicationUser
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                UserName = email,
-                Email = email,
-                FullName = request.FullName.Trim(),
-                CompanyEmail = string.IsNullOrWhiteSpace(request.CompanyEmail)
-                    ? null
-                    : request.CompanyEmail.Trim().ToLowerInvariant(),
-                EngineerId = null
-            };
-
-            var createResult = await _userManager.CreateAsync(user, request.Password);
-
-            if (!createResult.Succeeded)
-            {
-                var errors = string.Join(", ", createResult.Errors.Select(x => x.Description));
-                throw new InvalidOperationException(errors);
-            }
-
-            var roleResult = await _userManager.AddToRoleAsync(user, AppRoles.ADMIN);
-
-            if (!roleResult.Succeeded)
-            {
-                var errors = string.Join(", ", roleResult.Errors.Select(x => x.Description));
-                throw new InvalidOperationException(errors);
-            }
-
-            var roles = await _userManager.GetRolesAsync(user);
-
-            var response = await BuildUserAccountResponseAsync(user, cancellationToken);
-
-            await _auditLogService.CreateAsync(
-                new CreateAuditLogRequest
+                var user = new ApplicationUser
                 {
-                    ActionType = AuditActionType.AdminUserCreated,
-                    PerformedByUserId = performedByUserId,
-                    PerformedByEmail = performedByEmail,
-                    EntityName = nameof(ApplicationUser),
-                    EntityPublicId = user.Id,
-                    Description = $"Admin created admin user '{user.Email}'.",
-                    MetadataJson = JsonSerializer.Serialize(new
-                    {
-                        createdUserId = user.Id,
-                        user.Email,
-                        user.FullName,
-                        roles = response.Roles
-                    })
-                },
-                cancellationToken);
+                    UserName = email,
+                    Email = email,
+                    FullName = request.FullName.Trim(),
+                    CompanyEmail = string.IsNullOrWhiteSpace(request.CompanyEmail)
+                        ? null
+                        : request.CompanyEmail.Trim().ToLowerInvariant(),
+                    UserType = UserType.Admin,
+                    EngineerId = null
+                };
 
-            return response;
+                var createResult = await _userManager.CreateAsync(user, request.Password);
+
+                if (!createResult.Succeeded)
+                {
+                    var errors = string.Join(", ", createResult.Errors.Select(x => x.Description));
+                    throw new InvalidOperationException(errors);
+                }
+
+                // Create Admin profile
+                var adminProfile = new Admin
+                {
+                    UserId = user.Id,
+                    FullName = user.FullName,
+                    Email = user.Email
+                };
+                await _context.Admins.AddAsync(adminProfile, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                // Assign role
+                await AssignSingleBusinessRoleAsync(user, AppRoles.ADMIN, cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                var response = await BuildUserAccountResponseAsync(user, cancellationToken);
+
+                await _auditLogService.CreateAsync(
+                    new CreateAuditLogRequest
+                    {
+                        ActionType = AuditActionType.AdminUserCreated,
+                        PerformedByUserId = performedByUserId,
+                        PerformedByEmail = performedByEmail,
+                        EntityName = nameof(ApplicationUser),
+                        EntityPublicId = user.Id,
+                        Description = $"Admin created admin user '{user.Email}'.",
+                        MetadataJson = JsonSerializer.Serialize(new
+                        {
+                            createdUserId = user.Id,
+                            user.Email,
+                            user.FullName,
+                            roles = response.Roles
+                        })
+                    },
+                    cancellationToken);
+
+                return response;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
 
         public async Task<UserAccountResponse> RegisterManagerAsync(
-    Guid performedByUserId,
-    string performedByEmail,
-    RegisterAdminRequest request,
-    CancellationToken cancellationToken = default)
+            Guid performedByUserId,
+            string performedByEmail,
+            RegisterAdminRequest request,
+            CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(request.FullName))
                 throw new InvalidOperationException("Full name is required.");
@@ -130,8 +144,6 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(request.Password))
                 throw new InvalidOperationException("Password is required.");
 
-            await EnsureRoleExistsAsync(AppRoles.MANAGER);
-
             var email = request.Email.Trim();
 
             var existingUser = await _userManager.FindByEmailAsync(email);
@@ -139,52 +151,69 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (existingUser is not null)
                 throw new InvalidOperationException("Email is already registered.");
 
-            var user = new ApplicationUser
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                UserName = email,
-                Email = email,
-                FullName = request.FullName.Trim(),
-                EngineerId = null
-            };
-
-            var createResult = await _userManager.CreateAsync(user, request.Password);
-
-            if (!createResult.Succeeded)
-            {
-                var errors = string.Join(", ", createResult.Errors.Select(x => x.Description));
-                throw new InvalidOperationException(errors);
-            }
-
-            var roleResult = await _userManager.AddToRoleAsync(user, AppRoles.MANAGER);
-
-            if (!roleResult.Succeeded)
-            {
-                var errors = string.Join(", ", roleResult.Errors.Select(x => x.Description));
-                throw new InvalidOperationException(errors);
-            }
-
-            var response = await BuildUserAccountResponseAsync(user, cancellationToken);
-
-            await _auditLogService.CreateAsync(
-                new CreateAuditLogRequest
+                var user = new ApplicationUser
                 {
-                    ActionType = AuditActionType.AdminUserCreated,
-                    PerformedByUserId = performedByUserId,
-                    PerformedByEmail = performedByEmail,
-                    EntityName = nameof(ApplicationUser),
-                    EntityPublicId = user.Id,
-                    Description = $"Admin created manager user '{user.Email}'.",
-                    MetadataJson = JsonSerializer.Serialize(new
-                    {
-                        createdUserId = user.Id,
-                        user.Email,
-                        user.FullName,
-                        roles = response.Roles
-                    })
-                },
-                cancellationToken);
+                    UserName = email,
+                    Email = email,
+                    FullName = request.FullName.Trim(),
+                    UserType = UserType.Manager,
+                    EngineerId = null
+                };
 
-            return response;
+                var createResult = await _userManager.CreateAsync(user, request.Password);
+
+                if (!createResult.Succeeded)
+                {
+                    var errors = string.Join(", ", createResult.Errors.Select(x => x.Description));
+                    throw new InvalidOperationException(errors);
+                }
+
+                // Create Manager profile
+                var managerProfile = new Manager
+                {
+                    UserId = user.Id,
+                    FullName = user.FullName,
+                    Email = user.Email
+                };
+                await _context.Managers.AddAsync(managerProfile, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                // Assign role
+                await AssignSingleBusinessRoleAsync(user, AppRoles.MANAGER, cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                var response = await BuildUserAccountResponseAsync(user, cancellationToken);
+
+                await _auditLogService.CreateAsync(
+                    new CreateAuditLogRequest
+                    {
+                        ActionType = AuditActionType.AdminUserCreated,
+                        PerformedByUserId = performedByUserId,
+                        PerformedByEmail = performedByEmail,
+                        EntityName = nameof(ApplicationUser),
+                        EntityPublicId = user.Id,
+                        Description = $"Admin created manager user '{user.Email}'.",
+                        MetadataJson = JsonSerializer.Serialize(new
+                        {
+                            createdUserId = user.Id,
+                            user.Email,
+                            user.FullName,
+                            roles = response.Roles
+                        })
+                    },
+                    cancellationToken);
+
+                return response;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
 
         public async Task<UserAccountResponse> RegisterEngineerUserAsync(
@@ -198,8 +227,6 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             if (string.IsNullOrWhiteSpace(request.Password))
                 throw new InvalidOperationException("Password is required.");
-
-            await EnsureRoleExistsAsync(AppRoles.ENGINEER);
 
             var engineer = await _context.Engineers
                 .FirstOrDefaultAsync(
@@ -222,55 +249,65 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (engineerAlreadyHasUser)
                 throw new InvalidOperationException("This engineer already has a login account.");
 
-            var user = new ApplicationUser
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                UserName = email,
-                Email = email,
-                FullName = engineer.FullName,
-                EngineerId = engineer.Id
-            };
-
-            var createResult = await _userManager.CreateAsync(user, request.Password);
-
-            if (!createResult.Succeeded)
-            {
-                var errors = string.Join(", ", createResult.Errors.Select(x => x.Description));
-                throw new InvalidOperationException(errors);
-            }
-
-            var roleResult = await _userManager.AddToRoleAsync(user, AppRoles.ENGINEER);
-
-            if (!roleResult.Succeeded)
-            {
-                var errors = string.Join(", ", roleResult.Errors.Select(x => x.Description));
-                throw new InvalidOperationException(errors);
-            }
-
-            var roles = await _userManager.GetRolesAsync(user);
-
-            var response = await BuildUserAccountResponseAsync(user, cancellationToken);
-
-            await _auditLogService.CreateAsync(
-                new CreateAuditLogRequest
+                var user = new ApplicationUser
                 {
-                    ActionType = AuditActionType.EngineerUserCreated,
-                    PerformedByUserId = performedByUserId,
-                    PerformedByEmail = performedByEmail,
-                    EntityName = nameof(ApplicationUser),
-                    EntityPublicId = user.Id,
-                    Description = $"Admin created engineer user '{user.Email}'.",
-                    MetadataJson = JsonSerializer.Serialize(new
-                    {
-                        createdUserId = user.Id,
-                        engineerPublicId = response.EngineerPublicId,
-                        user.Email,
-                        user.FullName,
-                        roles = response.Roles
-                    })
-                },
-                cancellationToken);
+                    UserName = email,
+                    Email = email,
+                    FullName = engineer.FullName,
+                    UserType = UserType.Engineer,
+                    EngineerId = engineer.Id
+                };
 
-            return response;
+                var createResult = await _userManager.CreateAsync(user, request.Password);
+
+                if (!createResult.Succeeded)
+                {
+                    var errors = string.Join(", ", createResult.Errors.Select(x => x.Description));
+                    throw new InvalidOperationException(errors);
+                }
+
+                // Link Engineer profile to the user
+                engineer.UserId = user.Id;
+                _context.Engineers.Update(engineer);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                // Assign role
+                await AssignSingleBusinessRoleAsync(user, AppRoles.ENGINEER, cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                var response = await BuildUserAccountResponseAsync(user, cancellationToken);
+
+                await _auditLogService.CreateAsync(
+                    new CreateAuditLogRequest
+                    {
+                        ActionType = AuditActionType.EngineerUserCreated,
+                        PerformedByUserId = performedByUserId,
+                        PerformedByEmail = performedByEmail,
+                        EntityName = nameof(ApplicationUser),
+                        EntityPublicId = user.Id,
+                        Description = $"Admin created engineer user '{user.Email}'.",
+                        MetadataJson = JsonSerializer.Serialize(new
+                        {
+                            createdUserId = user.Id,
+                            engineerPublicId = response.EngineerPublicId,
+                            user.Email,
+                            user.FullName,
+                            roles = response.Roles
+                        })
+                    },
+                    cancellationToken);
+
+                return response;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
 
         private async Task<(Guid? DevicePublicId, string? DeviceName)> GetActiveDeviceForUserAsync(
@@ -633,5 +670,148 @@ namespace FutureOfEgypt.Infrastructure.Services
             };
         }
 
+        public async Task<UserAccountResponse> CreateFirstAdminAsync(
+            CreateFirstAdminRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            await EnsureRoleExistsAsync(AppRoles.ADMIN);
+
+            var admins = await _userManager.GetUsersInRoleAsync(AppRoles.ADMIN);
+
+            if (admins.Any())
+            {
+                throw new InvalidOperationException("First admin already exists. Use an existing admin account to create more admins.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Email))
+                throw new InvalidOperationException("Email is required.");
+
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new InvalidOperationException("Password is required.");
+
+            var normalizedEmail = request.Email.Trim();
+
+            var existingUser = await _userManager.FindByEmailAsync(normalizedEmail);
+
+            if (existingUser is not null)
+                throw new InvalidOperationException("A user with this email already exists.");
+
+            var displayName = string.IsNullOrWhiteSpace(request.UserName)
+                ? normalizedEmail
+                : request.UserName.Trim();
+
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var user = new ApplicationUser
+                {
+                    UserName = string.IsNullOrWhiteSpace(request.UserName)
+                        ? normalizedEmail
+                        : request.UserName.Trim(),
+
+                    Email = normalizedEmail,
+                    FullName = displayName,
+                    EmailConfirmed = true,
+                    UserType = UserType.Admin,
+                    EngineerId = null
+                };
+
+                var createUserResult = await _userManager.CreateAsync(user, request.Password);
+
+                if (!createUserResult.Succeeded)
+                {
+                    var errors = string.Join(", ", createUserResult.Errors.Select(x => x.Description));
+                    throw new InvalidOperationException(errors);
+                }
+
+                // Create Admin profile
+                var adminProfile = new Admin
+                {
+                    UserId = user.Id,
+                    FullName = user.FullName,
+                    Email = user.Email
+                };
+                await _context.Admins.AddAsync(adminProfile, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                // Assign role
+                await AssignSingleBusinessRoleAsync(user, AppRoles.ADMIN, cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                return await BuildUserAccountResponseAsync(user, cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        private async Task AssignSingleBusinessRoleAsync(
+            ApplicationUser user,
+            string roleName,
+            CancellationToken cancellationToken)
+        {
+            // 1. Verify user has no other roles assigned
+            var existingRoles = await _userManager.GetRolesAsync(user);
+            if (existingRoles.Any(r => r != roleName))
+            {
+                throw new InvalidOperationException($"User already has role(s): {string.Join(", ", existingRoles)}. A user can only have one business role.");
+            }
+
+            // 2. Verify UserType matches the roleName
+            var expectedType = roleName switch
+            {
+                AppRoles.ADMIN => UserType.Admin,
+                AppRoles.MANAGER => UserType.Manager,
+                AppRoles.ENGINEER => UserType.Engineer,
+                _ => UserType.Unknown
+            };
+
+            if (user.UserType != expectedType)
+            {
+                throw new InvalidOperationException($"UserType '{user.UserType}' does not match the assigned role '{roleName}'.");
+            }
+
+            // 3. Verify the corresponding profile exists
+            if (roleName == AppRoles.ADMIN)
+            {
+                var adminExists = await _context.Admins.AnyAsync(a => a.UserId == user.Id, cancellationToken);
+                if (!adminExists)
+                {
+                    throw new InvalidOperationException("Cannot assign Admin role: Admin profile does not exist.");
+                }
+            }
+            else if (roleName == AppRoles.MANAGER)
+            {
+                var managerExists = await _context.Managers.AnyAsync(m => m.UserId == user.Id, cancellationToken);
+                if (!managerExists)
+                {
+                    throw new InvalidOperationException("Cannot assign Manager role: Manager profile does not exist.");
+                }
+            }
+            else if (roleName == AppRoles.ENGINEER)
+            {
+                if (!user.EngineerId.HasValue)
+                {
+                    throw new InvalidOperationException("Cannot assign Engineer role: EngineerId is not set.");
+                }
+                var engineerExists = await _context.Engineers.AnyAsync(e => e.Id == user.EngineerId.Value, cancellationToken);
+                if (!engineerExists)
+                {
+                    throw new InvalidOperationException("Cannot assign Engineer role: Engineer profile does not exist.");
+                }
+            }
+
+            // 4. Assign the role
+            await EnsureRoleExistsAsync(roleName);
+            var roleResult = await _userManager.AddToRoleAsync(user, roleName);
+            if (!roleResult.Succeeded)
+            {
+                var errors = string.Join(", ", roleResult.Errors.Select(x => x.Description));
+                throw new InvalidOperationException(errors);
+            }
+        }
     }
 }

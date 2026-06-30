@@ -1,4 +1,5 @@
 using FutureOfEgypt.Domain.Entities;
+using FutureOfEgypt.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 
 namespace FutureOfEgypt.Infrastructure.Identity
@@ -7,11 +8,17 @@ namespace FutureOfEgypt.Infrastructure.Identity
     {
         public string FullName { get; set; } = string.Empty;
 
+        public UserType UserType { get; set; }
+
         public int? EngineerId { get; set; }
 
         public string? CompanyEmail { get; set; }
 
         public Engineer? Engineer { get; set; }
+
+        public Manager? Manager { get; set; }
+
+        public Admin? Admin { get; set; }
 
         public string? ProfilePhotoPath { get; set; }
 

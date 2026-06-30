@@ -15,6 +15,10 @@ namespace FutureOfEgypt.Infrastructure.Persistence
 
         public DbSet<Engineer> Engineers { get; set; }
 
+        public DbSet<Manager> Managers { get; set; }
+
+        public DbSet<Admin> Admins { get; set; }
+
         public DbSet<Device> Devices { get; set; }
 
         public DbSet<EngineerDevice> EngineerDevices { get; set; }
@@ -74,6 +78,55 @@ namespace FutureOfEgypt.Infrastructure.Persistence
 
             modelBuilder.Entity<EngineerStatusHistory>()
                 .HasIndex(x => new { x.DeviceId, x.ChangedAtUtc });
+
+            modelBuilder.Entity<Manager>(entity =>
+            {
+                entity.HasOne<ApplicationUser>()
+                    .WithOne(u => u.Manager)
+                    .HasForeignKey<Manager>(m => m.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(m => m.UserId)
+                    .IsUnique();
+            });
+
+            modelBuilder.Entity<Admin>(entity =>
+            {
+                entity.HasOne<ApplicationUser>()
+                    .WithOne(u => u.Admin)
+                    .HasForeignKey<Admin>(a => a.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(a => a.UserId)
+                    .IsUnique();
+            });
+
+            modelBuilder.Entity<Engineer>(entity =>
+            {
+                entity.HasOne<ApplicationUser>()
+                    .WithOne()
+                    .HasForeignKey<Engineer>(e => e.UserId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasIndex(e => e.UserId)
+                    .IsUnique()
+                    .HasFilter("\"UserId\" IS NOT NULL");
+            });
+
+            modelBuilder.Entity<ApplicationUser>(entity =>
+            {
+                entity.Property(u => u.UserType)
+                    .HasConversion<string>();
+
+                entity.HasOne(u => u.Engineer)
+                    .WithMany()
+                    .HasForeignKey(u => u.EngineerId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(u => u.EngineerId)
+                    .IsUnique()
+                    .HasFilter("\"EngineerId\" IS NOT NULL");
+            });
         }
     }
 }

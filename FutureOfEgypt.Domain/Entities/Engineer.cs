@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Common;
+using FutureOfEgypt.Domain.Common;
 using FutureOfEgypt.Domain.Enums;
 
 namespace FutureOfEgypt.Domain.Entities
@@ -13,6 +13,8 @@ namespace FutureOfEgypt.Domain.Entities
         public string? PhoneNumber { get; set; }
 
         public string? Email { get; set; }
+
+        public Guid? UserId { get; set; }
 
         public EngineerStatus Status { get; set; } = EngineerStatus.Inactive;
     }

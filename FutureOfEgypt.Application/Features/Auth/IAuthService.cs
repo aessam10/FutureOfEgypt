@@ -1,4 +1,4 @@
-﻿namespace FutureOfEgypt.Application.Features.Auth
+namespace FutureOfEgypt.Application.Features.Auth
 {
     public interface IAuthService
     {
@@ -30,6 +30,9 @@
 
         Task LogoutAsync(
             LogoutRequest request,
+            CancellationToken cancellationToken = default);
+        Task<UserAccountResponse> CreateFirstAdminAsync(
+            CreateFirstAdminRequest request,
             CancellationToken cancellationToken = default);
     }
 }

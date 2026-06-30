@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Security;
+using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.Auth;
 using FutureOfEgypt.Extensions;
 using FutureOfEgypt.Infrastructure.Identity;
@@ -43,96 +43,14 @@ namespace FutureOfEgypt.Controllers
             if (request.BootstrapPassword != configuredBootstrapPassword)
                 return Unauthorized(new { message = "Invalid bootstrap password." });
 
-            var adminRoleExists = await _roleManager.RoleExistsAsync(AppRoles.ADMIN);
-
-            if (!adminRoleExists)
-            {
-                var roleResult = await _roleManager.CreateAsync(
-                    new ApplicationRole
-                    {
-                        Name = AppRoles.ADMIN
-                    });
-
-                if (!roleResult.Succeeded)
-                {
-                    return BadRequest(new
-                    {
-                        message = "Failed to create Admin role.",
-                        errors = roleResult.Errors.Select(x => x.Description)
-                    });
-                }
-            }
-
-            var admins = await _userManager.GetUsersInRoleAsync(AppRoles.ADMIN);
-
-            if (admins.Any())
-            {
-                return BadRequest(new
-                {
-                    message = "First admin already exists. Use an existing admin account to create more admins."
-                });
-            }
-
-            if (string.IsNullOrWhiteSpace(request.Email))
-                return BadRequest(new { message = "Email is required." });
-
-            if (string.IsNullOrWhiteSpace(request.Password))
-                return BadRequest(new { message = "Password is required." });
-
-            var normalizedEmail = request.Email.Trim();
-
-            var existingUser = await _userManager.FindByEmailAsync(normalizedEmail);
-
-            if (existingUser is not null)
-                return BadRequest(new { message = "A user with this email already exists." });
-
-            var displayName = string.IsNullOrWhiteSpace(request.UserName)
-                ? normalizedEmail
-                : request.UserName.Trim();
-
-            var user = new ApplicationUser
-            {
-                UserName = string.IsNullOrWhiteSpace(request.UserName)
-                    ? normalizedEmail
-                    : request.UserName.Trim(),
-
-                Email = normalizedEmail,
-                FullName = displayName,
-                EmailConfirmed = true
-            };
-
-            var createUserResult = await _userManager.CreateAsync(
-                user,
-                request.Password);
-
-            if (!createUserResult.Succeeded)
-            {
-                return BadRequest(new
-                {
-                    message = "Failed to create first admin.",
-                    errors = createUserResult.Errors.Select(x => x.Description)
-                });
-            }
-
-            var addRoleResult = await _userManager.AddToRoleAsync(
-                user,
-                AppRoles.ADMIN);
-            
-            if (!addRoleResult.Succeeded)
-            {
-                return BadRequest(new
-                {
-                    message = "Failed to assign Admin role.",
-                    errors = addRoleResult.Errors.Select(x => x.Description)
-                });
-            }
+            var result = await _authService.CreateFirstAdminAsync(request, cancellationToken);
 
             return Ok(new
             {
                 message = "First admin created successfully.",
-                id = user.Id,
-                email = user.Email,
-                fullName = user.FullName,
+                id = result.UserId,
+                email = result.Email,
+                fullName = result.FullName,
                 role = AppRoles.ADMIN
             });
         }
