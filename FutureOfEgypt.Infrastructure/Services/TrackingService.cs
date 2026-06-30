@@ -786,17 +786,40 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);
 
-            var latestRecoveryEvents = await _context.DeviceRecoveryEvents
+            var devicePublicIds = locations.Select(l => l.DevicePublicId).Distinct().ToList();
+
+            var devices = await _context.Devices
                 .AsNoTracking()
+                .Where(d => devicePublicIds.Contains(d.PublicId))
+                .Select(d => new { d.Id, d.PublicId })
+                .ToDictionaryAsync(d => d.PublicId, d => d.Id, cancellationToken);
+
+            var deviceIds = devices.Values.ToList();
+
+            var recoveryEvents = await _context.DeviceRecoveryEvents
+                .AsNoTracking()
+                .Where(re => deviceIds.Contains(re.DeviceId))
+                .Select(re => new
+                {
+                    re.DeviceId,
+                    re.RecoveryReason,
+                    re.CreatedAtUtc,
+                    re.UploadedPointsCount,
+                    re.DroppedPointsCount
+                })
+                .ToListAsync(cancellationToken);
+
+            var latestRecoveryEvents = recoveryEvents
                 .GroupBy(re => re.DeviceId)
-                .Select(g => g.OrderByDescending(re => re.CreatedAtUtc).FirstOrDefault())
-                .Where(re => re != null)
-                .ToDictionaryAsync(re => re!.DeviceId, cancellationToken);
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(re => re.CreatedAtUtc).First()
+                );
 
             foreach (var loc in locations)
             {
-                var device = await _context.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.PublicId == loc.DevicePublicId, cancellationToken);
-                if (device != null && latestRecoveryEvents.TryGetValue(device.Id, out var re) && re != null)
+                if (devices.TryGetValue(loc.DevicePublicId, out var deviceId) &&
+                    latestRecoveryEvents.TryGetValue(deviceId, out var re))
                 {
                     loc.LastRecoveryReason = re.RecoveryReason;
                     loc.LastRecoveryAtUtc = re.CreatedAtUtc;
@@ -857,17 +880,40 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);
 
-            var latestRecoveryEvents = await _context.DeviceRecoveryEvents
+            var devicePublicIds = locations.Select(l => l.DevicePublicId).Distinct().ToList();
+
+            var devices = await _context.Devices
                 .AsNoTracking()
+                .Where(d => devicePublicIds.Contains(d.PublicId))
+                .Select(d => new { d.Id, d.PublicId })
+                .ToDictionaryAsync(d => d.PublicId, d => d.Id, cancellationToken);
+
+            var deviceIds = devices.Values.ToList();
+
+            var recoveryEvents = await _context.DeviceRecoveryEvents
+                .AsNoTracking()
+                .Where(re => deviceIds.Contains(re.DeviceId))
+                .Select(re => new
+                {
+                    re.DeviceId,
+                    re.RecoveryReason,
+                    re.CreatedAtUtc,
+                    re.UploadedPointsCount,
+                    re.DroppedPointsCount
+                })
+                .ToListAsync(cancellationToken);
+
+            var latestRecoveryEvents = recoveryEvents
                 .GroupBy(re => re.DeviceId)
-                .Select(g => g.OrderByDescending(re => re.CreatedAtUtc).FirstOrDefault())
-                .Where(re => re != null)
-                .ToDictionaryAsync(re => re!.DeviceId, cancellationToken);
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(re => re.CreatedAtUtc).First()
+                );
 
             foreach (var loc in locations)
             {
-                var device = await _context.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.PublicId == loc.DevicePublicId, cancellationToken);
-                if (device != null && latestRecoveryEvents.TryGetValue(device.Id, out var re) && re != null)
+                if (devices.TryGetValue(loc.DevicePublicId, out var deviceId) &&
+                    latestRecoveryEvents.TryGetValue(deviceId, out var re))
                 {
                     loc.LastRecoveryReason = re.RecoveryReason;
                     loc.LastRecoveryAtUtc = re.CreatedAtUtc;
