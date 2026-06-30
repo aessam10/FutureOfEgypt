@@ -466,7 +466,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      TrackingStatusReason = health != null ? health.TrackingStatusReason : null,
                                      LastHealthReportAt = health != null ? health.LastHealthReportAt : null,
                                      BackgroundServiceAlive = health != null && health.BackgroundServiceAlive,
-                                     BatteryOptimizationIgnored = health == null || health.BatteryOptimizationIgnored,
+                                     BatteryOptimizationIgnored = health != null ? health.BatteryOptimizationIgnored : null,
                                      LastTickAtUtc = health != null ? health.LastTickAtUtc : null,
                                      LastError = health != null ? health.LastError : null
                                  };
@@ -517,7 +517,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      TrackingStatusReason = health != null ? health.TrackingStatusReason : null,
                                      LastHealthReportAt = health != null ? health.LastHealthReportAt : null,
                                      BackgroundServiceAlive = health != null && health.BackgroundServiceAlive,
-                                     BatteryOptimizationIgnored = health == null || health.BatteryOptimizationIgnored,
+                                     BatteryOptimizationIgnored = health != null ? health.BatteryOptimizationIgnored : null,
                                      LastTickAtUtc = health != null ? health.LastTickAtUtc : null,
                                      LastError = health != null ? health.LastError : null
                                  };
