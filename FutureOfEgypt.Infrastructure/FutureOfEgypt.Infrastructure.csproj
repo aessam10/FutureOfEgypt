@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Repositories\**" />
+    <EmbeddedResource Remove="Repositories\**" />
+    <None Remove="Repositories\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FutureOfEgypt.Application\FutureOfEgypt.Application.csproj" />
     <ProjectReference Include="..\FutureOfEgypt.Domain\FutureOfEgypt.Domain.csproj" />
   </ItemGroup>
@@ -25,10 +31,6 @@
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.19.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.19.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Repositories\" />
   </ItemGroup>
 
 </Project>

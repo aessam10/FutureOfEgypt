@@ -7,11 +7,60 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FutureOfEgypt.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialPostgres : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.CreateTable(
+                name: "AppNotifications",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Title = table.Column<string>(type: "text", nullable: false),
+                    Message = table.Column<string>(type: "text", nullable: false),
+                    Type = table.Column<string>(type: "text", nullable: false),
+                    IsRead = table.Column<bool>(type: "boolean", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppNotifications", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppReleases",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Platform = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    VersionName = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    VersionCode = table.Column<int>(type: "integer", nullable: false),
+                    MinimumRecommendedVersionCode = table.Column<int>(type: "integer", nullable: true),
+                    MinimumRequiredVersionCode = table.Column<int>(type: "integer", nullable: true),
+                    MinimumMandatoryVersionCode = table.Column<int>(type: "integer", nullable: true),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    ApkFileName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    ApkDownloadUrl = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    ApkSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    FileSizeBytes = table.Column<long>(type: "bigint", nullable: false),
+                    ReleaseNotes = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
+                    PublishedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppReleases", x => x.Id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "AspNetRoles",
                 columns: table => new
@@ -51,6 +100,26 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ChatConversations",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    Type = table.Column<int>(type: "integer", nullable: false),
+                    CreatedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LastMessageAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ChatConversations", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Devices",
                 columns: table => new
                 {
@@ -71,6 +140,34 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Devices", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "EmailMessages",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    SenderUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SenderFullName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    FromEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false),
+                    ToEmails = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    CcEmails = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    BccEmails = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    Subject = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Body = table.Column<string>(type: "text", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    ProviderMessageId = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    ErrorMessage = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    SentAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_EmailMessages", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -115,12 +212,45 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ChatMessages",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ConversationId = table.Column<int>(type: "integer", nullable: false),
+                    SenderUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    MessageText = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: false),
+                    Type = table.Column<int>(type: "integer", nullable: false),
+                    SentAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    EditedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ChatMessages", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ChatMessages_ChatConversations_ConversationId",
+                        column: x => x.ConversationId,
+                        principalTable: "ChatConversations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AspNetUsers",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     FullName = table.Column<string>(type: "text", nullable: false),
                     EngineerId = table.Column<int>(type: "integer", nullable: true),
+                    CompanyEmail = table.Column<string>(type: "text", nullable: true),
+                    ProfilePhotoPath = table.Column<string>(type: "text", nullable: true),
+                    IsSuspended = table.Column<bool>(type: "boolean", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
                     UserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     NormalizedUserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
@@ -187,6 +317,53 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "DeviceAppStatuses",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    DeviceId = table.Column<int>(type: "integer", nullable: true),
+                    EngineerId = table.Column<int>(type: "integer", nullable: true),
+                    InstallationId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Platform = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    AppVersionName = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    AppVersionCode = table.Column<int>(type: "integer", nullable: false),
+                    LatestVersionCode = table.Column<int>(type: "integer", nullable: true),
+                    MinimumRecommendedVersionCode = table.Column<int>(type: "integer", nullable: true),
+                    MinimumRequiredVersionCode = table.Column<int>(type: "integer", nullable: true),
+                    MinimumMandatoryVersionCode = table.Column<int>(type: "integer", nullable: true),
+                    UpdateLevel = table.Column<int>(type: "integer", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    LastCheckedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastReportedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastUpdatePromptShownAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastUpdateStartedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastUpdateFailedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastError = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    RequiredReleasePublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DeviceAppStatuses", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DeviceAppStatuses_Devices_DeviceId",
+                        column: x => x.DeviceId,
+                        principalTable: "Devices",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_DeviceAppStatuses_Engineers_EngineerId",
+                        column: x => x.EngineerId,
+                        principalTable: "Engineers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "DeviceLatestLocations",
                 columns: table => new
                 {
@@ -199,6 +376,11 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     Accuracy = table.Column<double>(type: "double precision", nullable: true),
                     Speed = table.Column<double>(type: "double precision", nullable: true),
                     IsMocked = table.Column<bool>(type: "boolean", nullable: false),
+                    IsOnline = table.Column<bool>(type: "boolean", nullable: false),
+                    IsHidden = table.Column<bool>(type: "boolean", nullable: false),
+                    HiddenAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    HiddenByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    HiddenReason = table.Column<string>(type: "text", nullable: true),
                     RecordedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     ReceivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     PublicId = table.Column<Guid>(type: "uuid", nullable: false),
@@ -217,6 +399,44 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_DeviceLatestLocations_Engineers_EngineerId",
+                        column: x => x.EngineerId,
+                        principalTable: "Engineers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DeviceTrackingHealthStatuses",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    DeviceId = table.Column<int>(type: "integer", nullable: false),
+                    EngineerId = table.Column<int>(type: "integer", nullable: false),
+                    TrackingStatusReason = table.Column<string>(type: "text", nullable: true),
+                    LastHealthReportAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    HealthAuthState = table.Column<string>(type: "text", nullable: true),
+                    LocationPermissionState = table.Column<string>(type: "text", nullable: true),
+                    LocationServiceEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    BackgroundPermissionState = table.Column<string>(type: "text", nullable: true),
+                    BatteryOptimizationState = table.Column<string>(type: "text", nullable: true),
+                    InternetAvailable = table.Column<bool>(type: "boolean", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DeviceTrackingHealthStatuses", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DeviceTrackingHealthStatuses_Devices_DeviceId",
+                        column: x => x.DeviceId,
+                        principalTable: "Devices",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_DeviceTrackingHealthStatuses_Engineers_EngineerId",
                         column: x => x.EngineerId,
                         principalTable: "Engineers",
                         principalColumn: "Id",
@@ -250,6 +470,38 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_EngineerDevices_Engineers_EngineerId",
+                        column: x => x.EngineerId,
+                        principalTable: "Engineers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "EngineerStatusHistories",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    EngineerId = table.Column<int>(type: "integer", nullable: false),
+                    DeviceId = table.Column<int>(type: "integer", nullable: true),
+                    IsOnline = table.Column<bool>(type: "boolean", nullable: false),
+                    Reason = table.Column<string>(type: "text", nullable: true),
+                    ChangedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_EngineerStatusHistories", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_EngineerStatusHistories_Devices_DeviceId",
+                        column: x => x.DeviceId,
+                        principalTable: "Devices",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_EngineerStatusHistories_Engineers_EngineerId",
                         column: x => x.EngineerId,
                         principalTable: "Engineers",
                         principalColumn: "Id",
@@ -291,6 +543,41 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         principalTable: "Engineers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ChatParticipants",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ConversationId = table.Column<int>(type: "integer", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Role = table.Column<int>(type: "integer", nullable: false),
+                    JoinedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LeftAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsMuted = table.Column<bool>(type: "boolean", nullable: false),
+                    LastReadMessageId = table.Column<int>(type: "integer", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ChatParticipants", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ChatParticipants_ChatConversations_ConversationId",
+                        column: x => x.ConversationId,
+                        principalTable: "ChatConversations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_ChatParticipants_ChatMessages_LastReadMessageId",
+                        column: x => x.LastReadMessageId,
+                        principalTable: "ChatMessages",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -403,6 +690,28 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppNotifications_PublicId",
+                table: "AppNotifications",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppReleases_Platform_IsActive",
+                table: "AppReleases",
+                columns: new[] { "Platform", "IsActive" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppReleases_PublicId",
+                table: "AppReleases",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppReleases_VersionCode",
+                table: "AppReleases",
+                column: "VersionCode");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AspNetRoleClaims_RoleId",
                 table: "AspNetRoleClaims",
                 column: "RoleId");
@@ -476,6 +785,81 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_ChatConversations_CreatedByUserId",
+                table: "ChatConversations",
+                column: "CreatedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatConversations_LastMessageAtUtc",
+                table: "ChatConversations",
+                column: "LastMessageAtUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatConversations_PublicId",
+                table: "ChatConversations",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatConversations_Type",
+                table: "ChatConversations",
+                column: "Type");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatMessages_ConversationId",
+                table: "ChatMessages",
+                column: "ConversationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatMessages_ConversationId_SentAtUtc",
+                table: "ChatMessages",
+                columns: new[] { "ConversationId", "SentAtUtc" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatMessages_PublicId",
+                table: "ChatMessages",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatMessages_SenderUserId",
+                table: "ChatMessages",
+                column: "SenderUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatParticipants_ConversationId",
+                table: "ChatParticipants",
+                column: "ConversationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatParticipants_ConversationId_UserId",
+                table: "ChatParticipants",
+                columns: new[] { "ConversationId", "UserId" },
+                unique: true,
+                filter: "\"IsDeleted\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatParticipants_LastReadMessageId",
+                table: "ChatParticipants",
+                column: "LastReadMessageId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatParticipants_PublicId",
+                table: "ChatParticipants",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatParticipants_UserId",
+                table: "ChatParticipants",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChatParticipants_UserId_LeftAtUtc",
+                table: "ChatParticipants",
+                columns: new[] { "UserId", "LeftAtUtc" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_DeviceAccessRequests_CreatedDeviceId",
                 table: "DeviceAccessRequests",
                 column: "CreatedDeviceId");
@@ -512,6 +896,34 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 name: "IX_DeviceAccessRequests_Status",
                 table: "DeviceAccessRequests",
                 column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceAppStatuses_DeviceId",
+                table: "DeviceAppStatuses",
+                column: "DeviceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceAppStatuses_EngineerId",
+                table: "DeviceAppStatuses",
+                column: "EngineerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceAppStatuses_InstallationId",
+                table: "DeviceAppStatuses",
+                column: "InstallationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceAppStatuses_Platform_InstallationId",
+                table: "DeviceAppStatuses",
+                columns: new[] { "Platform", "InstallationId" },
+                unique: true,
+                filter: "\"IsDeleted\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceAppStatuses_PublicId",
+                table: "DeviceAppStatuses",
+                column: "PublicId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_DeviceLatestLocations_DeviceId",
@@ -554,6 +966,43 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 column: "SerialNumber");
 
             migrationBuilder.CreateIndex(
+                name: "IX_DeviceTrackingHealthStatuses_DeviceId",
+                table: "DeviceTrackingHealthStatuses",
+                column: "DeviceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceTrackingHealthStatuses_EngineerId",
+                table: "DeviceTrackingHealthStatuses",
+                column: "EngineerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceTrackingHealthStatuses_PublicId",
+                table: "DeviceTrackingHealthStatuses",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmailMessages_PublicId",
+                table: "EmailMessages",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmailMessages_SenderUserId",
+                table: "EmailMessages",
+                column: "SenderUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmailMessages_SentAtUtc",
+                table: "EmailMessages",
+                column: "SentAtUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmailMessages_Status",
+                table: "EmailMessages",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_EngineerDevices_DeviceId",
                 table: "EngineerDevices",
                 column: "DeviceId",
@@ -576,6 +1025,22 @@ namespace FutureOfEgypt.Infrastructure.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_Engineers_PublicId",
                 table: "Engineers",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EngineerStatusHistories_DeviceId_ChangedAtUtc",
+                table: "EngineerStatusHistories",
+                columns: new[] { "DeviceId", "ChangedAtUtc" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EngineerStatusHistories_EngineerId_ChangedAtUtc",
+                table: "EngineerStatusHistories",
+                columns: new[] { "EngineerId", "ChangedAtUtc" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EngineerStatusHistories_PublicId",
+                table: "EngineerStatusHistories",
                 column: "PublicId",
                 unique: true);
 
@@ -611,6 +1076,12 @@ namespace FutureOfEgypt.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "AppNotifications");
+
+            migrationBuilder.DropTable(
+                name: "AppReleases");
+
+            migrationBuilder.DropTable(
                 name: "AspNetRoleClaims");
 
             migrationBuilder.DropTable(
@@ -629,13 +1100,28 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 name: "AuditLogs");
 
             migrationBuilder.DropTable(
+                name: "ChatParticipants");
+
+            migrationBuilder.DropTable(
                 name: "DeviceAccessRequests");
+
+            migrationBuilder.DropTable(
+                name: "DeviceAppStatuses");
 
             migrationBuilder.DropTable(
                 name: "DeviceLatestLocations");
 
             migrationBuilder.DropTable(
+                name: "DeviceTrackingHealthStatuses");
+
+            migrationBuilder.DropTable(
+                name: "EmailMessages");
+
+            migrationBuilder.DropTable(
                 name: "EngineerDevices");
+
+            migrationBuilder.DropTable(
+                name: "EngineerStatusHistories");
 
             migrationBuilder.DropTable(
                 name: "LocationHistories");
@@ -647,10 +1133,16 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
+                name: "ChatMessages");
+
+            migrationBuilder.DropTable(
                 name: "Devices");
 
             migrationBuilder.DropTable(
                 name: "AspNetUsers");
+
+            migrationBuilder.DropTable(
+                name: "ChatConversations");
 
             migrationBuilder.DropTable(
                 name: "Engineers");

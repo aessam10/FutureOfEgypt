@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FutureOfEgypt.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260621222031_AddDeviceLocationHiddenFields")]
-    partial class AddDeviceLocationHiddenFields
+    [Migration("20260624170132_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -66,6 +66,88 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("AppNotifications");
+                });
+
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.AppRelease", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApkDownloadUrl")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ApkFileName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ApkSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("MinimumMandatoryVersionCode")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinimumRecommendedVersionCode")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinimumRequiredVersionCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReleaseNotes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("VersionCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("VersionName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("VersionCode");
+
+                    b.HasIndex("Platform", "IsActive");
+
+                    b.ToTable("AppReleases");
                 });
 
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.AuditLog", b =>
@@ -445,6 +527,108 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     b.ToTable("DeviceAccessRequests");
                 });
 
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceAppStatus", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AppVersionCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AppVersionName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DeviceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EngineerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InstallationId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("LastReportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastUpdateFailedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastUpdatePromptShownAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastUpdateStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("LatestVersionCode")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinimumMandatoryVersionCode")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinimumRecommendedVersionCode")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinimumRequiredVersionCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RequiredReleasePublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UpdateLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("EngineerId");
+
+                    b.HasIndex("InstallationId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("Platform", "InstallationId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("DeviceAppStatuses");
+                });
+
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceLatestLocation", b =>
                 {
                     b.Property<int>("Id")
@@ -483,6 +667,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     b.Property<bool>("IsMocked")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("boolean");
+
                     b.Property<double>("Latitude")
                         .HasColumnType("double precision");
 
@@ -515,6 +702,68 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("DeviceLatestLocations");
+                });
+
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceTrackingHealthStatus", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BackgroundPermissionState")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BatteryOptimizationState")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DeviceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EngineerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("HealthAuthState")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("InternetAvailable")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastHealthReportAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LocationPermissionState")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("LocationServiceEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TrackingStatusReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("EngineerId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("DeviceTrackingHealthStatuses");
                 });
 
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.EmailMessage", b =>
@@ -692,6 +941,53 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     b.ToTable("EngineerDevices");
                 });
 
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.EngineerStatusHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DeviceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EngineerId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("DeviceId", "ChangedAtUtc");
+
+                    b.HasIndex("EngineerId", "ChangedAtUtc");
+
+                    b.ToTable("EngineerStatusHistories");
+                });
+
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.LocationHistory", b =>
                 {
                     b.Property<int>("Id")
@@ -808,6 +1104,12 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSuspended")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 
@@ -830,6 +1132,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("ProfilePhotoPath")
+                        .HasColumnType("text");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
@@ -1042,7 +1347,43 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     b.Navigation("Engineer");
                 });
 
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceAppStatus", b =>
+                {
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Device", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Engineer", "Engineer")
+                        .WithMany()
+                        .HasForeignKey("EngineerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Device");
+
+                    b.Navigation("Engineer");
+                });
+
             modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceLatestLocation", b =>
+                {
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Device", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Engineer", "Engineer")
+                        .WithMany()
+                        .HasForeignKey("EngineerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Device");
+
+                    b.Navigation("Engineer");
+                });
+
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.DeviceTrackingHealthStatus", b =>
                 {
                     b.HasOne("FutureOfEgypt.Domain.Entities.Device", "Device")
                         .WithMany()
@@ -1068,6 +1409,23 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .HasForeignKey("DeviceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Engineer", "Engineer")
+                        .WithMany()
+                        .HasForeignKey("EngineerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Device");
+
+                    b.Navigation("Engineer");
+                });
+
+            modelBuilder.Entity("FutureOfEgypt.Domain.Entities.EngineerStatusHistory", b =>
+                {
+                    b.HasOne("FutureOfEgypt.Domain.Entities.Device", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId");
 
                     b.HasOne("FutureOfEgypt.Domain.Entities.Engineer", "Engineer")
                         .WithMany()

@@ -9,7 +9,7 @@ import 'package:future_of_egypt_mobile/features/app_update/app_update_models.dar
 import 'package:future_of_egypt_mobile/features/tracking/tracking_config_service.dart';
 
 class AppUpdateService {
-  static const String baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:5151/api');
+  static const String baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://51.75.128.157:5151/api');
 
   static Future<AppUpdateCheckResponse?> checkUpdate() async {
     try {
