@@ -138,8 +138,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                     LastSeenAtUtc = x.LastSeenAtUtc,
                     CreatedAt = x.CreatedAt,
                     AssignedEngineerName = _context.EngineerDevices
-                        .Where(ed => ed.DeviceId == x.Id && ed.IsActive && !ed.IsDeleted)
-                        .Select(ed => ed.Engineer!.FullName)
+                        .Where(ed => ed.DeviceId == x.Id && ed.IsActive && !ed.IsDeleted && !ed.Engineer!.IsDeleted)
+                        .Select(ed => ed.Engineer.FullName)
                         .FirstOrDefault()
                 })
                 .ToListAsync(cancellationToken);
@@ -185,8 +185,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                     LastSeenAtUtc = device.LastSeenAtUtc,
                     CreatedAt = device.CreatedAt,
                     AssignedEngineerName = await _context.EngineerDevices
-                        .Where(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted)
-                        .Select(ed => ed.Engineer!.FullName)
+                        .Where(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted && !ed.Engineer!.IsDeleted)
+                        .Select(ed => ed.Engineer.FullName)
                         .FirstOrDefaultAsync(cancellationToken)
                 };
             }
@@ -253,8 +253,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                 LastSeenAtUtc = device.LastSeenAtUtc,
                 CreatedAt = device.CreatedAt,
                 AssignedEngineerName = await _context.EngineerDevices
-                    .Where(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted)
-                    .Select(ed => ed.Engineer!.FullName)
+                    .Where(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted && !ed.Engineer!.IsDeleted)
+                    .Select(ed => ed.Engineer.FullName)
                     .FirstOrDefaultAsync(cancellationToken)
             };
         }

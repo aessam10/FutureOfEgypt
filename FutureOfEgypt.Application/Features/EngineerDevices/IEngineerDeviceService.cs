@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 
 namespace FutureOfEgypt.Application.Features.EngineerDevices
 {
@@ -16,6 +16,12 @@ namespace FutureOfEgypt.Application.Features.EngineerDevices
 
         Task<PagedResponse<EngineerDeviceResponse>> GetActiveAssignmentsAsync(
             EngineerDevicesQueryRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task UnassignDeviceAsync(
+            Guid adminUserId,
+            string adminEmail,
+            Guid assignmentPublicId,
             CancellationToken cancellationToken = default);
     }
 }

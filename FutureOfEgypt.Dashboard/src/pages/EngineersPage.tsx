@@ -110,6 +110,10 @@ export function EngineersPage() {
     mutationFn: (publicId: string) => import('../api/engineersApi').then(m => m.deleteEngineer(publicId)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['engineers'] });
+      await queryClient.invalidateQueries({ queryKey: ['devices'] });
+      await queryClient.invalidateQueries({ queryKey: ['active-assignments'] });
+      await queryClient.invalidateQueries({ queryKey: ['latest-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['hidden-locations'] });
       setMenuAnchor(null);
       setSelectedEngineer(null);
     },

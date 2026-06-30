@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Security;
+using FutureOfEgypt.Application.Common.Security;
 using FutureOfEgypt.Application.Features.EngineerDevices;
 using FutureOfEgypt.Extensions;
 using Microsoft.AspNetCore.Authorization;
@@ -57,6 +57,23 @@ namespace FutureOfEgypt.Controllers
                 cancellationToken);
 
             return Ok(result);
+        }
+
+        [HttpPost("{assignmentPublicId:guid}/unassign")]
+        public async Task<IActionResult> Unassign(
+            Guid assignmentPublicId,
+            CancellationToken cancellationToken)
+        {
+            var adminUserId = User.GetUserId();
+            var adminEmail = User.GetUserEmail();
+
+            await _engineerDeviceService.UnassignDeviceAsync(
+                adminUserId,
+                adminEmail,
+                assignmentPublicId,
+                cancellationToken);
+
+            return NoContent();
         }
     }
 }

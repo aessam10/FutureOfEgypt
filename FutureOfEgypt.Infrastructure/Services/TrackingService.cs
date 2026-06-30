@@ -756,7 +756,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                                  from u in uGroup.DefaultIfEmpty()
                                  join health in _context.DeviceTrackingHealthStatuses.AsNoTracking() on loc.DeviceId equals health.DeviceId into healthGroup
                                  from health in healthGroup.DefaultIfEmpty()
-                                 where !loc.IsDeleted && !loc.IsHidden
+                                 where !loc.IsDeleted && !loc.IsHidden && !eng.IsDeleted && !dev.IsDeleted
                                  orderby loc.ReceivedAt descending
                                  select new LatestLocationResponse
                                  {
@@ -850,7 +850,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                                  from u in uGroup.DefaultIfEmpty()
                                  join health in _context.DeviceTrackingHealthStatuses.AsNoTracking() on loc.DeviceId equals health.DeviceId into healthGroup
                                  from health in healthGroup.DefaultIfEmpty()
-                                 where !loc.IsDeleted && loc.IsHidden
+                                 where !loc.IsDeleted && loc.IsHidden && !eng.IsDeleted && !dev.IsDeleted
                                  orderby loc.ReceivedAt descending
                                  select new LatestLocationResponse
                                  {

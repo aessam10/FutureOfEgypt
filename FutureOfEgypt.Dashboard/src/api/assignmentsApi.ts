@@ -41,3 +41,7 @@ export async function assignDevice(request: AssignDeviceRequest) {
 
   return response.data;
 }
+
+export async function unassignDevice(assignmentPublicId: string) {
+  await axiosClient.post(`/api/EngineerDevices/${assignmentPublicId}/unassign`);
+}

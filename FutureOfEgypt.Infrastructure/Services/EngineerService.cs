@@ -308,6 +308,17 @@ namespace FutureOfEgypt.Infrastructure.Services
                 await _userManager.UpdateAsync(user);
             }
 
+            var activeAssignments = await _context.EngineerDevices
+                .Where(ed => ed.EngineerId == engineer.Id && ed.IsActive && !ed.IsDeleted)
+                .ToListAsync(cancellationToken);
+
+            foreach (var ed in activeAssignments)
+            {
+                ed.IsActive = false;
+                ed.UnassignedAtUtc = DateTime.UtcNow;
+                ed.UpdatedAt = DateTime.UtcNow;
+            }
+
             var latestLocations = await _context.DeviceLatestLocations
                 .Where(x => x.EngineerId == engineer.Id && x.IsOnline && !x.IsDeleted)
                 .ToListAsync(cancellationToken);

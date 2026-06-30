@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 using FutureOfEgypt.Application.Features.AuditLog;
 using FutureOfEgypt.Application.Features.EngineerDevices;
 using FutureOfEgypt.Domain.Entities;
@@ -168,7 +168,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .AsNoTracking()
                 .Include(x => x.Engineer)
                 .Include(x => x.Device)
-                .Where(x => !x.IsDeleted);
+                .Where(x => !x.IsDeleted && x.Engineer != null && !x.Engineer.IsDeleted && x.Device != null && !x.Device.IsDeleted);
 
             if (forceActiveOnly)
             {
@@ -231,6 +231,71 @@ namespace FutureOfEgypt.Infrastructure.Services
                 TotalCount = totalCount,
                 TotalPages = totalPages
             };
+        }
+
+        public async Task UnassignDeviceAsync(
+            Guid adminUserId,
+            string adminEmail,
+            Guid assignmentPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            var assignment = await _context.EngineerDevices
+                .Include(x => x.Engineer)
+                .Include(x => x.Device)
+                .FirstOrDefaultAsync(x => x.PublicId == assignmentPublicId && !x.IsDeleted, cancellationToken);
+
+            if (assignment is null)
+                throw new InvalidOperationException("Assignment does not exist.");
+
+            if (!assignment.IsActive)
+                throw new InvalidOperationException("Assignment is already inactive.");
+
+            var now = DateTime.UtcNow;
+            assignment.IsActive = false;
+            assignment.UnassignedAtUtc = now;
+            assignment.UpdatedAt = now;
+
+            _context.EngineerDevices.Update(assignment);
+
+            var latestLoc = await _context.DeviceLatestLocations
+                .FirstOrDefaultAsync(x => x.DeviceId == assignment.DeviceId && x.EngineerId == assignment.EngineerId && !x.IsDeleted, cancellationToken);
+            if (latestLoc != null)
+            {
+                latestLoc.IsOnline = false;
+                latestLoc.UpdatedAt = now;
+                _context.DeviceLatestLocations.Update(latestLoc);
+
+                _context.EngineerStatusHistories.Add(new EngineerStatusHistory
+                {
+                    EngineerId = latestLoc.EngineerId,
+                    DeviceId = latestLoc.DeviceId,
+                    IsOnline = false,
+                    Reason = "Unassigned from device",
+                    ChangedAtUtc = now
+                });
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            await _auditLogService.CreateAsync(
+                new CreateAuditLogRequest
+                {
+                    ActionType = AuditActionType.DeviceInactivated,
+                    PerformedByUserId = adminUserId,
+                    PerformedByEmail = adminEmail,
+                    EntityName = nameof(EngineerDevice),
+                    EntityPublicId = assignment.PublicId,
+                    Description = $"Admin unassigned device '{assignment.Device?.DeviceName}' from engineer '{assignment.Engineer?.FullName}'.",
+                    MetadataJson = JsonSerializer.Serialize(new
+                    {
+                        assignmentPublicId = assignment.PublicId,
+                        engineerPublicId = assignment.Engineer?.PublicId,
+                        engineerName = assignment.Engineer?.FullName,
+                        devicePublicId = assignment.Device?.PublicId,
+                        deviceName = assignment.Device?.DeviceName
+                    })
+                },
+                cancellationToken);
         }
     }
 }

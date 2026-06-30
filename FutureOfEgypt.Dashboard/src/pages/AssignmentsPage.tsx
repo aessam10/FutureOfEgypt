@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { useAuth } from '../auth/AuthContext';
 import {
   Autocomplete,
   Box,
@@ -30,7 +31,7 @@ import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { EmptyState } from '../components/common/EmptyState';
 import { StatusChip } from '../components/status/StatusChip';
-import { assignDevice, getActiveAssignments } from '../api/assignmentsApi';
+import { assignDevice, getActiveAssignments, unassignDevice } from '../api/assignmentsApi';
 import { getEngineers } from '../api/engineersApi';
 import { getDevices } from '../api/devicesApi';
 import type { AssignDeviceRequest } from '../types/assignments';
@@ -39,6 +40,7 @@ import type { DeviceResponse } from '../types/devices';
 
 export function AssignmentsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -80,12 +82,28 @@ export function AssignmentsPage() {
     mutationFn: (req: AssignDeviceRequest) => assignDevice(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['active-assignments'] });
+      await queryClient.invalidateQueries({ queryKey: ['engineers'] });
+      await queryClient.invalidateQueries({ queryKey: ['devices'] });
+      await queryClient.invalidateQueries({ queryKey: ['latest-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['hidden-locations'] });
       setIsAssignDialogOpen(false);
       setSelectedEngineer(null);
       setSelectedDevice(null);
       setFormError(null);
     },
     onError: () => setFormError('Failed to assign device.'),
+  });
+
+  const unassignMutation = useMutation({
+    mutationFn: (publicId: string) => unassignDevice(publicId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['active-assignments'] });
+      await queryClient.invalidateQueries({ queryKey: ['engineers'] });
+      await queryClient.invalidateQueries({ queryKey: ['devices'] });
+      await queryClient.invalidateQueries({ queryKey: ['latest-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['hidden-locations'] });
+    },
+    onError: () => setFormError('Failed to unassign device.'),
   });
 
   function handleAssignSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -168,6 +186,7 @@ export function AssignmentsPage() {
                   <TableCell scope="col">Device</TableCell>
                   <TableCell scope="col">Assigned At</TableCell>
                   <TableCell scope="col">Status</TableCell>
+                  <TableCell scope="col" align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -191,6 +210,23 @@ export function AssignmentsPage() {
                         <StatusChip label="Active" color="success" />
                       ) : (
                         <StatusChip label="Inactive" color="warning" />
+                      )}
+                    </TableCell>
+                    <TableCell align="right">
+                      {assignment.isActive && (user?.roles.includes('Admin') || user?.roles.includes('Manager')) && (
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          size="small"
+                          disabled={unassignMutation.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to unassign ${assignment.deviceName} from ${assignment.engineerName}?`)) {
+                              unassignMutation.mutate(assignment.publicId);
+                            }
+                          }}
+                        >
+                          Unassign
+                        </Button>
                       )}
                     </TableCell>
                   </TableRow>
