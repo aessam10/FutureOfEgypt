@@ -162,9 +162,13 @@ namespace FutureOfEgypt.Infrastructure.Services
             healthStatus.LocationPermissionState = request.LocationPermission;
             healthStatus.LocationServiceEnabled = request.LocationServiceEnabled;
             healthStatus.BackgroundPermissionState = request.BackgroundPermission;
-            healthStatus.BatteryOptimizationState = request.BatteryOptimizationIgnored;
+            healthStatus.BatteryOptimizationIgnored = request.BatteryOptimizationIgnored;
             healthStatus.InternetAvailable = request.InternetAvailable;
             healthStatus.UpdatedAt = DateTime.UtcNow;
+
+            healthStatus.BackgroundServiceAlive = request.BackgroundServiceAlive;
+            healthStatus.LastTickAtUtc = request.LastTickAtUtc;
+            healthStatus.LastError = request.LastError;
 
             await _context.SaveChangesAsync(cancellationToken);
         }
@@ -222,15 +226,22 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (request.Longitude < -180 || request.Longitude > 180)
                 throw new InvalidOperationException("Invalid longitude.");
 
-            if (request.RecordedAt > DateTime.UtcNow.AddMinutes(1))
-                throw new InvalidOperationException("Recorded time cannot be in the future.");
             if (request.Accuracy.HasValue && request.Accuracy.Value < 0)
                 throw new InvalidOperationException("Invalid accuracy.");
 
             if (request.Speed.HasValue && request.Speed.Value < 0)
                 throw new InvalidOperationException("Invalid speed.");
 
-            if (!TrackingScheduleHelper.IsWithinWorkingHours(_scheduleOptions, DateTime.UtcNow))
+            var receivedAtUtc = DateTime.UtcNow;
+            var checkTime = request.RecordedAt;
+
+            // Sanity check: RecordedAt must not be in the future by more than 10 minutes, and not in the past by more than 24 hours
+            if (request.RecordedAt > receivedAtUtc.AddMinutes(10) || request.RecordedAt < receivedAtUtc.AddHours(-24))
+            {
+                checkTime = receivedAtUtc;
+            }
+
+            if (!TrackingScheduleHelper.IsWithinWorkingHours(_scheduleOptions, checkTime))
             {
                 var existingLatest = await _context.DeviceLatestLocations
                     .FirstOrDefaultAsync(x => x.DeviceId == device.Id && !x.IsDeleted, cancellationToken);
@@ -276,10 +287,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                 };
             }
 
-            device.LastSeenAtUtc = DateTime.UtcNow;
-            device.UpdatedAt = DateTime.UtcNow;
-
-            var receivedAtUtc = DateTime.UtcNow;
+            device.LastSeenAtUtc = receivedAtUtc;
+            device.UpdatedAt = receivedAtUtc;
 
             var locationHistory = new LocationHistory
             {
@@ -410,7 +419,11 @@ namespace FutureOfEgypt.Infrastructure.Services
                      RecordedAt = request.RecordedAt,
                      ReceivedAt = receivedAtUtc,
                      TrackingStatusReason = healthStatus?.TrackingStatusReason,
-                     LastHealthReportAt = healthStatus?.LastHealthReportAt
+                     LastHealthReportAt = healthStatus?.LastHealthReportAt,
+                     BackgroundServiceAlive = healthStatus?.BackgroundServiceAlive ?? false,
+                     BatteryOptimizationIgnored = healthStatus?.BatteryOptimizationIgnored,
+                     LastTickAtUtc = healthStatus?.LastTickAtUtc,
+                     LastError = healthStatus?.LastError
                  }, cancellationToken);
                  
             return new ReceiveLocationUpdateResponse
@@ -451,7 +464,11 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      RecordedAt = loc.RecordedAt,
                                      ReceivedAt = loc.ReceivedAt,
                                      TrackingStatusReason = health != null ? health.TrackingStatusReason : null,
-                                     LastHealthReportAt = health != null ? health.LastHealthReportAt : null
+                                     LastHealthReportAt = health != null ? health.LastHealthReportAt : null,
+                                     BackgroundServiceAlive = health != null && health.BackgroundServiceAlive,
+                                     BatteryOptimizationIgnored = health == null || health.BatteryOptimizationIgnored,
+                                     LastTickAtUtc = health != null ? health.LastTickAtUtc : null,
+                                     LastError = health != null ? health.LastError : null
                                  };
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);
@@ -498,7 +515,11 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      RecordedAt = loc.RecordedAt,
                                      ReceivedAt = loc.ReceivedAt,
                                      TrackingStatusReason = health != null ? health.TrackingStatusReason : null,
-                                     LastHealthReportAt = health != null ? health.LastHealthReportAt : null
+                                     LastHealthReportAt = health != null ? health.LastHealthReportAt : null,
+                                     BackgroundServiceAlive = health != null && health.BackgroundServiceAlive,
+                                     BatteryOptimizationIgnored = health == null || health.BatteryOptimizationIgnored,
+                                     LastTickAtUtc = health != null ? health.LastTickAtUtc : null,
+                                     LastError = health != null ? health.LastError : null
                                  };
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);

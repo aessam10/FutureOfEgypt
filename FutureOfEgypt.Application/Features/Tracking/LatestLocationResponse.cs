@@ -39,5 +39,13 @@ namespace FutureOfEgypt.Application.Features.Tracking
         public string? TrackingStatusReason { get; set; }
 
         public DateTime? LastHealthReportAt { get; set; }
+
+        public bool BackgroundServiceAlive { get; set; }
+
+        public bool? BatteryOptimizationIgnored { get; set; }
+
+        public DateTime? LastTickAtUtc { get; set; }
+
+        public string? LastError { get; set; }
     }
 }

@@ -10,7 +10,7 @@ namespace FutureOfEgypt.Application.Features.Tracking
 
         public bool LocationServiceEnabled { get; set; }
 
-        public string? BatteryOptimizationIgnored { get; set; }
+        public bool? BatteryOptimizationIgnored { get; set; }
 
         public bool InternetAvailable { get; set; }
 
@@ -21,5 +21,11 @@ namespace FutureOfEgypt.Application.Features.Tracking
         public string? Reason { get; set; }
 
         public DateTime ReportedAtUtc { get; set; }
+
+        public bool BackgroundServiceAlive { get; set; }
+
+        public DateTime? LastTickAtUtc { get; set; }
+
+        public string? LastError { get; set; }
     }
 }

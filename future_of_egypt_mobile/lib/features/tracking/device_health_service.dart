@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/api_client.dart';
 
@@ -11,22 +12,17 @@ class DeviceHealthService {
     required String token,
     required String engineerPublicId,
     required String devicePublicId,
+    bool? backgroundServiceAlive,
+    DateTime? lastTickAtUtc,
+    String? lastError,
     String? fallbackReason,
   }) async {
     if (kIsWeb) return null;
 
-    // 1. Location Permission Check
-    final locStatus = await Permission.location.status;
-    String locPermission = locStatus.name;
-
-    // 2. Background Location Check (Android 10+)
-    String bgPermission = 'granted';
-    if (Platform.isAndroid) {
-      final bgStatus = await Permission.locationAlways.status;
-      bgPermission = bgStatus.name;
-    }
-
-    // 3. Location Service Check (GPS)
+    // 1. Location and Background Permission Check using Geolocator (Safe in background isolates)
+    final permission = await Geolocator.checkPermission();
+    
+    // 2. Location Service Check (GPS)
     bool hasGps = false;
     try {
       hasGps = await Geolocator.isLocationServiceEnabled();
@@ -34,24 +30,59 @@ class DeviceHealthService {
       hasGps = false;
     }
 
-    // 4. Battery Optimization Check
-    String batteryOpt = 'unknown';
-    if (Platform.isAndroid) {
-      final isIgnored = await Permission.ignoreBatteryOptimizations.isGranted;
-      batteryOpt = isIgnored ? 'ignored' : 'enabled';
+    // Map permissions explicitly
+    String locPermission = 'denied';
+    String bgPermission = 'denied';
+    String reason = fallbackReason ?? 'Valid';
+
+    if (permission == LocationPermission.always) {
+      locPermission = 'always';
+      bgPermission = 'granted';
+    } else if (permission == LocationPermission.whileInUse) {
+      locPermission = 'whileInUse';
+      bgPermission = 'denied';
+      if (reason == 'Valid') {
+        reason = 'BackgroundPermissionMissing';
+      }
+    } else {
+      locPermission = permission.name; // 'denied', 'deniedForever', 'unableToDetermine'
+      bgPermission = 'denied';
+      if (reason == 'Valid') {
+        reason = 'LocationPermissionDenied';
+      }
     }
 
-    // 5. Auth State Check (Assuming it's valid if we reach here)
-    String authState = 'valid';
-
-    // Determine main reason
-    String reason = fallbackReason ?? 'Valid';
-    if (!locStatus.isGranted && !locStatus.isLimited) {
-      reason = 'LocationPermissionDenied';
-    } else if (!hasGps) {
+    if (!hasGps && reason == 'Valid') {
       reason = 'LocationServiceDisabled';
-    } else if (Platform.isAndroid && bgPermission != 'granted') {
-      reason = 'BackgroundPermissionMissing';
+    }
+
+    // 3. Battery Optimization Check (safe in background)
+    bool? batteryOptIgnored;
+    if (Platform.isAndroid) {
+      try {
+        batteryOptIgnored = await Permission.ignoreBatteryOptimizations.isGranted;
+      } catch (_) {
+        batteryOptIgnored = null;
+      }
+    }
+
+    // 4. Read last tick and last error if not provided
+    String? finalLastTickStr;
+    if (lastTickAtUtc != null) {
+      finalLastTickStr = lastTickAtUtc.toIso8601String();
+    } else {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        finalLastTickStr = prefs.getString('last_tick_at_utc');
+      } catch (_) {}
+    }
+
+    String? finalLastError = lastError;
+    if (finalLastError == null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        finalLastError = prefs.getString('last_tracking_error') ?? '';
+      } catch (_) {}
     }
 
     final payload = {
@@ -59,19 +90,24 @@ class DeviceHealthService {
       "engineerPublicId": engineerPublicId,
       "locationPermission": locPermission,
       "locationServiceEnabled": hasGps,
-      "batteryOptimizationIgnored": batteryOpt,
+      "batteryOptimizationIgnored": batteryOptIgnored,
       "internetAvailable": true, // If this request succeeds, it means true
-      "authState": authState,
+      "authState": "valid",
       "backgroundPermission": bgPermission,
       "reason": reason,
       "reportedAtUtc": DateTime.now().toUtc().toIso8601String(),
+      "backgroundServiceAlive": backgroundServiceAlive ?? false,
+      "lastTickAtUtc": finalLastTickStr,
+      "lastError": finalLastError,
     };
 
     debugPrint("[DeviceHealthService] reporting reason=$reason");
     debugPrint("[DeviceHealthService] locationPermission=$locPermission");
     debugPrint("[DeviceHealthService] backgroundPermission=$bgPermission");
     debugPrint("[DeviceHealthService] locationServiceEnabled=$hasGps");
-    debugPrint("[DeviceHealthService] batteryOptimizationIgnored=$batteryOpt");
+    debugPrint("[DeviceHealthService] backgroundServiceAlive=${backgroundServiceAlive ?? false}");
+    debugPrint("[DeviceHealthService] lastTickAtUtc=$finalLastTickStr");
+    debugPrint("[DeviceHealthService] lastError=$finalLastError");
 
     final response = await ApiClient.postWithToken(
       "Tracking/device-health",

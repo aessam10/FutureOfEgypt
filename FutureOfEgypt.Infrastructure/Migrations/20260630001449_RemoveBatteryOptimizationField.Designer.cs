@@ -3,6 +3,7 @@ using System;
 using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FutureOfEgypt.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260630001449_RemoveBatteryOptimizationField")]
+    partial class RemoveBatteryOptimizationField
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -713,9 +716,6 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<bool>("BackgroundServiceAlive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("BatteryOptimizationIgnored")
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")

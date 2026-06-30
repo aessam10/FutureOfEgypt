@@ -20,9 +20,15 @@ namespace FutureOfEgypt.Domain.Entities
 
         public string? BackgroundPermissionState { get; set; }
 
-        public string? BatteryOptimizationState { get; set; }
+        public bool? BatteryOptimizationIgnored { get; set; }
 
         public bool InternetAvailable { get; set; }
+
+        public bool BackgroundServiceAlive { get; set; }
+
+        public DateTime? LastTickAtUtc { get; set; }
+
+        public string? LastError { get; set; }
 
         public Device? Device { get; set; }
 

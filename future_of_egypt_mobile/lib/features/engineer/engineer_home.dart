@@ -11,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/network/api_client.dart';
 import '../tracking/background_service.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import '../tracking/location_service.dart';
 import '../tracking/tracking_config_service.dart';
 import '../tracking/device_health_service.dart';
@@ -223,13 +224,38 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
       return;
     }
 
-    final installationId = await TrackingConfigService.getInstallationId();
+    final shouldTrack = await TrackingConfigService.isTrackingShouldBeActive();
+    final isRunning = await FlutterBackgroundService().isRunning();
+    if (shouldTrack && !isRunning) {
+      bool? batteryOptIgnored;
+      try {
+        batteryOptIgnored = await Permission.ignoreBatteryOptimizations.isGranted;
+      } catch (_) {}
 
-    await LocationService.start(
-      token: widget.token,
-      devicePublicId: widget.deviceId,
-      installationId: installationId,
-    );
+      String reason = 'BackgroundServiceStopped';
+      if (batteryOptIgnored == false) {
+        reason = 'PossibleBatteryOptimizationOrOsKill';
+      }
+
+      try {
+        final config = await TrackingConfigService.getTrackingData();
+        final engineerId = config['engineerPublicId'] as String? ?? widget.engineerId;
+        await DeviceHealthService.reportHealth(
+          token: widget.token,
+          engineerPublicId: engineerId,
+          devicePublicId: widget.deviceId,
+          backgroundServiceAlive: false,
+          lastError: 'BackgroundServiceStopped',
+          fallbackReason: reason,
+        ).timeout(const Duration(seconds: 15));
+      } catch (e) {
+        debugPrint('[FOE_BACKGROUND] Failed to report stopped service health: $e');
+      }
+    }
+
+    await TrackingConfigService.setTrackingShouldBeActive(true);
+
+    final installationId = await TrackingConfigService.getInstallationId();
 
     await BackgroundTrackingService.startTracking(
       token: widget.token,

@@ -8,6 +8,17 @@ class TrackingConfigService {
   static const String _installationIdKey = "installation_id";
   static const String _rolesKey = "user_roles";
   static const String _refreshTokenKey = "refresh_token";
+  static const String _shouldTrackKey = "tracking_should_be_active";
+
+  static Future<void> setTrackingShouldBeActive(bool active) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_shouldTrackKey, active);
+  }
+
+  static Future<bool> isTrackingShouldBeActive() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_shouldTrackKey) ?? false;
+  }
 
   static Future<void> saveLoginData({
     required String token,
@@ -88,5 +99,6 @@ class TrackingConfigService {
     await prefs.remove(_engineerPublicIdKey);
     await prefs.remove(_devicePublicIdKey);
     await prefs.remove(_rolesKey);
+    await prefs.remove(_shouldTrackKey);
   }
 }

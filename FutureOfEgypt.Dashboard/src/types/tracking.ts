@@ -20,6 +20,10 @@ export interface LatestLocationResponse {
   isAuthorized?: boolean;
   trackingStatusReason?: string;
   lastHealthReportAt?: string;
+  backgroundServiceAlive?: boolean;
+  batteryOptimizationIgnored?: boolean;
+  lastTickAtUtc?: string;
+  lastError?: string;
 }
 
 export interface LocationReceivedEvent {
@@ -35,6 +39,10 @@ export interface LocationReceivedEvent {
   receivedAt: string;
   isMocked?: boolean;
   isOnline: boolean;
+  backgroundServiceAlive?: boolean;
+  batteryOptimizationIgnored?: boolean;
+  lastTickAtUtc?: string;
+  lastError?: string;
 }
 
 export interface EngineerStatusChangedEvent {

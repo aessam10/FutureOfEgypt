@@ -102,9 +102,6 @@ function getDashboardStatus(location: LatestLocationResponse): { label: string, 
   if (reason === 'BackgroundPermissionMissing') {
     return { label: 'Blocked — Background permission missing', color: '#ef4444', isBlocked: true };
   }
-  if (reason === 'BatteryOptimizationIgnored' || reason === 'BatteryOptimizationEnabled') { // Handling potential backend values
-    return { label: 'Blocked — Battery optimization enabled', color: '#ef4444', isBlocked: true };
-  }
   if (reason === 'AuthExpired' || reason === 'DeviceRevoked') {
     return { label: 'Blocked — Device revoked', color: '#ef4444', isBlocked: true };
   }
@@ -283,8 +280,16 @@ function toLatestLocation(event: LocationReceivedEvent): LatestLocationResponse 
     receivedAt: event.receivedAt,
     isMocked: event.isMocked,
     isOnline: event.isOnline,
+    backgroundServiceAlive: event.backgroundServiceAlive,
+    batteryOptimizationIgnored: event.batteryOptimizationIgnored,
+    lastTickAtUtc: event.lastTickAtUtc,
+    lastError: event.lastError,
   };
 }
+
+// ─── Tracking Constants ──────────────────────────────────────────────────────
+const TRACKING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (matching production; set to 1 * 60 * 1000 for debug)
+const SERVICE_STALL_THRESHOLD_MS = Math.min(15 * 60 * 1000, TRACKING_INTERVAL_MS * 2);
 
 // ─── Filter type ─────────────────────────────────────────────────────────────
 type FilterType = 'all' | 'online' | 'offline' | 'hidden';
@@ -650,6 +655,43 @@ export function LiveMapPage() {
           </Typography>
         </>
       )}
+
+      <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid rgba(148, 163, 184, 0.15)' }}>
+        {(() => {
+          const isStale = (dateStr?: string) => {
+            if (!dateStr) return true;
+            const diff = Date.now() - new Date(dateStr).getTime();
+            return diff > SERVICE_STALL_THRESHOLD_MS;
+          };
+          const isTickStale = isStale(location.lastTickAtUtc);
+          const isHealthStale = isStale(location.lastHealthReportAt);
+          const isServiceStopped = !location.backgroundServiceAlive || isTickStale || isHealthStale;
+          const showBatteryWarning = isServiceStopped && location.batteryOptimizationIgnored === false;
+
+          return (
+            <>
+              <Typography variant="caption" sx={{ display: 'block', color: isServiceStopped ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                Background Service: {isServiceStopped ? 'Stopped' : 'Active'}
+              </Typography>
+              {showBatteryWarning && (
+                <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: '#ef4444', fontWeight: 500 }}>
+                  Possible cause: Battery optimization / OS killed the service
+                </Typography>
+              )}
+              {location.lastTickAtUtc && (
+                <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: 'text.secondary' }}>
+                  Last Tick: {formatLastSeen(location.lastTickAtUtc)}
+                </Typography>
+              )}
+              {location.lastError && (
+                <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: '#ef4444', wordBreak: 'break-word', fontStyle: 'italic' }}>
+                  Error: {location.lastError}
+                </Typography>
+              )}
+            </>
+          );
+        })()}
+      </Box>
 
       <Button
         variant="outlined"
