@@ -24,3 +24,11 @@ export interface UpdateEngineerRequest {
   phoneNumber: string;
   email: string;
 }
+
+export interface RegisterEngineerCompleteRequest {
+  fullName: string;
+  phoneNumber: string;
+  email: string;
+  password?: string;
+  status: number;
+}

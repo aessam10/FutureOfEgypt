@@ -36,8 +36,9 @@ import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { EmptyState } from '../components/common/EmptyState';
 import { EngineerStatusChip } from '../components/status/EngineerStatusChip';
-import { createEngineer, getEngineers, updateEngineerStatus } from '../api/engineersApi';
-import type { CreateEngineerRequest, EngineerResponse } from '../types/engineers';
+import { getEngineers, updateEngineerStatus } from '../api/engineersApi';
+import { registerEngineerComplete } from '../api/authApi';
+import type { EngineerResponse, RegisterEngineerCompleteRequest } from '../types/engineers';
 import { AvatarPreviewModal } from '../components/profile/AvatarPreviewModal';
 import { AuthorizedAvatar } from '../components/common/AuthorizedAvatar';
 
@@ -49,9 +50,10 @@ interface EngineerFormState {
   phoneNumber: string;
   email: string;
   status: number;
+  password?: string;
 }
 const initialFormState: EngineerFormState = {
-  fullName: '', phoneNumber: '', email: '', status: ACTIVE_STATUS,
+  fullName: '', phoneNumber: '', email: '', status: ACTIVE_STATUS, password: '',
 };
 
 export function EngineersPage() {
@@ -80,14 +82,14 @@ export function EngineersPage() {
   const [isEditMode, setIsEditMode] = useState(false);
 
   const createMutation = useMutation({
-    mutationFn: (req: CreateEngineerRequest) => createEngineer(req),
+    mutationFn: (req: RegisterEngineerCompleteRequest) => registerEngineerComplete(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['engineers'] });
       setIsCreateDialogOpen(false);
       setFormState(initialFormState);
       setFormError(null);
     },
-    onError: () => setFormError('Failed to create engineer.'),
+    onError: (e: any) => setFormError(e?.response?.data?.message || 'Failed to create engineer.'),
   });
 
   const updateMutation = useMutation({
@@ -129,6 +131,10 @@ export function EngineersPage() {
       setFormError('Please fill all required fields.');
       return;
     }
+    if (!isEditMode && !formState.password?.trim()) {
+      setFormError('Password is required.');
+      return;
+    }
     setFormError(null);
 
     if (isEditMode && selectedEngineer) {
@@ -142,6 +148,7 @@ export function EngineersPage() {
         fullName: formState.fullName.trim(),
         phoneNumber: formState.phoneNumber.trim(),
         email: formState.email.trim(),
+        password: formState.password?.trim(),
         status: formState.status,
       });
     }
@@ -371,19 +378,27 @@ export function EngineersPage() {
               sx={{ mb: 2 }}
             />
             {!isEditMode && (
-              <FormControl fullWidth size="small">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  label="Status"
-                  value={formState.status}
-                  onChange={(e: SelectChangeEvent<number>) =>
-                    setFormState((s) => ({ ...s, status: Number(e.target.value) }))
-                  }
-                >
-                  <MenuItem value={ACTIVE_STATUS}>Active</MenuItem>
-                  <MenuItem value={INACTIVE_STATUS}>Inactive</MenuItem>
-                </Select>
-              </FormControl>
+              <>
+                <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    label="Status"
+                    value={formState.status}
+                    onChange={(e: SelectChangeEvent<number>) =>
+                      setFormState((s) => ({ ...s, status: Number(e.target.value) }))
+                    }
+                  >
+                    <MenuItem value={ACTIVE_STATUS}>Active</MenuItem>
+                    <MenuItem value={INACTIVE_STATUS}>Inactive</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  fullWidth label="Password" type="password" required
+                  value={formState.password || ''}
+                  onChange={(e) => setFormState((s) => ({ ...s, password: e.target.value }))}
+                  sx={{ mb: 2 }}
+                />
+              </>
             )}
           </DialogContent>
           <DialogActions>

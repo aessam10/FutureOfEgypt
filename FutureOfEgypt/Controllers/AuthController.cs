@@ -101,6 +101,24 @@ namespace FutureOfEgypt.Controllers
             return Ok(result);
         }
 
+        [Authorize(Policy = "AdminOrManager")]
+        [HttpPost("register-engineer-complete")]
+        public async Task<IActionResult> RegisterEngineerComplete(
+            [FromBody] RegisterEngineerCompleteRequest request,
+            CancellationToken cancellationToken)
+        {
+            var adminUserId = User.GetUserId();
+            var adminEmail = User.GetUserEmail();
+
+            var result = await _authService.RegisterEngineerCompleteAsync(
+                adminUserId,
+                adminEmail,
+                request,
+                cancellationToken);
+
+            return Ok(result);
+        }
+
         [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IActionResult> Login(

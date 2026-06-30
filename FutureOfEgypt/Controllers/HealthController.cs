@@ -35,7 +35,7 @@ namespace FutureOfEgypt.Controllers
             });
         }
 
-        [AllowAnonymous]
+        [Authorize(Policy = "AdminOnly")]
         [HttpGet("preflight")]
         public async Task<IActionResult> GetPreflightReport()
         {

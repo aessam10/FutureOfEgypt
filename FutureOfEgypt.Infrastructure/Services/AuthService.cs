@@ -748,6 +748,101 @@ namespace FutureOfEgypt.Infrastructure.Services
             }
         }
 
+        public async Task<UserAccountResponse> RegisterEngineerCompleteAsync(
+            Guid performedByUserId,
+            string performedByEmail,
+            RegisterEngineerCompleteRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(request.FullName))
+                throw new InvalidOperationException("Full name is required.");
+
+            if (string.IsNullOrWhiteSpace(request.Email))
+                throw new InvalidOperationException("Email is required.");
+
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new InvalidOperationException("Password is required.");
+
+            var email = request.Email.Trim().ToLowerInvariant();
+
+            var existingUser = await _userManager.FindByEmailAsync(email);
+            if (existingUser is not null)
+                throw new InvalidOperationException("Email is already registered.");
+
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                // 1. Create Engineer profile row
+                var engineer = new Engineer
+                {
+                    FullName = request.FullName.Trim(),
+                    PhoneNumber = request.PhoneNumber?.Trim(),
+                    Email = email,
+                    Status = request.Status
+                };
+
+                await _context.Engineers.AddAsync(engineer, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                // 2. Create ApplicationUser
+                var user = new ApplicationUser
+                {
+                    UserName = email,
+                    Email = email,
+                    FullName = request.FullName.Trim(),
+                    PhoneNumber = request.PhoneNumber?.Trim(),
+                    UserType = UserType.Engineer,
+                    EngineerId = engineer.Id
+                };
+
+                var createResult = await _userManager.CreateAsync(user, request.Password);
+                if (!createResult.Succeeded)
+                {
+                    var errors = string.Join(", ", createResult.Errors.Select(x => x.Description));
+                    throw new InvalidOperationException(errors);
+                }
+
+                // 3. Set Engineer.UserId = applicationUser.Id
+                engineer.UserId = user.Id;
+                _context.Engineers.Update(engineer);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                // 4. Assign Engineer role using existing helper
+                await AssignSingleBusinessRoleAsync(user, AppRoles.ENGINEER, cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                var response = await BuildUserAccountResponseAsync(user, cancellationToken);
+
+                await _auditLogService.CreateAsync(
+                    new CreateAuditLogRequest
+                    {
+                        ActionType = AuditActionType.EngineerUserCreated,
+                        PerformedByUserId = performedByUserId,
+                        PerformedByEmail = performedByEmail,
+                        EntityName = nameof(ApplicationUser),
+                        EntityPublicId = user.Id,
+                        Description = $"Admin created engineer user '{user.Email}'.",
+                        MetadataJson = JsonSerializer.Serialize(new
+                        {
+                            createdUserId = user.Id,
+                            engineerPublicId = response.EngineerPublicId,
+                            user.Email,
+                            user.FullName,
+                            roles = response.Roles
+                        })
+                    },
+                    cancellationToken);
+
+                return response;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
         private async Task AssignSingleBusinessRoleAsync(
             ApplicationUser user,
             string roleName,
