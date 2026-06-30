@@ -29,6 +29,7 @@ namespace FutureOfEgypt.Domain.Entities
         public DateTime? LastTickAtUtc { get; set; }
 
         public string? LastError { get; set; }
+        public int? TrackingIntervalMs { get; set; }
 
         public Device? Device { get; set; }
 

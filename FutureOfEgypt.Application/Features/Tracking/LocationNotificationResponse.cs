@@ -37,5 +37,6 @@ namespace FutureOfEgypt.Application.Features.Tracking
         public DateTime? LastTickAtUtc { get; set; }
 
         public string? LastError { get; set; }
+        public int? TrackingIntervalMs { get; set; }
     }
 }

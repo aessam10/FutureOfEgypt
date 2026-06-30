@@ -284,12 +284,12 @@ function toLatestLocation(event: LocationReceivedEvent): LatestLocationResponse 
     batteryOptimizationIgnored: event.batteryOptimizationIgnored,
     lastTickAtUtc: event.lastTickAtUtc,
     lastError: event.lastError,
+    trackingIntervalMs: event.trackingIntervalMs,
   };
 }
 
 // ─── Tracking Constants ──────────────────────────────────────────────────────
-const TRACKING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (matching production; set to 1 * 60 * 1000 for debug)
-const SERVICE_STALL_THRESHOLD_MS = Math.min(15 * 60 * 1000, TRACKING_INTERVAL_MS * 2);
+const FALLBACK_TRACKING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes fallback if not reported by device
 
 // ─── Filter type ─────────────────────────────────────────────────────────────
 type FilterType = 'all' | 'online' | 'offline' | 'hidden';
@@ -658,10 +658,13 @@ export function LiveMapPage() {
 
       <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid rgba(148, 163, 184, 0.15)' }}>
         {(() => {
+          const effectiveIntervalMs = location.trackingIntervalMs ?? FALLBACK_TRACKING_INTERVAL_MS;
+          const serviceStallThresholdMs = Math.min(15 * 60 * 1000, effectiveIntervalMs * 2);
+
           const isStale = (dateStr?: string) => {
             if (!dateStr) return true;
             const diff = Date.now() - new Date(dateStr).getTime();
-            return diff > SERVICE_STALL_THRESHOLD_MS;
+            return diff > serviceStallThresholdMs;
           };
           const isTickStale = isStale(location.lastTickAtUtc);
           const isHealthStale = isStale(location.lastHealthReportAt);

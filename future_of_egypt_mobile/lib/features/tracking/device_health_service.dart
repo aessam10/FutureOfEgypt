@@ -16,6 +16,7 @@ class DeviceHealthService {
     DateTime? lastTickAtUtc,
     String? lastError,
     String? fallbackReason,
+    int? trackingIntervalMs,
   }) async {
     if (kIsWeb) return null;
 
@@ -99,6 +100,7 @@ class DeviceHealthService {
       "backgroundServiceAlive": backgroundServiceAlive ?? false,
       "lastTickAtUtc": finalLastTickStr,
       "lastError": finalLastError,
+      "trackingIntervalMs": trackingIntervalMs,
     };
 
     debugPrint("[DeviceHealthService] reporting reason=$reason");

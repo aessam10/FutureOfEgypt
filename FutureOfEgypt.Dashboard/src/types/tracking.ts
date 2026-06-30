@@ -24,6 +24,7 @@ export interface LatestLocationResponse {
   batteryOptimizationIgnored?: boolean;
   lastTickAtUtc?: string;
   lastError?: string;
+  trackingIntervalMs?: number | null;
 }
 
 export interface LocationReceivedEvent {
@@ -43,6 +44,7 @@ export interface LocationReceivedEvent {
   batteryOptimizationIgnored?: boolean;
   lastTickAtUtc?: string;
   lastError?: string;
+  trackingIntervalMs?: number | null;
 }
 
 export interface EngineerStatusChangedEvent {

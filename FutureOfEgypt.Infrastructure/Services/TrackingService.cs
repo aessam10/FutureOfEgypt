@@ -169,6 +169,7 @@ namespace FutureOfEgypt.Infrastructure.Services
             healthStatus.BackgroundServiceAlive = request.BackgroundServiceAlive;
             healthStatus.LastTickAtUtc = request.LastTickAtUtc;
             healthStatus.LastError = request.LastError;
+            healthStatus.TrackingIntervalMs = request.TrackingIntervalMs;
 
             await _context.SaveChangesAsync(cancellationToken);
         }
@@ -423,7 +424,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                      BackgroundServiceAlive = healthStatus?.BackgroundServiceAlive ?? false,
                      BatteryOptimizationIgnored = healthStatus?.BatteryOptimizationIgnored,
                      LastTickAtUtc = healthStatus?.LastTickAtUtc,
-                     LastError = healthStatus?.LastError
+                     LastError = healthStatus?.LastError,
+                     TrackingIntervalMs = healthStatus?.TrackingIntervalMs
                  }, cancellationToken);
                  
             return new ReceiveLocationUpdateResponse
@@ -468,7 +470,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      BackgroundServiceAlive = health != null && health.BackgroundServiceAlive,
                                      BatteryOptimizationIgnored = health != null ? health.BatteryOptimizationIgnored : null,
                                      LastTickAtUtc = health != null ? health.LastTickAtUtc : null,
-                                     LastError = health != null ? health.LastError : null
+                                     LastError = health != null ? health.LastError : null,
+                                     TrackingIntervalMs = health != null ? health.TrackingIntervalMs : null
                                  };
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);
@@ -519,7 +522,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      BackgroundServiceAlive = health != null && health.BackgroundServiceAlive,
                                      BatteryOptimizationIgnored = health != null ? health.BatteryOptimizationIgnored : null,
                                      LastTickAtUtc = health != null ? health.LastTickAtUtc : null,
-                                     LastError = health != null ? health.LastError : null
+                                     LastError = health != null ? health.LastError : null,
+                                     TrackingIntervalMs = health != null ? health.TrackingIntervalMs : null
                                  };
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);

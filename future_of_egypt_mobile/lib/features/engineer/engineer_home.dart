@@ -15,6 +15,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import '../tracking/location_service.dart';
 import '../tracking/tracking_config_service.dart';
 import '../tracking/device_health_service.dart';
+import '../tracking/tracking_intervals.dart';
 import '../chat/chat_list_page.dart';
 
 class EngineerHome extends StatefulWidget {
@@ -247,6 +248,7 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
           backgroundServiceAlive: false,
           lastError: 'BackgroundServiceStopped',
           fallbackReason: reason,
+          trackingIntervalMs: TrackingIntervals.locationUpdateInterval.inMilliseconds,
         ).timeout(const Duration(seconds: 15));
       } catch (e) {
         debugPrint('[FOE_BACKGROUND] Failed to report stopped service health: $e');

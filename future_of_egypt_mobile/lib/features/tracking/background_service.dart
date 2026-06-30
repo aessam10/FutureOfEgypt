@@ -83,6 +83,7 @@ void callbackDispatcher() {
             backgroundServiceAlive: false,
             lastError: 'BackgroundServiceStopped',
             fallbackReason: reason,
+            trackingIntervalMs: TrackingIntervals.locationUpdateInterval.inMilliseconds,
           ).timeout(const Duration(seconds: 15));
         } catch (he) {
           debugPrint('[FOE_WATCHDOG] Watchdog health report failed: $he');
@@ -462,6 +463,7 @@ Future<void> _runTick({
           lastTickAtUtc: tickTime,
           lastError: lastError,
           fallbackReason: reason,
+          trackingIntervalMs: TrackingIntervals.locationUpdateInterval.inMilliseconds,
         ).timeout(const Duration(seconds: 15));
         print('[FOE_BACKGROUND] Health POST response code: $statusCode');
       } catch (he) {
