@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Common;
+using FutureOfEgypt.Domain.Common;
 
 namespace FutureOfEgypt.Domain.Entities
 {
@@ -24,6 +24,8 @@ namespace FutureOfEgypt.Domain.Entities
         public DateTime RecordedAt { get; set; }
 
         public DateTime ReceivedAt { get; set; } = DateTime.UtcNow;
+
+        public string? ClientLocalId { get; set; }
 
         public Engineer? Engineer { get; set; }
 

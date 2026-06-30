@@ -14,6 +14,16 @@ namespace FutureOfEgypt.Application.Features.Tracking
             DeviceHealthRequest request,
             CancellationToken cancellationToken = default);
 
+        Task<LocationBatchResponse> ReceiveLocationBatchAsync(
+            Guid engineerPublicId,
+            LocationBatchRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task ReceiveRecoveryEventAsync(
+            Guid engineerPublicId,
+            RecoveryEventRequest request,
+            CancellationToken cancellationToken = default);
+
         Task<DeviceValidationResponse> ValidateDeviceAsync(
             Guid engineerPublicId,
             DeviceValidationRequest request,

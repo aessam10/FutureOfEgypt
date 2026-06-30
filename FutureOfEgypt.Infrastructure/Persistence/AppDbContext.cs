@@ -47,6 +47,8 @@ namespace FutureOfEgypt.Infrastructure.Persistence
 
         public DbSet<DeviceAppStatus> DeviceAppStatuses { get; set; }
 
+        public DbSet<DeviceRecoveryEvent> DeviceRecoveryEvents { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -61,6 +63,11 @@ namespace FutureOfEgypt.Infrastructure.Persistence
                         .IsUnique();
                 }
             }
+
+            modelBuilder.Entity<LocationHistory>()
+                .HasIndex(x => new { x.DeviceId, x.ClientLocalId })
+                .IsUnique()
+                .HasFilter("ClientLocalId IS NOT NULL");
 
             modelBuilder.Entity<EngineerStatusHistory>()
                 .HasIndex(x => new { x.EngineerId, x.ChangedAtUtc });

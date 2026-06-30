@@ -87,6 +87,52 @@ namespace FutureOfEgypt.Controllers
             return Ok(new { message = "Health report received." });
         }
 
+        [EnableRateLimiting("TrackingPolicy")]
+        [Authorize(Roles = AppRoles.ENGINEER)]
+        [HttpPost("locations/batch")]
+        public async Task<IActionResult> ReceiveLocationBatch(
+            [FromBody] LocationBatchRequest request,
+            CancellationToken cancellationToken)
+        {
+            var engineerPublicIdValue = User.FindFirstValue("engineerPublicId");
+
+            if (string.IsNullOrWhiteSpace(engineerPublicIdValue))
+                return Unauthorized(new { message = "Engineer identity is missing from token." });
+
+            if (!Guid.TryParse(engineerPublicIdValue, out var engineerPublicId))
+                return Unauthorized(new { message = "Invalid engineer identity in token." });
+
+            var response = await _trackingService.ReceiveLocationBatchAsync(
+                engineerPublicId,
+                request,
+                cancellationToken);
+
+            return Ok(response);
+        }
+
+        [EnableRateLimiting("TrackingPolicy")]
+        [Authorize(Roles = AppRoles.ENGINEER)]
+        [HttpPost("recovery-event")]
+        public async Task<IActionResult> ReceiveRecoveryEvent(
+            [FromBody] RecoveryEventRequest request,
+            CancellationToken cancellationToken)
+        {
+            var engineerPublicIdValue = User.FindFirstValue("engineerPublicId");
+
+            if (string.IsNullOrWhiteSpace(engineerPublicIdValue))
+                return Unauthorized(new { message = "Engineer identity is missing from token." });
+
+            if (!Guid.TryParse(engineerPublicIdValue, out var engineerPublicId))
+                return Unauthorized(new { message = "Invalid engineer identity in token." });
+
+            await _trackingService.ReceiveRecoveryEventAsync(
+                engineerPublicId,
+                request,
+                cancellationToken);
+
+            return Ok(new { message = "Recovery event received." });
+        }
+
         [Authorize(Policy = "AdminOrManager")]
         [HttpGet("latest")]
         public async Task<IActionResult> GetLatestLocations(CancellationToken cancellationToken)

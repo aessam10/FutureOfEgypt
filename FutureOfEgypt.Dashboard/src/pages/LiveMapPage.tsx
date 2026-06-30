@@ -142,6 +142,22 @@ function getDashboardStatus(location: LatestLocationResponse): { label: string, 
   return { label: 'Offline — App possibly stopped', color: '#94a3b8', isBlocked: false };
 }
 
+function getRecoveryText(location: LatestLocationResponse): string | null {
+  if (!location.lastRecoveryReason) return null;
+  switch (location.lastRecoveryReason) {
+    case 'RecoveredAfterNetworkLoss':
+      return `Recovered — Internet was unavailable. Uploaded ${location.uploadedOfflinePointsCount ?? 0} offline points.`;
+    case 'RecoveredAfterAppOpen':
+      return 'Recovered after app open — background service was stopped.';
+    case 'RecoveredByWatchdog':
+      return 'Recovered by watchdog — service restarted.';
+    case 'RecoveredAfterBoot':
+      return 'Recovered after device reboot.';
+    default:
+      return `Recovered (${location.lastRecoveryReason})`;
+  }
+}
+
 // ─── Custom marker icons ──────────────────────────────────────────────────────
 function createPinIcon(color: string): L.DivIcon {
   return L.divIcon({
@@ -309,6 +325,10 @@ function toLatestLocation(event: LocationReceivedEvent): LatestLocationResponse 
     lastTickAtUtc: event.lastTickAtUtc,
     lastError: event.lastError,
     trackingIntervalMs: event.trackingIntervalMs,
+    lastRecoveryReason: event.lastRecoveryReason,
+    lastRecoveryAtUtc: event.lastRecoveryAtUtc,
+    uploadedOfflinePointsCount: event.uploadedOfflinePointsCount,
+    droppedPointsCount: event.droppedPointsCount,
   };
 }
 
@@ -703,6 +723,11 @@ export function LiveMapPage() {
               {location.lastError && (
                 <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: '#ef4444', wordBreak: 'break-word', fontStyle: 'italic' }}>
                   Error: {location.lastError}
+                </Typography>
+              )}
+              {getRecoveryText(location) && (
+                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: '#10b981', fontWeight: 600 }}>
+                  ✔ {getRecoveryText(location)}
                 </Typography>
               )}
             </>
@@ -1180,6 +1205,11 @@ export function LiveMapPage() {
                             {isServiceStalled(location) && location.batteryOptimizationIgnored === false && (
                               <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: '#fca5a5', fontWeight: 600 }}>
                                 Possible cause: Battery optimization / OS killed the service
+                              </Typography>
+                            )}
+                            {getRecoveryText(location) && (
+                              <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: '#a7f3d0', fontWeight: 600 }}>
+                                ✔ {getRecoveryText(location)}
                               </Typography>
                             )}
                           </Box>

@@ -34,7 +34,7 @@ class DeviceHealthService {
     // Map permissions explicitly
     String locPermission = 'denied';
     String bgPermission = 'denied';
-    String reason = fallbackReason ?? 'Valid';
+    String reason = 'Valid';
 
     if (permission == LocationPermission.always) {
       locPermission = 'always';
@@ -42,19 +42,25 @@ class DeviceHealthService {
     } else if (permission == LocationPermission.whileInUse) {
       locPermission = 'whileInUse';
       bgPermission = 'denied';
-      if (reason == 'Valid') {
-        reason = 'BackgroundPermissionMissing';
-      }
     } else {
       locPermission = permission.name; // 'denied', 'deniedForever', 'unableToDetermine'
       bgPermission = 'denied';
-      if (reason == 'Valid') {
-        reason = 'LocationPermissionDenied';
-      }
     }
 
-    if (!hasGps && reason == 'Valid') {
+    // Precedence:
+    // 1. LocationPermissionDenied
+    // 2. BackgroundPermissionMissing
+    // 3. LocationServiceDisabled
+    // 4. fallbackReason
+    // 5. Valid
+    if (permission != LocationPermission.always && permission != LocationPermission.whileInUse) {
+      reason = 'LocationPermissionDenied';
+    } else if (permission == LocationPermission.whileInUse) {
+      reason = 'BackgroundPermissionMissing';
+    } else if (!hasGps) {
       reason = 'LocationServiceDisabled';
+    } else {
+      reason = fallbackReason ?? 'Valid';
     }
 
     // 3. Battery Optimization Check (safe in background)
@@ -119,5 +125,32 @@ class DeviceHealthService {
 
     debugPrint("[DeviceHealthService] Successfully reported health status. Response code: ${response.statusCode}");
     return response.statusCode;
+  }
+
+  static Future<void> reportRecoveryEvent({
+    required String token,
+    required String engineerPublicId,
+    required String devicePublicId,
+    required String recoveryReason,
+    String? lastError,
+  }) async {
+    final payload = {
+      "engineerPublicId": engineerPublicId,
+      "devicePublicId": devicePublicId,
+      "recoveryReason": recoveryReason,
+      if (lastError != null) "lastError": lastError,
+    };
+
+    try {
+      debugPrint("[DeviceHealthService] Reporting recovery event: $recoveryReason");
+      final response = await ApiClient.postWithToken(
+        "Tracking/recovery-event",
+        payload,
+        token,
+      ).timeout(const Duration(seconds: 15));
+      debugPrint("[DeviceHealthService] Recovery event reported. Status code: ${response.statusCode}");
+    } catch (e) {
+      debugPrint("[DeviceHealthService] Failed to report recovery event: $e");
+    }
   }
 }

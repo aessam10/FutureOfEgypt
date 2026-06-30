@@ -174,6 +174,316 @@ namespace FutureOfEgypt.Infrastructure.Services
             await _context.SaveChangesAsync(cancellationToken);
         }
 
+        public async Task<LocationBatchResponse> ReceiveLocationBatchAsync(
+            Guid engineerPublicId,
+            LocationBatchRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var engineer = await _context.Engineers
+                .FirstOrDefaultAsync(
+                    x => x.PublicId == engineerPublicId && !x.IsDeleted,
+                    cancellationToken);
+
+            if (engineer is null)
+                throw new InvalidOperationException("Engineer does not exist.");
+            if (engineer.Status != EngineerStatus.Active)
+                throw new InvalidOperationException("Engineer is not active.");
+
+            var device = await _context.Devices
+                .FirstOrDefaultAsync(
+                    x => x.PublicId == request.DevicePublicId && !x.IsDeleted,
+                    cancellationToken);
+
+            if (device is null)
+                throw new InvalidOperationException("Device does not exist.");
+
+            if (!string.IsNullOrWhiteSpace(device.InstallationId))
+            {
+                if (string.IsNullOrWhiteSpace(request.InstallationId))
+                    throw new InvalidOperationException("Installation id is required for this device.");
+
+                if (device.InstallationId != request.InstallationId.Trim())
+                    throw new InvalidOperationException("Invalid installation id for this device.");
+            }
+
+            if (device.Status != DeviceStatus.Active)
+                throw new InvalidOperationException("Device is not active.");
+
+            var assignmentExists = await _context.EngineerDevices
+                .AnyAsync(
+                    x => x.EngineerId == engineer.Id
+                         && x.DeviceId == device.Id
+                         && x.IsActive
+                         && !x.IsDeleted,
+                    cancellationToken);
+
+            if (!assignmentExists)
+                throw new InvalidOperationException("Device is not assigned to this engineer.");
+
+            if (request.Points == null || request.Points.Count == 0)
+            {
+                return new LocationBatchResponse
+                {
+                    StatusReason = "Valid"
+                };
+            }
+
+            // Filter points: must match DayKey (yyyy-MM-dd in UTC)
+            var validPoints = new List<LocationBatchPoint>();
+            foreach (var pt in request.Points)
+            {
+                if (pt.RecordedAtUtc.ToString("yyyy-MM-dd") == request.DayKey)
+                {
+                    validPoints.Add(pt);
+                }
+            }
+
+            if (validPoints.Count == 0)
+            {
+                return new LocationBatchResponse
+                {
+                    StatusReason = "NoValidPointsMatchingDayKey"
+                };
+            }
+
+            var receivedAtUtc = DateTime.UtcNow;
+
+            // Start Database Transaction to guarantee atomic operations and idempotency
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            var requestLocalIds = validPoints.Select(p => p.LocalId).ToList();
+
+            // Find existing duplicates
+            var existingLocalIds = await _context.LocationHistories
+                .Where(lh => lh.DeviceId == device.Id && lh.ClientLocalId != null && requestLocalIds.Contains(lh.ClientLocalId))
+                .Select(lh => lh.ClientLocalId!)
+                .ToListAsync(cancellationToken);
+
+            var newPoints = validPoints.Where(p => !existingLocalIds.Contains(p.LocalId)).ToList();
+
+            foreach (var pt in newPoints)
+            {
+                var locationHistory = new LocationHistory
+                {
+                    EngineerId = engineer.Id,
+                    DeviceId = device.Id,
+                    Latitude = pt.Latitude,
+                    Longitude = pt.Longitude,
+                    Accuracy = pt.Accuracy,
+                    Speed = pt.Speed,
+                    IsMocked = pt.IsMocked,
+                    RecordedAt = pt.RecordedAtUtc,
+                    ReceivedAt = receivedAtUtc,
+                    ClientLocalId = pt.LocalId
+                };
+                await _context.LocationHistories.AddAsync(locationHistory, cancellationToken);
+            }
+
+            // Find the newest point by RecordedAtUtc in the batch
+            var newestPoint = validPoints.OrderByDescending(p => p.RecordedAtUtc).First();
+
+            var latestLocation = await _context.DeviceLatestLocations
+                .FirstOrDefaultAsync(
+                    x => x.DeviceId == device.Id && !x.IsDeleted,
+                    cancellationToken);
+
+            if (latestLocation is null)
+            {
+                latestLocation = new DeviceLatestLocation
+                {
+                    EngineerId = engineer.Id,
+                    DeviceId = device.Id,
+                    Latitude = newestPoint.Latitude,
+                    Longitude = newestPoint.Longitude,
+                    Accuracy = newestPoint.Accuracy,
+                    Speed = newestPoint.Speed,
+                    IsMocked = newestPoint.IsMocked,
+                    IsOnline = true,
+                    RecordedAt = newestPoint.RecordedAtUtc,
+                    ReceivedAt = receivedAtUtc
+                };
+                await _context.DeviceLatestLocations.AddAsync(latestLocation, cancellationToken);
+            }
+            else if (latestLocation.RecordedAt < newestPoint.RecordedAtUtc)
+            {
+                latestLocation.EngineerId = engineer.Id;
+                latestLocation.DeviceId = device.Id;
+                latestLocation.Latitude = newestPoint.Latitude;
+                latestLocation.Longitude = newestPoint.Longitude;
+                latestLocation.Accuracy = newestPoint.Accuracy;
+                latestLocation.Speed = newestPoint.Speed;
+                latestLocation.IsMocked = newestPoint.IsMocked;
+                latestLocation.IsOnline = true;
+                latestLocation.RecordedAt = newestPoint.RecordedAtUtc;
+                latestLocation.ReceivedAt = receivedAtUtc;
+                latestLocation.UpdatedAt = receivedAtUtc;
+            }
+
+            device.LastSeenAtUtc = receivedAtUtc;
+            device.UpdatedAt = receivedAtUtc;
+
+            var healthStatus = await _context.DeviceTrackingHealthStatuses
+                .FirstOrDefaultAsync(x => x.DeviceId == device.Id, cancellationToken);
+
+            if (healthStatus != null && healthStatus.LastHealthReportAt < receivedAtUtc)
+            {
+                var reason = healthStatus.TrackingStatusReason;
+                if (reason == "LocationPermissionDenied" ||
+                    reason == "LocationServiceDisabled" ||
+                    reason == "AuthExpired" ||
+                    reason == "RefreshFailed" ||
+                    reason == "DeviceRevoked" ||
+                    reason == "DeviceUnassigned" ||
+                    reason == "InternetUnavailable")
+                {
+                    healthStatus.TrackingStatusReason = "Valid";
+                }
+            }
+
+            if (request.Diagnostics != null)
+            {
+                var recoveryEvent = new DeviceRecoveryEvent
+                {
+                    DeviceId = device.Id,
+                    EngineerId = engineer.Id,
+                    RecoveryReason = request.Diagnostics.RecoveryReason,
+                    FromUtc = request.Diagnostics.OfflineFromUtc,
+                    ToUtc = request.Diagnostics.OfflineToUtc,
+                    UploadedPointsCount = request.Diagnostics.UploadedOfflinePointsCount,
+                    DroppedPointsCount = request.Diagnostics.DroppedPointsCount,
+                    CreatedAtUtc = receivedAtUtc
+                };
+                await _context.DeviceRecoveryEvents.AddAsync(recoveryEvent, cancellationToken);
+            }
+
+            var isNewLocation = latestLocation.Id == 0 || _context.Entry(latestLocation).State == EntityState.Added;
+            var wasOnlineValue = isNewLocation ? false : (bool)_context.Entry(latestLocation).OriginalValues["IsOnline"]!;
+
+            if (!wasOnlineValue)
+            {
+                await _context.EngineerStatusHistories.AddAsync(new EngineerStatusHistory
+                {
+                    EngineerId = engineer.Id,
+                    DeviceId = device.Id,
+                    IsOnline = true,
+                    Reason = "Location update received (batch)",
+                    ChangedAtUtc = receivedAtUtc
+                }, cancellationToken);
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            if (!wasOnlineValue && !latestLocation.IsHidden)
+            {
+                var totalOnline = await _context.DeviceLatestLocations
+                    .Where(x => !x.IsDeleted && !x.IsHidden && x.IsOnline)
+                    .CountAsync(cancellationToken);
+
+                var totalOffline = await _context.DeviceLatestLocations
+                    .Where(x => !x.IsDeleted && !x.IsHidden && !x.IsOnline)
+                    .CountAsync(cancellationToken);
+
+                var statusEvent = new EngineerStatusChangedEvent
+                {
+                    EngineerPublicId = engineer.PublicId,
+                    DevicePublicId = device.PublicId,
+                    IsOnline = true,
+                    Reason = "Location update received (batch)",
+                    OnlineCount = totalOnline,
+                    OfflineCount = totalOffline
+                };
+                await _locationNotifier.NotifyEngineerStatusChangedAsync(statusEvent, cancellationToken);
+            }
+
+            // Send ONE SignalR notification for the newest point in the batch
+            await _locationNotifier.NotifyLocationReceivedAsync(
+                 new LocationNotificationResponse
+                 {
+                     EngineerPublicId = engineer.PublicId,
+                     EngineerName = engineer.FullName,
+                     DevicePublicId = device.PublicId,
+                     DeviceName = device.DeviceName,
+                     Latitude = newestPoint.Latitude,
+                     Longitude = newestPoint.Longitude,
+                     Accuracy = newestPoint.Accuracy,
+                     Speed = newestPoint.Speed,
+                     IsMocked = newestPoint.IsMocked,
+                     IsOnline = true,
+                     RecordedAt = newestPoint.RecordedAtUtc,
+                     ReceivedAt = receivedAtUtc,
+                     TrackingStatusReason = healthStatus?.TrackingStatusReason,
+                     LastHealthReportAt = healthStatus?.LastHealthReportAt,
+                     BackgroundServiceAlive = healthStatus?.BackgroundServiceAlive ?? false,
+                     BatteryOptimizationIgnored = healthStatus?.BatteryOptimizationIgnored,
+                     LastTickAtUtc = healthStatus?.LastTickAtUtc,
+                     LastError = healthStatus?.LastError,
+                     TrackingIntervalMs = healthStatus?.TrackingIntervalMs
+                 }, cancellationToken);
+
+            return new LocationBatchResponse
+            {
+                AcceptedLocalIds = validPoints.Select(p => p.LocalId).ToList(), // Accept duplicates too so client deletes them
+                SavedCount = newPoints.Count,
+                DuplicateCount = existingLocalIds.Count,
+                StatusReason = "Valid"
+            };
+        }
+
+        public async Task ReceiveRecoveryEventAsync(
+            Guid engineerPublicId,
+            RecoveryEventRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var engineer = await _context.Engineers
+                .FirstOrDefaultAsync(
+                    x => x.PublicId == engineerPublicId && !x.IsDeleted,
+                    cancellationToken);
+
+            if (engineer is null || engineer.Status != EngineerStatus.Active)
+                return;
+
+            var device = await _context.Devices
+                .FirstOrDefaultAsync(
+                    x => x.PublicId == request.DevicePublicId && !x.IsDeleted,
+                    cancellationToken);
+
+            if (device is null || device.Status != DeviceStatus.Active)
+                return;
+
+            var assignmentExists = await _context.EngineerDevices
+                .AnyAsync(
+                    x => x.EngineerId == engineer.Id
+                         && x.DeviceId == device.Id
+                         && x.IsActive
+                         && !x.IsDeleted,
+                    cancellationToken);
+
+            if (!assignmentExists)
+                return;
+
+            var recoveryEvent = new DeviceRecoveryEvent
+            {
+                DeviceId = device.Id,
+                EngineerId = engineer.Id,
+                RecoveryReason = request.RecoveryReason,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+
+            await _context.DeviceRecoveryEvents.AddAsync(recoveryEvent, cancellationToken);
+
+            var healthStatus = await _context.DeviceTrackingHealthStatuses
+                .FirstOrDefaultAsync(x => x.DeviceId == device.Id, cancellationToken);
+
+            if (healthStatus != null)
+            {
+                healthStatus.LastError = request.LastError;
+                healthStatus.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
 
         public async Task<ReceiveLocationUpdateResponse> ReceiveLocationUpdateAsync(
             Guid engineerPublicId,
@@ -476,6 +786,25 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);
 
+            var latestRecoveryEvents = await _context.DeviceRecoveryEvents
+                .AsNoTracking()
+                .GroupBy(re => re.DeviceId)
+                .Select(g => g.OrderByDescending(re => re.CreatedAtUtc).FirstOrDefault())
+                .Where(re => re != null)
+                .ToDictionaryAsync(re => re!.DeviceId, cancellationToken);
+
+            foreach (var loc in locations)
+            {
+                var device = await _context.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.PublicId == loc.DevicePublicId, cancellationToken);
+                if (device != null && latestRecoveryEvents.TryGetValue(device.Id, out var re) && re != null)
+                {
+                    loc.LastRecoveryReason = re.RecoveryReason;
+                    loc.LastRecoveryAtUtc = re.CreatedAtUtc;
+                    loc.UploadedOfflinePointsCount = re.UploadedPointsCount;
+                    loc.DroppedPointsCount = re.DroppedPointsCount;
+                }
+            }
+
             if (!TrackingScheduleHelper.IsWithinWorkingHours(_scheduleOptions, DateTime.UtcNow))
             {
                 foreach (var loc in locations)
@@ -527,6 +856,25 @@ namespace FutureOfEgypt.Infrastructure.Services
                                  };
 
             var locations = await locationsQuery.ToListAsync(cancellationToken);
+
+            var latestRecoveryEvents = await _context.DeviceRecoveryEvents
+                .AsNoTracking()
+                .GroupBy(re => re.DeviceId)
+                .Select(g => g.OrderByDescending(re => re.CreatedAtUtc).FirstOrDefault())
+                .Where(re => re != null)
+                .ToDictionaryAsync(re => re!.DeviceId, cancellationToken);
+
+            foreach (var loc in locations)
+            {
+                var device = await _context.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.PublicId == loc.DevicePublicId, cancellationToken);
+                if (device != null && latestRecoveryEvents.TryGetValue(device.Id, out var re) && re != null)
+                {
+                    loc.LastRecoveryReason = re.RecoveryReason;
+                    loc.LastRecoveryAtUtc = re.CreatedAtUtc;
+                    loc.UploadedOfflinePointsCount = re.UploadedPointsCount;
+                    loc.DroppedPointsCount = re.DroppedPointsCount;
+                }
+            }
 
             if (!TrackingScheduleHelper.IsWithinWorkingHours(_scheduleOptions, DateTime.UtcNow))
             {

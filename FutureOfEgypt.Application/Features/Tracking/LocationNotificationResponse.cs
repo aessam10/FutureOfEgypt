@@ -38,5 +38,10 @@ namespace FutureOfEgypt.Application.Features.Tracking
 
         public string? LastError { get; set; }
         public int? TrackingIntervalMs { get; set; }
+
+        public string? LastRecoveryReason { get; set; }
+        public DateTime? LastRecoveryAtUtc { get; set; }
+        public int? UploadedOfflinePointsCount { get; set; }
+        public int? DroppedPointsCount { get; set; }
     }
 }

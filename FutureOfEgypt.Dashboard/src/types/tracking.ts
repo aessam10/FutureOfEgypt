@@ -25,6 +25,10 @@ export interface LatestLocationResponse {
   lastTickAtUtc?: string;
   lastError?: string;
   trackingIntervalMs?: number | null;
+  lastRecoveryReason?: string | null;
+  lastRecoveryAtUtc?: string | null;
+  uploadedOfflinePointsCount?: number | null;
+  droppedPointsCount?: number | null;
 }
 
 export interface LocationReceivedEvent {
@@ -45,6 +49,10 @@ export interface LocationReceivedEvent {
   lastTickAtUtc?: string;
   lastError?: string;
   trackingIntervalMs?: number | null;
+  lastRecoveryReason?: string | null;
+  lastRecoveryAtUtc?: string | null;
+  uploadedOfflinePointsCount?: number | null;
+  droppedPointsCount?: number | null;
 }
 
 export interface EngineerStatusChangedEvent {

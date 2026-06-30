@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -14,6 +15,8 @@ import '../../core/network/api_client.dart';
 import 'tracking_intervals.dart';
 import 'tracking_config_service.dart';
 import 'device_health_service.dart';
+import 'package:uuid/uuid.dart';
+import 'offline_queue_helper.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -62,8 +65,10 @@ void callbackDispatcher() {
         debugPrint('[FOE_WATCHDOG] Error checking last tick: $e');
       }
 
+      final permission = await Geolocator.checkPermission();
+
       if (!isRunning || isStale) {
-        debugPrint('[FOE_WATCHDOG] Background service is stopped or stale. Recovering...');
+        debugPrint('[FOE_WATCHDOG] Background service is stopped or stale (isRunning=$isRunning). Recovering...');
         
         try {
           bool? batteryOptIgnored;
@@ -80,8 +85,8 @@ void callbackDispatcher() {
             token: token,
             engineerPublicId: engineerId,
             devicePublicId: deviceId,
-            backgroundServiceAlive: false,
-            lastError: 'BackgroundServiceStopped',
+            backgroundServiceAlive: isRunning,
+            lastError: isRunning ? null : 'BackgroundServiceStopped',
             fallbackReason: reason,
             trackingIntervalMs: TrackingIntervals.locationUpdateInterval.inMilliseconds,
           ).timeout(const Duration(seconds: 15));
@@ -89,13 +94,28 @@ void callbackDispatcher() {
           debugPrint('[FOE_WATCHDOG] Watchdog health report failed: $he');
         }
 
-        await service.startService();
-        service.invoke('startTracking', {
-          'token': token,
-          'devicePublicId': deviceId,
-          'installationId': installationId,
-        });
-        debugPrint('[FOE_WATCHDOG] Service restart triggered successfully.');
+        if (permission == LocationPermission.always) {
+          await service.startService();
+          service.invoke('startTracking', {
+            'token': token,
+            'devicePublicId': deviceId,
+            'installationId': installationId,
+          });
+          debugPrint('[FOE_WATCHDOG] Service restart triggered successfully. Sending watchdog recovery event.');
+          try {
+            await DeviceHealthService.reportRecoveryEvent(
+              token: token,
+              engineerPublicId: engineerId,
+              devicePublicId: deviceId,
+              recoveryReason: 'RecoveredByWatchdog',
+              lastError: 'BackgroundServiceStopped',
+            );
+          } catch (re) {
+            debugPrint('[FOE_WATCHDOG] Failed to report watchdog recovery event: $re');
+          }
+        } else {
+          debugPrint('[FOE_WATCHDOG] Service restart skipped: Location permission is not Always ($permission).');
+        }
       } else {
         debugPrint('[FOE_WATCHDOG] Service is running and healthy.');
       }
@@ -244,6 +264,17 @@ void onStart(ServiceInstance service) async {
   await ApiClient.init();
   debugPrint('[FOE_BACKGROUND] Service started.');
 
+  try {
+    final uptime = await _getSystemUptime();
+    if (uptime != null && uptime < 300) {
+      debugPrint('[FOE_BACKGROUND] System uptime is ${uptime.toStringAsFixed(1)}s. Detecting device reboot!');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_reboot_recovery', true);
+    }
+  } catch (e) {
+    debugPrint('[FOE_BACKGROUND] Error checking uptime: $e');
+  }
+
   // Auto-start from config if possible
   if (_backgroundTimer == null) {
     debugPrint('[FOE_BACKGROUND] Checking for saved config to auto-start tracking...');
@@ -293,6 +324,28 @@ Future<void> _handleStartTracking(ServiceInstance service, Map<String, dynamic>?
   print('[FOE_BACKGROUND] InstallationId: $installationId');
   print('[FOE_BACKGROUND] Interval: ${TrackingIntervals.label}');
   print('=========================================================');
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final isReboot = prefs.getBool('is_reboot_recovery') ?? false;
+    if (isReboot) {
+      await prefs.setBool('is_reboot_recovery', false);
+      final config = await TrackingConfigService.getTrackingData();
+      final engineerId = config['engineerPublicId'] as String?;
+      if (engineerId != null) {
+        print('[FOE_BACKGROUND] Reporting RecoveredAfterBoot recovery event.');
+        await DeviceHealthService.reportRecoveryEvent(
+          token: token,
+          engineerPublicId: engineerId,
+          devicePublicId: devicePublicId,
+          recoveryReason: 'RecoveredAfterBoot',
+          lastError: 'DeviceRebooted',
+        );
+      }
+    }
+  } catch (e) {
+    debugPrint('[FOE_BACKGROUND] Failed to report boot recovery event: $e');
+  }
 
   if (_backgroundTimer != null) {
     debugPrint('[FOE_BACKGROUND] tracking timer already running; skipping duplicate timer');
@@ -407,32 +460,36 @@ Future<void> _runTick({
         }
       }
 
-      if (position != null) {
-        final body = {
-          'devicePublicId': devicePublicId,
-          'installationId': installationId,
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'accuracy': position.accuracy,
-          'speed': position.speed,
-          'isMocked': position.isMocked,
-          'recordedAt': position.timestamp?.toUtc().toIso8601String() ?? DateTime.now().toUtc().toIso8601String(),
-        };
+      if (position != null && engineerPublicId != null) {
+        final recordedAt = position.timestamp?.toUtc() ?? DateTime.now().toUtc();
+        final dayKey = recordedAt.toIso8601String().substring(0, 10);
 
-        print('[FOE_BACKGROUND] Location POST attempted.');
-        final response = await ApiClient.postWithToken('Tracking/location', body, token)
-            .timeout(const Duration(seconds: 15));
-        print('[FOE_BACKGROUND] Location POST response code: ${response.statusCode}');
+        final point = OfflineLocationPoint(
+          localId: const Uuid().v4(),
+          engineerPublicId: engineerPublicId,
+          devicePublicId: devicePublicId,
+          dayKey: dayKey,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          accuracy: position.accuracy,
+          speed: position.speed,
+          isMocked: position.isMocked,
+          recordedAtUtc: recordedAt,
+          createdAtUtc: DateTime.now().toUtc(),
+        );
 
-        if (response.statusCode == 200) {
-          // Success, clear error
-          lastError = '';
+        print('[FOE_BACKGROUND] Saving acquired position to local queue. dayKey: $dayKey');
+        final saved = await OfflineQueueHelper().insertPoint(point);
+        if (!saved) {
           if (prefs != null) {
-            await prefs.setString('last_tracking_error', '');
+            final dropped = prefs.getInt('dropped_points_count') ?? 0;
+            await prefs.setInt('dropped_points_count', dropped + 1);
           }
-        } else {
-          lastError = 'Server returned status code: ${response.statusCode}';
         }
+      }
+
+      if (engineerPublicId != null) {
+        await _flushPendingLocationQueue(token, engineerPublicId, devicePublicId, installationId, prefs);
       }
     }
   } catch (e) {
@@ -473,4 +530,111 @@ Future<void> _runTick({
       print('[FOE_BACKGROUND] Health POST skipped: missing engineerPublicId');
     }
   }
+}
+
+Future<void> _flushPendingLocationQueue(
+  String token,
+  String engineerPublicId,
+  String devicePublicId,
+  String installationId,
+  SharedPreferences? prefs,
+) async {
+  final queueHelper = OfflineQueueHelper();
+  
+  for (int i = 0; i < 3; i++) {
+    final dayKeys = await queueHelper.getDistinctDayKeys();
+    if (dayKeys.isEmpty) break;
+
+    final targetDayKey = dayKeys.first; // Oldest dayKey
+    final pendingPoints = await queueHelper.getPointsForDayKey(targetDayKey, 200);
+    if (pendingPoints.isEmpty) break;
+
+    // Check if this is a network recovery batch
+    final hasNetworkFailure = prefs?.getBool('has_network_failure') ?? false;
+    
+    // Oldest point is older than 2 * trackingInterval
+    final oldestRecordedAt = pendingPoints.first.recordedAtUtc;
+    final timeDiff = DateTime.now().toUtc().difference(oldestRecordedAt);
+    final isAccumulated = timeDiff > (TrackingIntervals.locationUpdateInterval * 2);
+
+    Map<String, dynamic>? diagnostics;
+    if (hasNetworkFailure || isAccumulated) {
+      final droppedCount = prefs?.getInt('dropped_points_count') ?? 0;
+      diagnostics = {
+        'recoveryReason': 'RecoveredAfterNetworkLoss',
+        'offlineFromUtc': oldestRecordedAt.toIso8601String(),
+        'offlineToUtc': pendingPoints.last.recordedAtUtc.toIso8601String(),
+        'uploadedOfflinePointsCount': pendingPoints.length,
+        'droppedPointsCount': droppedCount,
+      };
+    }
+
+    final body = {
+      'engineerPublicId': engineerPublicId,
+      'devicePublicId': devicePublicId,
+      'installationId': installationId,
+      'dayKey': targetDayKey,
+      'points': pendingPoints.map((p) => {
+        'localId': p.localId,
+        'latitude': p.latitude,
+        'longitude': p.longitude,
+        'accuracy': p.accuracy,
+        'speed': p.speed,
+        'isMocked': p.isMocked,
+        'recordedAtUtc': p.recordedAtUtc.toIso8601String(),
+      }).toList(),
+      if (diagnostics != null) 'diagnostics': diagnostics,
+    };
+
+    try {
+      print('[FOE_BACKGROUND] Location batch POST attempted for dayKey: $targetDayKey, count: ${pendingPoints.length}');
+      final response = await ApiClient.postWithToken('Tracking/locations/batch', body, token)
+          .timeout(const Duration(seconds: 20));
+      print('[FOE_BACKGROUND] Location batch POST response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        // Clear network failure flag and reset dropped points
+        if (prefs != null) {
+          await prefs.setBool('has_network_failure', false);
+          if (diagnostics != null) {
+            await prefs.setInt('dropped_points_count', 0);
+          }
+          await prefs.setString('last_tracking_error', '');
+        }
+
+        final List<String> acceptedIds = pendingPoints.map((p) => p.localId).toList();
+        await queueHelper.deletePoints(acceptedIds);
+      } else {
+        // Set network failure flag
+        if (prefs != null) {
+          await prefs.setBool('has_network_failure', true);
+          await prefs.setString('last_tracking_error', 'Server returned status code: ${response.statusCode}');
+        }
+        break; // Stop flushing on failure
+      }
+    } catch (e) {
+      print('[FOE_BACKGROUND] Batch upload failed: $e');
+      if (prefs != null) {
+        await prefs.setBool('has_network_failure', true);
+        await prefs.setString('last_tracking_error', e.toString());
+      }
+      break; // Stop flushing on failure
+    }
+  }
+}
+
+Future<double?> _getSystemUptime() async {
+  if (!kIsWeb && Platform.isAndroid) {
+    try {
+      final file = File('/proc/uptime');
+      if (await file.exists()) {
+        final contents = await file.readAsString();
+        final parts = contents.trim().split(' ');
+        if (parts.isNotEmpty) {
+          return double.tryParse(parts[0]);
+        }
+      }
+    } catch (_) {}
+  }
+  return null;
 }
