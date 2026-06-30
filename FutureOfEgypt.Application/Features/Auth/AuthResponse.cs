@@ -1,4 +1,4 @@
-﻿namespace FutureOfEgypt.Application.Features.Auth
+namespace FutureOfEgypt.Application.Features.Auth
 {
     public sealed class AuthResponse
     {
@@ -9,6 +9,8 @@
         public Guid? DevicePublicId { get; set; }
 
         public string? DeviceName { get; set; }
+
+        public string? ProfilePhotoUrl { get; set; }
 
         public string FullName { get; set; } = string.Empty;
 

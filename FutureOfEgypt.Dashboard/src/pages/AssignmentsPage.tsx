@@ -86,6 +86,7 @@ export function AssignmentsPage() {
       await queryClient.invalidateQueries({ queryKey: ['devices'] });
       await queryClient.invalidateQueries({ queryKey: ['latest-locations'] });
       await queryClient.invalidateQueries({ queryKey: ['hidden-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['deviceAppStatuses'] });
       setIsAssignDialogOpen(false);
       setSelectedEngineer(null);
       setSelectedDevice(null);
@@ -102,6 +103,7 @@ export function AssignmentsPage() {
       await queryClient.invalidateQueries({ queryKey: ['devices'] });
       await queryClient.invalidateQueries({ queryKey: ['latest-locations'] });
       await queryClient.invalidateQueries({ queryKey: ['hidden-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['deviceAppStatuses'] });
     },
     onError: () => setFormError('Failed to unassign device.'),
   });

@@ -114,6 +114,7 @@ export function EngineersPage() {
       await queryClient.invalidateQueries({ queryKey: ['active-assignments'] });
       await queryClient.invalidateQueries({ queryKey: ['latest-locations'] });
       await queryClient.invalidateQueries({ queryKey: ['hidden-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['deviceAppStatuses'] });
       setMenuAnchor(null);
       setSelectedEngineer(null);
     },

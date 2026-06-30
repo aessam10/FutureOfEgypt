@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Avatar } from '@mui/material';
 import { axiosClient } from '../api/axiosClient';
 
 interface AuthAvatarProps {
@@ -45,36 +46,56 @@ export function AuthAvatar({ url, name, className = '', onClick, size = 'md' }: 
 
   const initials = getInitials(name);
 
-  const sizeClasses = {
-    sm: 'w-8 h-8 text-xs',
-    md: 'w-10 h-10 text-sm',
-    lg: 'w-12 h-12 text-base',
-    xl: 'w-16 h-16 text-lg',
-    '2xl': 'w-32 h-32 text-2xl',
+  const sizeStyles = {
+    sm: { width: 32, height: 32, fontSize: '0.75rem' },
+    md: { width: 40, height: 40, fontSize: '0.875rem' },
+    lg: { width: 48, height: 48, fontSize: '1rem' },
+    xl: { width: 64, height: 64, fontSize: '1.25rem' },
+    '2xl': { width: 128, height: 128, fontSize: '2rem' },
   };
 
-  const containerClass = `relative inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 ${sizeClasses[size]} ${className}`;
+  const style = sizeStyles[size];
 
   if (!url || hasError || !imgSrc) {
     return (
-      <div 
-        className={`${containerClass} bg-indigo-100 text-indigo-600 font-semibold cursor-pointer`}
+      <Avatar
+        sx={{
+          ...style,
+          bgcolor: 'rgba(79, 70, 229, 0.1)',
+          color: 'rgb(79, 70, 229)',
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+        className={className}
         onClick={onClick}
         title={name}
       >
         {initials}
-      </div>
+      </Avatar>
     );
   }
 
   return (
-    <div 
-      className={`${containerClass} cursor-pointer bg-gray-100`}
+    <Avatar
+      sx={{
+        ...style,
+        bgcolor: '#f1f5f9',
+        cursor: 'pointer',
+      }}
+      className={className}
       onClick={onClick}
       title={name}
     >
-      <img src={imgSrc} alt={name} className="w-full h-full object-cover" />
-    </div>
+      <img
+        src={imgSrc}
+        alt={name}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+        }}
+      />
+    </Avatar>
   );
 }
 

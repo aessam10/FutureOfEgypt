@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { AuthResponse, AuthUser, LoginRequest } from '../types/auth';
 import { login as loginApi, logout as logoutApi } from '../api/authApi';
 import {
@@ -38,6 +39,7 @@ function mapAuthResponseToUser(response: AuthResponse): AuthUser {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => getSavedUser());
+  const queryClient = useQueryClient();
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -67,6 +69,7 @@ if (!canAccessDashboard) {
 
         clearAuthStorage();
         setUser(null);
+        queryClient.clear();
 
         if (refreshToken) {
           try {

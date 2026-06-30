@@ -485,39 +485,54 @@ namespace FutureOfEgypt.Infrastructure.Services
         public async Task<List<DeviceAppStatusAdminResponse>> GetAllDeviceStatusesAsync(CancellationToken cancellationToken = default)
         {
             var statuses = await _context.DeviceAppStatuses
-                .Include(x => x.Engineer)
                 .Include(x => x.Device)
+                .Where(x => x.Device != null && !x.Device.IsDeleted)
                 .AsNoTracking()
                 .OrderByDescending(x => x.LastReportedAt)
                 .ToListAsync(cancellationToken);
 
             var deviceIds = statuses.Where(s => s.DeviceId.HasValue).Select(s => s.DeviceId!.Value).Distinct().ToList();
+
+            var activeAssignments = await _context.EngineerDevices
+                .Include(x => x.Engineer)
+                .Where(x => deviceIds.Contains(x.DeviceId) && x.IsActive && !x.IsDeleted && x.Engineer != null && !x.Engineer.IsDeleted)
+                .ToDictionaryAsync(x => x.DeviceId, x => x.Engineer!, cancellationToken);
+
             var latestLocations = await _context.DeviceLatestLocations
                 .Where(x => deviceIds.Contains(x.DeviceId) && !x.IsDeleted)
                 .ToDictionaryAsync(x => x.DeviceId, x => x.ReceivedAt, cancellationToken);
 
-            return statuses.Select(s => new DeviceAppStatusAdminResponse
+            return statuses.Select(s =>
             {
-                InstallationId = s.InstallationId,
-                Platform = s.Platform,
-                EngineerPublicId = s.Engineer?.PublicId,
-                EngineerName = s.Engineer?.FullName,
-                DevicePublicId = s.Device?.PublicId,
-                DeviceName = s.Device?.DeviceName,
-                AppVersionName = s.AppVersionName,
-                AppVersionCode = s.AppVersionCode,
-                LatestVersionCode = s.LatestVersionCode,
-                MinimumRecommendedVersionCode = s.MinimumRecommendedVersionCode,
-                MinimumRequiredVersionCode = s.MinimumRequiredVersionCode,
-                MinimumMandatoryVersionCode = s.MinimumMandatoryVersionCode,
-                UpdateLevel = s.UpdateLevel,
-                Status = s.Status,
-                LastCheckedAt = s.LastCheckedAt,
-                LastReportedAt = s.LastReportedAt,
-                LastUpdateStartedAt = s.LastUpdateStartedAt,
-                LastUpdateFailedAt = s.LastUpdateFailedAt,
-                LastError = s.LastError,
-                LastLocationReceivedAt = s.DeviceId.HasValue && latestLocations.TryGetValue(s.DeviceId.Value, out var ts) ? ts : null
+                Engineer? activeEngineer = null;
+                if (s.DeviceId.HasValue)
+                {
+                    activeAssignments.TryGetValue(s.DeviceId.Value, out activeEngineer);
+                }
+
+                return new DeviceAppStatusAdminResponse
+                {
+                    InstallationId = s.InstallationId,
+                    Platform = s.Platform,
+                    EngineerPublicId = activeEngineer?.PublicId,
+                    EngineerName = activeEngineer?.FullName,
+                    DevicePublicId = s.Device?.PublicId,
+                    DeviceName = s.Device?.DeviceName,
+                    AppVersionName = s.AppVersionName,
+                    AppVersionCode = s.AppVersionCode,
+                    LatestVersionCode = s.LatestVersionCode,
+                    MinimumRecommendedVersionCode = s.MinimumRecommendedVersionCode,
+                    MinimumRequiredVersionCode = s.MinimumRequiredVersionCode,
+                    MinimumMandatoryVersionCode = s.MinimumMandatoryVersionCode,
+                    UpdateLevel = s.UpdateLevel,
+                    Status = s.Status,
+                    LastCheckedAt = s.LastCheckedAt,
+                    LastReportedAt = s.LastReportedAt,
+                    LastUpdateStartedAt = s.LastUpdateStartedAt,
+                    LastUpdateFailedAt = s.LastUpdateFailedAt,
+                    LastError = s.LastError,
+                    LastLocationReceivedAt = s.DeviceId.HasValue && latestLocations.TryGetValue(s.DeviceId.Value, out var ts) ? ts : null
+                };
             }).ToList();
         }
     }

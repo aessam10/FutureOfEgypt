@@ -91,6 +91,7 @@ export function DevicesPage() {
       updateDeviceStatus(devicePublicId, { status }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['devices'] });
+      await queryClient.invalidateQueries({ queryKey: ['deviceAppStatuses'] });
       setMenuAnchor(null);
       setSelectedDevice(null);
     },

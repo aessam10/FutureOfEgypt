@@ -633,6 +633,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 EngineerPublicId = engineerPublicId,
                 DevicePublicId = activeDevice.DevicePublicId,
                 DeviceName = activeDevice.DeviceName,
+                ProfilePhotoUrl = !string.IsNullOrEmpty(user.ProfilePhotoPath) ? $"/api/profile/photo/{user.Id}" : null,
                 FullName = user.FullName,
                 Email = user.Email ?? string.Empty,
                 Roles = roles.ToList(),
