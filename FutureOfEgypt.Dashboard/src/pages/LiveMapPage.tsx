@@ -90,6 +90,27 @@ function filterAndDownsampleRoute(points: RoutePoint[]): RoutePoint[] {
 }
 
 // ─── Status Display Helper ────────────────────────────────────────────────────
+function isServiceStalled(location: LatestLocationResponse): boolean {
+  if (location.backgroundServiceAlive === false) return true;
+
+  const effectiveIntervalMs = location.trackingIntervalMs ?? FALLBACK_TRACKING_INTERVAL_MS;
+  const serviceStallThresholdMs = Math.min(15 * 60 * 1000, effectiveIntervalMs * 2);
+
+  const isStale = (dateStr?: string) => {
+    if (!dateStr) return false; // Missing timestamp alone does not mean stalled
+    const diff = Date.now() - new Date(dateStr).getTime();
+    return diff > serviceStallThresholdMs;
+  };
+
+  if (!location.lastTickAtUtc && !location.lastHealthReportAt) {
+    const diff = Date.now() - new Date(location.receivedAt).getTime();
+    return diff > serviceStallThresholdMs;
+  }
+
+  const timestamps = [location.lastTickAtUtc, location.lastHealthReportAt].filter(Boolean) as string[];
+  return timestamps.some(isStale);
+}
+
 function getDashboardStatus(location: LatestLocationResponse): { label: string, color: string, isBlocked: boolean } {
   const reason = location.trackingStatusReason;
 
@@ -104,6 +125,10 @@ function getDashboardStatus(location: LatestLocationResponse): { label: string, 
   }
   if (reason === 'AuthExpired' || reason === 'DeviceRevoked') {
     return { label: 'Blocked — Device revoked', color: '#ef4444', isBlocked: true };
+  }
+
+  if (isServiceStalled(location)) {
+    return { label: 'Offline — App stopped or permission may have changed', color: '#94a3b8', isBlocked: false };
   }
 
   if (location.isOnline) {
@@ -134,15 +159,14 @@ function createPinIcon(color: string): L.DivIcon {
   });
 }
 
-const ONLINE_ICON = createPinIcon('#10b981');   // Green
-const OFFLINE_ICON = createPinIcon('#94a3b8');  // Gray
 const MOCKED_ICON = createPinIcon('#ef4444');   // Red
 const HIDDEN_ICON = createPinIcon('#f59e0b');   // Orange/Amber
 
 function getMarkerIcon(location: LatestLocationResponse, currentFilter: FilterType): L.DivIcon {
   if (currentFilter === 'hidden') return HIDDEN_ICON;
   if (location.isMocked) return MOCKED_ICON;
-  return location.isOnline ? ONLINE_ICON : OFFLINE_ICON;
+  const status = getDashboardStatus(location);
+  return createPinIcon(status.color);
 }
 
 
@@ -658,17 +682,7 @@ export function LiveMapPage() {
 
       <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid rgba(148, 163, 184, 0.15)' }}>
         {(() => {
-          const effectiveIntervalMs = location.trackingIntervalMs ?? FALLBACK_TRACKING_INTERVAL_MS;
-          const serviceStallThresholdMs = Math.min(15 * 60 * 1000, effectiveIntervalMs * 2);
-
-          const isStale = (dateStr?: string) => {
-            if (!dateStr) return true;
-            const diff = Date.now() - new Date(dateStr).getTime();
-            return diff > serviceStallThresholdMs;
-          };
-          const isTickStale = isStale(location.lastTickAtUtc);
-          const isHealthStale = isStale(location.lastHealthReportAt);
-          const isServiceStopped = !location.backgroundServiceAlive || isTickStale || isHealthStale;
+          const isServiceStopped = isServiceStalled(location);
           const showBatteryWarning = isServiceStopped && location.batteryOptimizationIgnored === false;
 
           return (
@@ -1163,6 +1177,11 @@ export function LiveMapPage() {
                                 {getDashboardStatus(location).label}
                               </Typography>
                             </Box>
+                            {isServiceStalled(location) && location.batteryOptimizationIgnored === false && (
+                              <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: '#fca5a5', fontWeight: 600 }}>
+                                Possible cause: Battery optimization / OS killed the service
+                              </Typography>
+                            )}
                           </Box>
                         </Box>
 
