@@ -9,13 +9,13 @@ import '../tracking/offline_queue_helper.dart';
 
 class AuthService {
   static Future<Map<String, dynamic>> login(
-    String email,
+    String username,
     String password,
   ) async {
     final response = await ApiClient.post(
       "Auth/login",
       {
-        "email": email,
+        "username": username,
         "password": password,
       },
       includeAuth: false,
@@ -87,10 +87,10 @@ class AuthService {
     ApiClient.setToken('');
   }
 
-  static Future<void> forgotPassword(String email) async {
+  static Future<void> forgotPassword(String username, String email) async {
     final response = await ApiClient.post(
       "Auth/forgot-password",
-      {"email": email},
+      {"username": username, "email": email},
       includeAuth: false,
     );
 

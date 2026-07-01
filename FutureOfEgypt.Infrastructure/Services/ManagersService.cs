@@ -55,6 +55,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .Select(x => new ManagerResponse
                 {
                     Id = x.Id,
+                    Username = x.UserName ?? string.Empty,
                     FullName = x.FullName,
                     Email = x.Email ?? string.Empty,
                     PhoneNumber = x.PhoneNumber,
@@ -84,20 +85,7 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             user.FullName = request.FullName.Trim();
             user.PhoneNumber = request.PhoneNumber?.Trim();
-
-            if (!string.Equals(user.Email, request.Email.Trim(), StringComparison.OrdinalIgnoreCase))
-            {
-                var email = request.Email.Trim();
-                var existingUser = await _userManager.FindByEmailAsync(email);
-                if (existingUser != null && existingUser.Id != user.Id)
-                {
-                    throw new InvalidOperationException("Email is already in use.");
-                }
-
-                user.Email = email;
-                user.UserName = email;
-            }
-
+            user.Email = request.Email.Trim();
             var result = await _userManager.UpdateAsync(user);
             if (!result.Succeeded) throw new InvalidOperationException(string.Join(", ", result.Errors.Select(e => e.Description)));
 
@@ -115,6 +103,7 @@ namespace FutureOfEgypt.Infrastructure.Services
             return new ManagerResponse
             {
                 Id = user.Id,
+                Username = user.UserName ?? string.Empty,
                 FullName = user.FullName,
                 Email = user.Email ?? string.Empty,
                 PhoneNumber = user.PhoneNumber,

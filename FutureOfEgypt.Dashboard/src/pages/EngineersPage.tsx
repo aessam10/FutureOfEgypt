@@ -49,11 +49,12 @@ interface EngineerFormState {
   fullName: string;
   phoneNumber: string;
   email: string;
+  username: string;
   status: number;
   password?: string;
 }
 const initialFormState: EngineerFormState = {
-  fullName: '', phoneNumber: '', email: '', status: ACTIVE_STATUS, password: '',
+  fullName: '', phoneNumber: '', email: '', username: '', status: ACTIVE_STATUS, password: '',
 };
 
 export function EngineersPage() {
@@ -135,7 +136,7 @@ export function EngineersPage() {
 
   function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!formState.fullName.trim() || !formState.phoneNumber.trim() || !formState.email.trim()) {
+    if (!formState.fullName.trim() || !formState.phoneNumber.trim() || !formState.email.trim() || (!isEditMode && !formState.username.trim())) {
       setFormError('Please fill all required fields.');
       return;
     }
@@ -156,6 +157,7 @@ export function EngineersPage() {
         fullName: formState.fullName.trim(),
         phoneNumber: formState.phoneNumber.trim(),
         email: formState.email.trim(),
+        username: formState.username.trim(),
         password: formState.password?.trim(),
         status: formState.status,
       });
@@ -258,7 +260,14 @@ export function EngineersPage() {
                         {engineer.publicId}
                       </Typography>
                     </TableCell>
-                    <TableCell>{engineer.email}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <span>{engineer.email}</span>
+                        {engineer.username && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>@{engineer.username}</Typography>
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell>{engineer.phoneNumber}</TableCell>
                     <TableCell><EngineerStatusChip status={engineer.status} /></TableCell>
                     <TableCell>{new Date(engineer.createdAt).toLocaleDateString()}</TableCell>
@@ -309,6 +318,7 @@ export function EngineersPage() {
               setFormState({
                 fullName: selectedEngineer.fullName,
                 email: selectedEngineer.email,
+                username: selectedEngineer.username || '',
                 phoneNumber: selectedEngineer.phoneNumber,
                 status: selectedEngineer.status,
               });
@@ -384,6 +394,13 @@ export function EngineersPage() {
               value={formState.email}
               onChange={(e) => setFormState((s) => ({ ...s, email: e.target.value }))}
               sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth label="Username" required={!isEditMode}
+              value={formState.username}
+              onChange={(e) => setFormState((s) => ({ ...s, username: e.target.value }))}
+              sx={{ mb: 2 }}
+              disabled={isEditMode}
             />
             {!isEditMode && (
               <>

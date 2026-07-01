@@ -171,26 +171,6 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Engineers",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    FullName = table.Column<string>(type: "text", nullable: false),
-                    PhoneNumber = table.Column<string>(type: "text", nullable: true),
-                    Email = table.Column<string>(type: "text", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Engineers", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "AspNetRoleClaims",
                 columns: table => new
                 {
@@ -241,11 +221,117 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ChatParticipants",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ConversationId = table.Column<int>(type: "integer", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Role = table.Column<int>(type: "integer", nullable: false),
+                    JoinedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LeftAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsMuted = table.Column<bool>(type: "boolean", nullable: false),
+                    MutedUntilUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsArchived = table.Column<bool>(type: "boolean", nullable: false),
+                    ArchivedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastReadMessageId = table.Column<int>(type: "integer", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ChatParticipants", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ChatParticipants_ChatConversations_ConversationId",
+                        column: x => x.ConversationId,
+                        principalTable: "ChatConversations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_ChatParticipants_ChatMessages_LastReadMessageId",
+                        column: x => x.LastReadMessageId,
+                        principalTable: "ChatMessages",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Admins",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FullName = table.Column<string>(type: "text", nullable: false),
+                    Email = table.Column<string>(type: "text", nullable: true),
+                    PhoneNumber = table.Column<string>(type: "text", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Admins", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AspNetUserClaims",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ClaimType = table.Column<string>(type: "text", nullable: true),
+                    ClaimValue = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AspNetUserClaims", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AspNetUserLogins",
+                columns: table => new
+                {
+                    LoginProvider = table.Column<string>(type: "text", nullable: false),
+                    ProviderKey = table.Column<string>(type: "text", nullable: false),
+                    ProviderDisplayName = table.Column<string>(type: "text", nullable: true),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AspNetUserLogins", x => new { x.LoginProvider, x.ProviderKey });
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AspNetUserRoles",
+                columns: table => new
+                {
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RoleId = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AspNetUserRoles", x => new { x.UserId, x.RoleId });
+                    table.ForeignKey(
+                        name: "FK_AspNetUserRoles_AspNetRoles_RoleId",
+                        column: x => x.RoleId,
+                        principalTable: "AspNetRoles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AspNetUsers",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     FullName = table.Column<string>(type: "text", nullable: false),
+                    UserType = table.Column<string>(type: "text", nullable: false),
                     EngineerId = table.Column<int>(type: "integer", nullable: true),
                     CompanyEmail = table.Column<string>(type: "text", nullable: true),
                     ProfilePhotoPath = table.Column<string>(type: "text", nullable: true),
@@ -269,11 +355,103 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AspNetUsers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AspNetUserTokens",
+                columns: table => new
+                {
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LoginProvider = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    Value = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AspNetUserTokens", x => new { x.UserId, x.LoginProvider, x.Name });
                     table.ForeignKey(
-                        name: "FK_AspNetUsers_Engineers_EngineerId",
-                        column: x => x.EngineerId,
-                        principalTable: "Engineers",
-                        principalColumn: "Id");
+                        name: "FK_AspNetUserTokens_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Engineers",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    FullName = table.Column<string>(type: "text", nullable: false),
+                    PhoneNumber = table.Column<string>(type: "text", nullable: true),
+                    Email = table.Column<string>(type: "text", nullable: true),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Engineers", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Engineers_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Managers",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FullName = table.Column<string>(type: "text", nullable: false),
+                    Email = table.Column<string>(type: "text", nullable: true),
+                    PhoneNumber = table.Column<string>(type: "text", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Managers", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Managers_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RefreshTokens",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    TokenHash = table.Column<string>(type: "text", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ExpiresAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    RevokedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ReplacedByTokenHash = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RefreshTokens", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RefreshTokens_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -406,6 +584,42 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "DeviceRecoveryEvents",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    DeviceId = table.Column<int>(type: "integer", nullable: false),
+                    EngineerId = table.Column<int>(type: "integer", nullable: false),
+                    RecoveryReason = table.Column<string>(type: "text", nullable: false),
+                    FromUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ToUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UploadedPointsCount = table.Column<int>(type: "integer", nullable: false),
+                    DroppedPointsCount = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DeviceRecoveryEvents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DeviceRecoveryEvents_Devices_DeviceId",
+                        column: x => x.DeviceId,
+                        principalTable: "Devices",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_DeviceRecoveryEvents_Engineers_EngineerId",
+                        column: x => x.EngineerId,
+                        principalTable: "Engineers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "DeviceTrackingHealthStatuses",
                 columns: table => new
                 {
@@ -419,8 +633,12 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     LocationPermissionState = table.Column<string>(type: "text", nullable: true),
                     LocationServiceEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     BackgroundPermissionState = table.Column<string>(type: "text", nullable: true),
-                    BatteryOptimizationState = table.Column<string>(type: "text", nullable: true),
+                    BatteryOptimizationIgnored = table.Column<bool>(type: "boolean", nullable: true),
                     InternetAvailable = table.Column<bool>(type: "boolean", nullable: false),
+                    BackgroundServiceAlive = table.Column<bool>(type: "boolean", nullable: false),
+                    LastTickAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastError = table.Column<string>(type: "text", nullable: true),
+                    TrackingIntervalMs = table.Column<int>(type: "integer", nullable: true),
                     PublicId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -523,6 +741,7 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                     IsMocked = table.Column<bool>(type: "boolean", nullable: false),
                     RecordedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     ReceivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ClientLocalId = table.Column<string>(type: "text", nullable: true),
                     PublicId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -545,149 +764,17 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            migrationBuilder.CreateTable(
-                name: "ChatParticipants",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    ConversationId = table.Column<int>(type: "integer", nullable: false),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Role = table.Column<int>(type: "integer", nullable: false),
-                    JoinedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    LeftAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    IsMuted = table.Column<bool>(type: "boolean", nullable: false),
-                    LastReadMessageId = table.Column<int>(type: "integer", nullable: true),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ChatParticipants", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ChatParticipants_ChatConversations_ConversationId",
-                        column: x => x.ConversationId,
-                        principalTable: "ChatConversations",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ChatParticipants_ChatMessages_LastReadMessageId",
-                        column: x => x.LastReadMessageId,
-                        principalTable: "ChatMessages",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
+            migrationBuilder.CreateIndex(
+                name: "IX_Admins_PublicId",
+                table: "Admins",
+                column: "PublicId",
+                unique: true);
 
-            migrationBuilder.CreateTable(
-                name: "AspNetUserClaims",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ClaimType = table.Column<string>(type: "text", nullable: true),
-                    ClaimValue = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AspNetUserClaims", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AspNetUserClaims_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AspNetUserLogins",
-                columns: table => new
-                {
-                    LoginProvider = table.Column<string>(type: "text", nullable: false),
-                    ProviderKey = table.Column<string>(type: "text", nullable: false),
-                    ProviderDisplayName = table.Column<string>(type: "text", nullable: true),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AspNetUserLogins", x => new { x.LoginProvider, x.ProviderKey });
-                    table.ForeignKey(
-                        name: "FK_AspNetUserLogins_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AspNetUserRoles",
-                columns: table => new
-                {
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    RoleId = table.Column<Guid>(type: "uuid", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AspNetUserRoles", x => new { x.UserId, x.RoleId });
-                    table.ForeignKey(
-                        name: "FK_AspNetUserRoles_AspNetRoles_RoleId",
-                        column: x => x.RoleId,
-                        principalTable: "AspNetRoles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_AspNetUserRoles_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AspNetUserTokens",
-                columns: table => new
-                {
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    LoginProvider = table.Column<string>(type: "text", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
-                    Value = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AspNetUserTokens", x => new { x.UserId, x.LoginProvider, x.Name });
-                    table.ForeignKey(
-                        name: "FK_AspNetUserTokens_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "RefreshTokens",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    TokenHash = table.Column<string>(type: "text", nullable: false),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    ExpiresAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    RevokedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ReplacedByTokenHash = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RefreshTokens", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RefreshTokens_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
+            migrationBuilder.CreateIndex(
+                name: "IX_Admins_UserId",
+                table: "Admins",
+                column: "UserId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppNotifications_PublicId",
@@ -745,7 +832,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_AspNetUsers_EngineerId",
                 table: "AspNetUsers",
-                column: "EngineerId");
+                column: "EngineerId",
+                unique: true,
+                filter: "\"EngineerId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UserNameIndex",
@@ -855,6 +944,11 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_ChatParticipants_UserId_IsArchived",
+                table: "ChatParticipants",
+                columns: new[] { "UserId", "IsArchived" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ChatParticipants_UserId_LeftAtUtc",
                 table: "ChatParticipants",
                 columns: new[] { "UserId", "LeftAtUtc" });
@@ -939,6 +1033,22 @@ namespace FutureOfEgypt.Infrastructure.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_DeviceLatestLocations_PublicId",
                 table: "DeviceLatestLocations",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceRecoveryEvents_DeviceId",
+                table: "DeviceRecoveryEvents",
+                column: "DeviceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceRecoveryEvents_EngineerId",
+                table: "DeviceRecoveryEvents",
+                column: "EngineerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeviceRecoveryEvents_PublicId",
+                table: "DeviceRecoveryEvents",
                 column: "PublicId",
                 unique: true);
 
@@ -1029,6 +1139,13 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_Engineers_UserId",
+                table: "Engineers",
+                column: "UserId",
+                unique: true,
+                filter: "\"UserId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_EngineerStatusHistories_DeviceId_ChangedAtUtc",
                 table: "EngineerStatusHistories",
                 columns: new[] { "DeviceId", "ChangedAtUtc" });
@@ -1045,9 +1162,11 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_LocationHistories_DeviceId",
+                name: "IX_LocationHistories_DeviceId_ClientLocalId",
                 table: "LocationHistories",
-                column: "DeviceId");
+                columns: new[] { "DeviceId", "ClientLocalId" },
+                unique: true,
+                filter: "ClientLocalId IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LocationHistories_EngineerId",
@@ -1061,6 +1180,18 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_Managers_PublicId",
+                table: "Managers",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Managers_UserId",
+                table: "Managers",
+                column: "UserId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RefreshTokens_TokenHash",
                 table: "RefreshTokens",
                 column: "TokenHash",
@@ -1070,11 +1201,58 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 name: "IX_RefreshTokens_UserId",
                 table: "RefreshTokens",
                 column: "UserId");
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Admins_AspNetUsers_UserId",
+                table: "Admins",
+                column: "UserId",
+                principalTable: "AspNetUsers",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_AspNetUserClaims_AspNetUsers_UserId",
+                table: "AspNetUserClaims",
+                column: "UserId",
+                principalTable: "AspNetUsers",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_AspNetUserLogins_AspNetUsers_UserId",
+                table: "AspNetUserLogins",
+                column: "UserId",
+                principalTable: "AspNetUsers",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_AspNetUserRoles_AspNetUsers_UserId",
+                table: "AspNetUserRoles",
+                column: "UserId",
+                principalTable: "AspNetUsers",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_AspNetUsers_Engineers_EngineerId",
+                table: "AspNetUsers",
+                column: "EngineerId",
+                principalTable: "Engineers",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropForeignKey(
+                name: "FK_Engineers_AspNetUsers_UserId",
+                table: "Engineers");
+
+            migrationBuilder.DropTable(
+                name: "Admins");
+
             migrationBuilder.DropTable(
                 name: "AppNotifications");
 
@@ -1112,6 +1290,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 name: "DeviceLatestLocations");
 
             migrationBuilder.DropTable(
+                name: "DeviceRecoveryEvents");
+
+            migrationBuilder.DropTable(
                 name: "DeviceTrackingHealthStatuses");
 
             migrationBuilder.DropTable(
@@ -1127,6 +1308,9 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 name: "LocationHistories");
 
             migrationBuilder.DropTable(
+                name: "Managers");
+
+            migrationBuilder.DropTable(
                 name: "RefreshTokens");
 
             migrationBuilder.DropTable(
@@ -1139,10 +1323,10 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 name: "Devices");
 
             migrationBuilder.DropTable(
-                name: "AspNetUsers");
+                name: "ChatConversations");
 
             migrationBuilder.DropTable(
-                name: "ChatConversations");
+                name: "AspNetUsers");
 
             migrationBuilder.DropTable(
                 name: "Engineers");

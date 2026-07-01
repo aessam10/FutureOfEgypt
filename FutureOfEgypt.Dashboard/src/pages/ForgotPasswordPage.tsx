@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { routes } from '../app/routes';
 
 export function ForgotPasswordPage() {
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -12,15 +13,15 @@ export function ForgotPasswordPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!username.trim() || !email.trim()) return;
 
     setIsLoading(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const result = await forgotPassword(email.trim());
-      setSuccess(result.message || 'If this email exists, a password reset link has been sent.');
+      const result = await forgotPassword(username.trim(), email.trim());
+      setSuccess(result.message || 'If this account exists, a password reset link has been sent.');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'An error occurred while sending the request.');
     } finally {
@@ -45,7 +46,17 @@ export function ForgotPasswordPage() {
           <Box component="form" onSubmit={handleSubmit}>
             <TextField
               fullWidth
-              label="Email Address"
+              label="Username"
+              type="text"
+              variant="outlined"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              sx={{ mb: 3 }}
+            />
+            <TextField
+              fullWidth
+              label="Registered Email"
               type="email"
               variant="outlined"
               value={email}

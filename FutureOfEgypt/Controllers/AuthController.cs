@@ -43,14 +43,13 @@ namespace FutureOfEgypt.Controllers
             if (request.BootstrapPassword != configuredBootstrapPassword)
                 return Unauthorized(new { message = "Invalid bootstrap password." });
 
-            var result = await _authService.CreateFirstAdminAsync(request, cancellationToken);
+            var result = await _authService.CreateFirstAdminAsync(cancellationToken);
 
             return Ok(new
             {
                 message = "First admin created successfully.",
                 id = result.UserId,
-                email = result.Email,
-                fullName = result.FullName,
+                username = result.Email, // Email will be replaced by username property if needed, but let's just return result
                 role = AppRoles.ADMIN
             });
         }
@@ -159,7 +158,7 @@ namespace FutureOfEgypt.Controllers
         {
             await _authService.ForgotPasswordAsync(request, cancellationToken);
             // Always return this exact string to prevent email enumeration
-            return Ok(new { message = "If this email exists, a password reset link has been sent." });
+            return Ok(new { message = "If the account information is correct, a reset link has been sent." });
         }
 
         [AllowAnonymous]

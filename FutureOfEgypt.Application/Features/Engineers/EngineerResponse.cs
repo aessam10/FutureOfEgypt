@@ -12,6 +12,8 @@ namespace FutureOfEgypt.Application.Features.Engineers
 
         public string? Email { get; set; }
 
+        public string? Username { get; set; }
+
         public EngineerStatus Status { get; set; }
 
         public DateTime CreatedAt { get; set; }

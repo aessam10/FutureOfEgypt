@@ -6,7 +6,7 @@ import { routes } from '../app/routes';
 
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [token, setToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,9 +16,9 @@ export function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const qEmail = searchParams.get('email');
+    const qUsername = searchParams.get('username');
     const qToken = searchParams.get('token');
-    if (qEmail) setEmail(qEmail);
+    if (qUsername) setUsername(qUsername);
     if (qToken) setToken(qToken);
   }, [searchParams]);
 
@@ -28,8 +28,8 @@ export function ResetPasswordPage() {
       setError('Passwords do not match.');
       return;
     }
-    if (!email || !token) {
-      setError('Invalid reset link. Missing email or token.');
+    if (!username || !token) {
+      setError('Invalid reset link. Missing username or token.');
       return;
     }
 
@@ -38,7 +38,7 @@ export function ResetPasswordPage() {
     setSuccess(null);
 
     try {
-      const result = await resetPassword({ email, token, newPassword });
+      const result = await resetPassword({ username, token, newPassword });
       setSuccess(result.message || 'Password has been reset successfully.');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Password reset failed.');

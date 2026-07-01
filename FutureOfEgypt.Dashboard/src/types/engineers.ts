@@ -5,6 +5,7 @@ export interface EngineerResponse {
   email: string;
   status: number;
   createdAt: string;
+  username?: string;
   profilePhotoUrl?: string;
 }
 
@@ -12,6 +13,7 @@ export interface CreateEngineerRequest {
   fullName: string;
   phoneNumber: string;
   email: string;
+  username: string;
   status: number;
 }
 
@@ -29,6 +31,7 @@ export interface RegisterEngineerCompleteRequest {
   fullName: string;
   phoneNumber: string;
   email: string;
+  username: string;
   password?: string;
   status: number;
 }

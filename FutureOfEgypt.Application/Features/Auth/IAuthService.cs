@@ -32,7 +32,6 @@ namespace FutureOfEgypt.Application.Features.Auth
             LogoutRequest request,
             CancellationToken cancellationToken = default);
         Task<UserAccountResponse> CreateFirstAdminAsync(
-            CreateFirstAdminRequest request,
             CancellationToken cancellationToken = default);
 
         Task<UserAccountResponse> RegisterEngineerCompleteAsync(

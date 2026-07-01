@@ -16,6 +16,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using FutureOfEgypt.Application.Features.Email;
+using FutureOfEgypt.Application.Common.Helpers;
 
 namespace FutureOfEgypt.Infrastructure.Services
 {
@@ -53,28 +54,28 @@ namespace FutureOfEgypt.Infrastructure.Services
             RegisterAdminRequest request,
             CancellationToken cancellationToken = default)
         {
+            UsernameValidator.Validate(request.Username);
+
             if (string.IsNullOrWhiteSpace(request.FullName))
                 throw new InvalidOperationException("Full name is required.");
-
-            if (string.IsNullOrWhiteSpace(request.Email))
-                throw new InvalidOperationException("Email is required.");
 
             if (string.IsNullOrWhiteSpace(request.Password))
                 throw new InvalidOperationException("Password is required.");
 
-            var email = request.Email.Trim();
-
-            var existingUser = await _userManager.FindByEmailAsync(email);
+            var username = request.Username.Trim();
+            var existingUser = await _userManager.FindByNameAsync(username);
 
             if (existingUser is not null)
-                throw new InvalidOperationException("Email is already registered.");
+                throw new InvalidOperationException("Username is already taken.");
+
+            var email = request.Email?.Trim();
 
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
                 var user = new ApplicationUser
                 {
-                    UserName = email,
+                    UserName = username,
                     Email = email,
                     FullName = request.FullName.Trim(),
                     CompanyEmail = string.IsNullOrWhiteSpace(request.CompanyEmail)
@@ -143,28 +144,28 @@ namespace FutureOfEgypt.Infrastructure.Services
             RegisterAdminRequest request,
             CancellationToken cancellationToken = default)
         {
+            UsernameValidator.Validate(request.Username);
+
             if (string.IsNullOrWhiteSpace(request.FullName))
                 throw new InvalidOperationException("Full name is required.");
-
-            if (string.IsNullOrWhiteSpace(request.Email))
-                throw new InvalidOperationException("Email is required.");
 
             if (string.IsNullOrWhiteSpace(request.Password))
                 throw new InvalidOperationException("Password is required.");
 
-            var email = request.Email.Trim();
-
-            var existingUser = await _userManager.FindByEmailAsync(email);
+            var username = request.Username.Trim();
+            var existingUser = await _userManager.FindByNameAsync(username);
 
             if (existingUser is not null)
-                throw new InvalidOperationException("Email is already registered.");
+                throw new InvalidOperationException("Username is already taken.");
+
+            var email = request.Email?.Trim();
 
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
                 var user = new ApplicationUser
                 {
-                    UserName = email,
+                    UserName = username,
                     Email = email,
                     FullName = request.FullName.Trim(),
                     UserType = UserType.Manager,
@@ -230,8 +231,7 @@ namespace FutureOfEgypt.Infrastructure.Services
             RegisterEngineerUserRequest request,
             CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(request.Email))
-                throw new InvalidOperationException("Email is required.");
+            UsernameValidator.Validate(request.Username);
 
             if (string.IsNullOrWhiteSpace(request.Password))
                 throw new InvalidOperationException("Password is required.");
@@ -244,12 +244,13 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (engineer is null)
                 throw new InvalidOperationException("Engineer does not exist.");
 
-            var email = request.Email.Trim();
-
-            var existingUser = await _userManager.FindByEmailAsync(email);
+            var username = request.Username.Trim();
+            var existingUser = await _userManager.FindByNameAsync(username);
 
             if (existingUser is not null)
-                throw new InvalidOperationException("Email is already registered.");
+                throw new InvalidOperationException("Username is already taken.");
+
+            var email = request.Email?.Trim();
 
             var engineerAlreadyHasUser = await _context.Users
                 .AnyAsync(x => x.EngineerId == engineer.Id, cancellationToken);
@@ -262,7 +263,7 @@ namespace FutureOfEgypt.Infrastructure.Services
             {
                 var user = new ApplicationUser
                 {
-                    UserName = email,
+                    UserName = username,
                     Email = email,
                     FullName = engineer.FullName,
                     UserType = UserType.Engineer,
@@ -356,18 +357,18 @@ namespace FutureOfEgypt.Infrastructure.Services
             LoginRequest request,
             CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(request.Email))
-                throw new InvalidOperationException("Email is required.");
+            var username = request.Username?.Trim() ?? request.Email?.Trim();
+
+            if (string.IsNullOrWhiteSpace(username))
+                throw new InvalidOperationException("Username is required.");
 
             if (string.IsNullOrWhiteSpace(request.Password))
                 throw new InvalidOperationException("Password is required.");
 
-            var email = request.Email.Trim();
-
-            var user = await _userManager.FindByEmailAsync(email);
+            var user = await _userManager.FindByNameAsync(username);
 
             if (user is null)
-                throw new InvalidOperationException("Invalid email or password.");
+                throw new InvalidOperationException("Invalid username or password.");
 
             if (user.IsDeleted)
                 throw new InvalidOperationException("Account is deleted.");
@@ -380,7 +381,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 request.Password);
 
             if (!passwordIsValid)
-                throw new InvalidOperationException("Invalid email or password.");
+                throw new InvalidOperationException("Invalid username or password.");
 
             Guid? engineerPublicId = null;
 
@@ -684,7 +685,6 @@ namespace FutureOfEgypt.Infrastructure.Services
         }
 
         public async Task<UserAccountResponse> CreateFirstAdminAsync(
-            CreateFirstAdminRequest request,
             CancellationToken cancellationToken = default)
         {
             await EnsureRoleExistsAsync(AppRoles.ADMIN);
@@ -696,40 +696,38 @@ namespace FutureOfEgypt.Infrastructure.Services
                 throw new InvalidOperationException("First admin already exists. Use an existing admin account to create more admins.");
             }
 
-            if (string.IsNullOrWhiteSpace(request.Email))
-                throw new InvalidOperationException("Email is required.");
+            var username = _configuration["Bootstrap:FirstAdminUsername"]?.Trim() ?? "admin";
+            var email = _configuration["Bootstrap:FirstAdminEmail"]?.Trim() ?? string.Empty;
+            var password = _configuration["Bootstrap:FirstAdminPassword"];
+            var fullName = _configuration["Bootstrap:FirstAdminFullName"]?.Trim() ?? "System Administrator";
+            var phone = _configuration["Bootstrap:FirstAdminPhone"]?.Trim();
 
-            if (string.IsNullOrWhiteSpace(request.Password))
-                throw new InvalidOperationException("Password is required.");
+            if (string.IsNullOrWhiteSpace(email))
+                throw new InvalidOperationException("Bootstrap FirstAdminEmail is required.");
 
-            var normalizedEmail = request.Email.Trim();
+            if (string.IsNullOrWhiteSpace(password))
+                throw new InvalidOperationException("Bootstrap FirstAdminPassword is required.");
 
-            var existingUser = await _userManager.FindByEmailAsync(normalizedEmail);
+            var existingUser = await _userManager.FindByNameAsync(username);
 
             if (existingUser is not null)
-                throw new InvalidOperationException("A user with this email already exists.");
-
-            var displayName = string.IsNullOrWhiteSpace(request.UserName)
-                ? normalizedEmail
-                : request.UserName.Trim();
+                throw new InvalidOperationException("First admin username already exists.");
 
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
                 var user = new ApplicationUser
                 {
-                    UserName = string.IsNullOrWhiteSpace(request.UserName)
-                        ? normalizedEmail
-                        : request.UserName.Trim(),
-
-                    Email = normalizedEmail,
-                    FullName = displayName,
+                    UserName = username,
+                    Email = email,
+                    FullName = fullName,
+                    PhoneNumber = phone,
                     EmailConfirmed = true,
                     UserType = UserType.Admin,
                     EngineerId = null
                 };
 
-                var createUserResult = await _userManager.CreateAsync(user, request.Password);
+                var createUserResult = await _userManager.CreateAsync(user, password);
 
                 if (!createUserResult.Succeeded)
                 {
@@ -767,6 +765,8 @@ namespace FutureOfEgypt.Infrastructure.Services
             RegisterEngineerCompleteRequest request,
             CancellationToken cancellationToken = default)
         {
+            UsernameValidator.Validate(request.Username);
+
             if (string.IsNullOrWhiteSpace(request.FullName))
                 throw new InvalidOperationException("Full name is required.");
 
@@ -777,10 +777,11 @@ namespace FutureOfEgypt.Infrastructure.Services
                 throw new InvalidOperationException("Password is required.");
 
             var email = request.Email.Trim().ToLowerInvariant();
+            var username = request.Username.Trim();
 
-            var existingUser = await _userManager.FindByEmailAsync(email);
+            var existingUser = await _userManager.FindByNameAsync(username);
             if (existingUser is not null)
-                throw new InvalidOperationException("Email is already registered.");
+                throw new InvalidOperationException("Username is already taken.");
 
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
@@ -800,7 +801,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 // 2. Create ApplicationUser
                 var user = new ApplicationUser
                 {
-                    UserName = email,
+                    UserName = username,
                     Email = email,
                     FullName = request.FullName.Trim(),
                     PhoneNumber = request.PhoneNumber?.Trim(),
@@ -924,16 +925,24 @@ namespace FutureOfEgypt.Infrastructure.Services
 
         public async Task ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(request.Email))
+            if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Email))
                 return; // Return silently
 
-            var email = request.Email.Trim().ToLowerInvariant();
-            var user = await _userManager.FindByEmailAsync(email);
+            var username = request.Username.Trim();
+            var email = request.Email.Trim();
+            
+            var user = await _userManager.FindByNameAsync(username);
 
             if (user == null || user.IsDeleted || user.IsSuspended)
             {
                 // Do not reveal user status.
                 return;
+            }
+
+            // Verify the registered email matches the provided email
+            if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
+            {
+                return; // Do not reveal mismatch
             }
 
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
@@ -949,7 +958,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                 baseUrl = "http://localhost:5173/reset-password";
             }
 
-            var resetUrl = $"{baseUrl}?email={Uri.EscapeDataString(user.Email!)}&token={encodedToken}";
+            var resetUrl = $"{baseUrl}?username={Uri.EscapeDataString(user.UserName!)}&token={encodedToken}";
 
             var htmlMessage = $@"<!doctype html>
 <html lang=""en"">
@@ -1044,13 +1053,17 @@ namespace FutureOfEgypt.Infrastructure.Services
 
         public async Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Token) || string.IsNullOrWhiteSpace(request.NewPassword))
-            {
-                throw new InvalidOperationException("Invalid reset password request.");
-            }
+            if (string.IsNullOrWhiteSpace(request.Username))
+                throw new InvalidOperationException("Username is required.");
 
-            var email = request.Email.Trim().ToLowerInvariant();
-            var user = await _userManager.FindByEmailAsync(email);
+            if (string.IsNullOrWhiteSpace(request.Token))
+                throw new InvalidOperationException("Token is required.");
+
+            if (string.IsNullOrWhiteSpace(request.NewPassword))
+                throw new InvalidOperationException("New password is required.");
+
+            var username = request.Username.Trim();
+            var user = await _userManager.FindByNameAsync(username);
 
             if (user == null || user.IsDeleted || user.IsSuspended)
             {

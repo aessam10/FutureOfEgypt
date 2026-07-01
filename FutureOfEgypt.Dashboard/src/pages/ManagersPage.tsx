@@ -41,11 +41,12 @@ import { useAuth } from '../auth/AuthContext';
 interface ManagerFormState {
   fullName: string;
   email: string;
+  username: string;
   phoneNumber: string;
   password?: string;
 }
 const initialFormState: ManagerFormState = {
-  fullName: '', email: '', phoneNumber: '', password: '',
+  fullName: '', email: '', username: '', phoneNumber: '', password: '',
 };
 
 export function ManagersPage() {
@@ -134,6 +135,7 @@ export function ManagersPage() {
     setFormState({
       fullName: manager.fullName,
       email: manager.email,
+      username: manager.username || '',
       phoneNumber: manager.phoneNumber || '',
     });
     setFormError(null);
@@ -146,12 +148,13 @@ export function ManagersPage() {
     const req = {
       fullName: formState.fullName.trim(),
       email: formState.email.trim(),
+      username: formState.username.trim(),
       phoneNumber: formState.phoneNumber.trim(),
       password: formState.password,
     };
 
-    if (!req.fullName || !req.email) {
-      setFormError('Full name and email are required.');
+    if (!req.fullName || !req.email || (!isEditMode && !req.username)) {
+      setFormError('Full name, email, and username are required.');
       return;
     }
 
@@ -257,7 +260,12 @@ export function ManagersPage() {
                         {manager.role}
                       </Typography>
                     </TableCell>
-                    <TableCell>{manager.email}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <span>{manager.email}</span>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>@{manager.username}</Typography>
+                      </Box>
+                    </TableCell>
                     <TableCell>{manager.phoneNumber}</TableCell>
                     <TableCell>
                         <Chip 
@@ -376,6 +384,13 @@ export function ManagersPage() {
               value={formState.email}
               onChange={(e) => setFormState((s) => ({ ...s, email: e.target.value }))}
               sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth label="Username" required={!isEditMode}
+              value={formState.username}
+              onChange={(e) => setFormState((s) => ({ ...s, username: e.target.value }))}
+              sx={{ mb: 2 }}
+              disabled={isEditMode}
             />
             <TextField
               fullWidth label="Phone Number"

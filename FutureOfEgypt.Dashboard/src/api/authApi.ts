@@ -21,11 +21,12 @@ export async function logout(refreshToken: string) {
 export interface RegisterManagerRequest {
   fullName: string;
   email: string;
+  username: string;
   password?: string;
 }
 
-export async function forgotPassword(email: string) {
-  const response = await axiosClient.post('/api/Auth/forgot-password', { email });
+export async function forgotPassword(username: string, email: string) {
+  const response = await axiosClient.post('/api/Auth/forgot-password', { username, email });
   return response.data;
 }
 

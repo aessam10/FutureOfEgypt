@@ -119,6 +119,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                     FullName = x.Engineer.FullName,
                     PhoneNumber = x.Engineer.PhoneNumber,
                     Email = x.Engineer.Email,
+                    Username = x.User != null ? x.User.UserName : null,
                     Status = x.Engineer.Status,
                     CreatedAt = x.Engineer.CreatedAt,
                     UserPublicId = x.User != null ? x.User.Id : null,
@@ -256,14 +257,7 @@ namespace FutureOfEgypt.Infrastructure.Services
             {
                 user.FullName = engineer.FullName;
                 user.PhoneNumber = engineer.PhoneNumber;
-                if (!string.Equals(user.Email, engineer.Email, StringComparison.OrdinalIgnoreCase))
-                {
-                    var existingUser = await _userManager.FindByEmailAsync(engineer.Email);
-                    if (existingUser != null && existingUser.Id != user.Id)
-                        throw new InvalidOperationException("Email is already in use.");
-                    user.Email = engineer.Email;
-                    user.UserName = engineer.Email;
-                }
+                user.Email = engineer.Email;
                 await _userManager.UpdateAsync(user);
             }
 

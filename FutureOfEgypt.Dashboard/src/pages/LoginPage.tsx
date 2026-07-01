@@ -81,7 +81,7 @@ export function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const { toggleMode, isDark } = useThemeMode();
 
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login({ email, password });
+      await login({ username, password });
       navigate(routes.dashboard, { replace: true });
     } catch (err: any) {
       if (err instanceof Error && err.message === 'DASHBOARD_ACCESS_DENIED') {
@@ -107,7 +107,7 @@ export function LoginPage() {
       } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
         setError('Error: Disconnected from the Auth Server. Maintenance in progress.');
       } else {
-        setError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+        setError('Invalid username or password.');
       }
     } finally {
       setIsLoading(false);
@@ -303,15 +303,15 @@ export function LoginPage() {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <TextField
             fullWidth
-            id="login-email"
-            label="Email Address"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            id="login-username"
+            label="Username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
             autoFocus
             required
-            slotProps={{ htmlInput: { 'aria-label': 'Email address', 'aria-required': 'true' } }}
+            slotProps={{ htmlInput: { 'aria-label': 'Username', 'aria-required': 'true' } }}
             sx={{
               '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus, & input:-webkit-autofill:active, & input:-internal-autofill-previewed, & input:-internal-autofill-selected': {
                 transition: 'background-color 5000s ease-in-out 0s !important',
@@ -415,7 +415,7 @@ export function LoginPage() {
             variant="contained"
             size="large"
             type="submit"
-            disabled={isLoading || !email || !password}
+            disabled={isLoading || !username || !password}
             aria-label={isLoading ? 'Signing in...' : 'Sign in'}
             sx={{
               mt: 2,

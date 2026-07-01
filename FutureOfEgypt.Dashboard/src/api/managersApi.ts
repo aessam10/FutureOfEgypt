@@ -4,6 +4,7 @@ export interface ManagerResponse {
   id: string;
   fullName: string;
   email: string;
+  username?: string;
   phoneNumber?: string;
   role: string;
   profilePhotoUrl?: string;

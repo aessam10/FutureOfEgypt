@@ -168,7 +168,10 @@ namespace FutureOfEgypt
             builder.Services.AddSingleton<IAppReleaseFileService, AppReleaseFileService>();
             builder.Services.AddScoped<FutureOfEgypt.Application.Features.Managers.IManagersService, ManagersService>();
             builder.Services.AddMemoryCache();
-            builder.Services.AddIdentity<ApplicationUser, ApplicationRole>()
+            builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
+            {
+                options.User.RequireUniqueEmail = false;
+            })
                 .AddEntityFrameworkStores<AppDbContext>()
                 .AddDefaultTokenProviders();
                 
