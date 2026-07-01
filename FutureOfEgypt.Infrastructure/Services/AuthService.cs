@@ -951,18 +951,78 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var resetUrl = $"{baseUrl}?email={Uri.EscapeDataString(user.Email!)}&token={encodedToken}";
 
-            var htmlMessage = $@"
-                <html>
-                <body>
-                    <h2>Hello {user.FullName},</h2>
-                    <p>We received a request to reset your password for FutureOfEgypt.</p>
-                    <p>Click the link below to set a new password:</p>
-                    <p><a href='{resetUrl}' style='display:inline-block;padding:10px 20px;color:white;background-color:#007bff;text-decoration:none;border-radius:5px;'>Reset Password</a></p>
-                    <p>If you did not request this, please ignore this email. This link will expire in 1 hour.</p>
-                    <br/>
-                    <p>Best regards,<br/>FutureOfEgypt Team</p>
-                </body>
-                </html>";
+            var htmlMessage = $@"<!doctype html>
+<html lang=""en"">
+<head>
+  <meta charset=""utf-8"">
+  <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+  <title>Reset your password</title>
+</head>
+<body style=""margin:0;padding:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#172033;"">
+  <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background:#f4f6f8;padding:32px 12px;"">
+    <tr>
+      <td align=""center"">
+        <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;"">
+          <tr>
+            <td style=""padding:26px 32px;background:#0f172a;color:#ffffff;"">
+              <div style=""font-size:20px;font-weight:700;"">foe-Constructions</div>
+              <div style=""font-size:13px;color:#cbd5e1;margin-top:4px;"">Account security</div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style=""padding:32px;"">
+              <h1 style=""margin:0 0 14px;font-size:24px;line-height:1.3;color:#0f172a;"">Reset your password</h1>
+
+              <p style=""margin:0 0 16px;font-size:15px;line-height:1.7;color:#334155;"">
+                We received a request to reset the password for your account.
+              </p>
+
+              <p style=""margin:0 0 24px;font-size:15px;line-height:1.7;color:#334155;"">
+                Click the button below to choose a new password.
+              </p>
+
+              <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" style=""margin:0 0 24px;"">
+                <tr>
+                  <td>
+                    <a href=""{resetUrl}"" style=""display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:8px;"">
+                      Reset Password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style=""margin:0 0 14px;font-size:14px;line-height:1.7;color:#475569;"">
+                This link will expire in <strong>1 hour</strong>.
+              </p>
+
+              <p style=""margin:0 0 18px;font-size:14px;line-height:1.7;color:#475569;"">
+                If you did not request this password reset, you can safely ignore this email.
+              </p>
+
+              <hr style=""border:none;border-top:1px solid #e5e7eb;margin:24px 0;"">
+
+              <p style=""margin:0 0 8px;font-size:12px;line-height:1.6;color:#64748b;"">
+                If the button does not work, copy and paste this link into your browser:
+              </p>
+
+              <p style=""margin:0;font-size:12px;line-height:1.6;word-break:break-all;color:#2563eb;"">
+                <a href=""{resetUrl}"" style=""color:#2563eb;text-decoration:underline;"">{resetUrl}</a>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style=""padding:18px 32px;background:#f8fafc;color:#64748b;font-size:12px;text-align:center;"">
+              © foe-Constructions. All rights reserved.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
 
             try
             {
@@ -972,7 +1032,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                     toEmails: new List<string> { user.Email! },
                     ccEmails: null,
                     bccEmails: null,
-                    subject: "Reset your FutureOfEgypt password",
+                    subject: "Reset your password",
                     body: htmlMessage,
                     cancellationToken: cancellationToken);
             }

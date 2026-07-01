@@ -37,7 +37,7 @@ namespace FutureOfEgypt.Infrastructure.Services.Email
                 From = new MailAddress(fromEmail),
                 Subject = subject,
                 Body = body,
-                IsBodyHtml = false
+                IsBodyHtml = true
             };
 
             foreach (var email in toEmails)
