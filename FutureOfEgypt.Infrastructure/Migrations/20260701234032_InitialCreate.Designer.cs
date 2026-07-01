@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FutureOfEgypt.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260701231836_InitialCreate")]
+    [Migration("20260701234032_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -1178,7 +1178,7 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     b.HasIndex("DeviceId", "ClientLocalId")
                         .IsUnique()
-                        .HasFilter("ClientLocalId IS NOT NULL");
+                        .HasFilter("\"ClientLocalId\" IS NOT NULL");
 
                     b.ToTable("LocationHistories");
                 });

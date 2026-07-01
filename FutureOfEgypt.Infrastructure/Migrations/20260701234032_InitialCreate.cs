@@ -1166,7 +1166,7 @@ namespace FutureOfEgypt.Infrastructure.Migrations
                 table: "LocationHistories",
                 columns: new[] { "DeviceId", "ClientLocalId" },
                 unique: true,
-                filter: "ClientLocalId IS NOT NULL");
+                filter: "\"ClientLocalId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LocationHistories_EngineerId",

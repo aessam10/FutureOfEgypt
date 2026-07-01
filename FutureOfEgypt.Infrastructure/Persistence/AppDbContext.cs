@@ -71,7 +71,7 @@ namespace FutureOfEgypt.Infrastructure.Persistence
             modelBuilder.Entity<LocationHistory>()
                 .HasIndex(x => new { x.DeviceId, x.ClientLocalId })
                 .IsUnique()
-                .HasFilter("ClientLocalId IS NOT NULL");
+                .HasFilter("\"ClientLocalId\" IS NOT NULL");
 
             modelBuilder.Entity<EngineerStatusHistory>()
                 .HasIndex(x => new { x.EngineerId, x.ChangedAtUtc });

@@ -1175,7 +1175,7 @@ namespace FutureOfEgypt.Infrastructure.Migrations
 
                     b.HasIndex("DeviceId", "ClientLocalId")
                         .IsUnique()
-                        .HasFilter("ClientLocalId IS NOT NULL");
+                        .HasFilter("\"ClientLocalId\" IS NOT NULL");
 
                     b.ToTable("LocationHistories");
                 });
