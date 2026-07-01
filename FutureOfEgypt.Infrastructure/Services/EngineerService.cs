@@ -294,61 +294,82 @@ namespace FutureOfEgypt.Infrastructure.Services
         public async Task DeleteEngineerAsync(
             Guid adminUserId, string adminEmail, Guid engineerPublicId, CancellationToken cancellationToken = default)
         {
-            var engineer = await _context.Engineers.FirstOrDefaultAsync(x => x.PublicId == engineerPublicId && !x.IsDeleted, cancellationToken);
-            if (engineer == null) throw new InvalidOperationException("Engineer does not exist.");
-
-            engineer.IsDeleted = true;
-            engineer.UpdatedAt = DateTime.UtcNow;
-
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.EngineerId == engineer.Id, cancellationToken);
-            if (user != null)
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                user.IsDeleted = true;
-                user.IsSuspended = true;
-                await _userManager.UpdateAsync(user);
-            }
+                var engineer = await _context.Engineers.FirstOrDefaultAsync(x => x.PublicId == engineerPublicId && !x.IsDeleted, cancellationToken);
+                if (engineer == null) throw new InvalidOperationException("Engineer does not exist.");
 
-            var activeAssignments = await _context.EngineerDevices
-                .Where(ed => ed.EngineerId == engineer.Id && ed.IsActive && !ed.IsDeleted)
-                .ToListAsync(cancellationToken);
+                engineer.IsDeleted = true;
+                engineer.UpdatedAt = DateTime.UtcNow;
 
-            foreach (var ed in activeAssignments)
-            {
-                ed.IsActive = false;
-                ed.UnassignedAtUtc = DateTime.UtcNow;
-                ed.UpdatedAt = DateTime.UtcNow;
-            }
-
-            var latestLocations = await _context.DeviceLatestLocations
-                .Where(x => x.EngineerId == engineer.Id && x.IsOnline && !x.IsDeleted)
-                .ToListAsync(cancellationToken);
-            
-            foreach (var loc in latestLocations)
-            {
-                loc.IsOnline = false;
-                loc.UpdatedAt = DateTime.UtcNow;
-                _context.EngineerStatusHistories.Add(new EngineerStatusHistory
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.EngineerId == engineer.Id, cancellationToken);
+                if (user != null)
                 {
-                    EngineerId = loc.EngineerId,
-                    DeviceId = loc.DeviceId,
-                    IsOnline = false,
-                    Reason = "Engineer deleted",
-                    ChangedAtUtc = DateTime.UtcNow
-                });
+                    user.IsDeleted = true;
+                    user.IsSuspended = true;
+                    await _userManager.UpdateAsync(user);
+                }
+
+                var activeAssignments = await _context.EngineerDevices
+                    .Where(ed => ed.EngineerId == engineer.Id && ed.IsActive && !ed.IsDeleted)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var ed in activeAssignments)
+                {
+                    ed.IsActive = false;
+                    ed.UnassignedAtUtc = DateTime.UtcNow;
+                    ed.UpdatedAt = DateTime.UtcNow;
+                }
+
+                var latestLocations = await _context.DeviceLatestLocations
+                    .Where(x => x.EngineerId == engineer.Id && x.IsOnline && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
+                
+                foreach (var loc in latestLocations)
+                {
+                    loc.IsOnline = false;
+                    loc.UpdatedAt = DateTime.UtcNow;
+                    _context.EngineerStatusHistories.Add(new EngineerStatusHistory
+                    {
+                        EngineerId = loc.EngineerId,
+                        DeviceId = loc.DeviceId,
+                        IsOnline = false,
+                        Reason = "Engineer deleted",
+                        ChangedAtUtc = DateTime.UtcNow
+                    });
+                }
+
+                var pendingRequests = await _context.DeviceAccessRequests
+                    .Where(x => x.EngineerId == engineer.Id && x.Status == DeviceAccessRequestStatus.Pending && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var req in pendingRequests)
+                {
+                    req.Status = DeviceAccessRequestStatus.Cancelled;
+                    req.UpdatedAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync(cancellationToken);
+
+                await _auditLogService.CreateAsync(new CreateAuditLogRequest
+                {
+                    ActionType = AuditActionType.EngineerInactivated, // generic delete
+                    PerformedByUserId = adminUserId,
+                    PerformedByEmail = adminEmail,
+                    EntityName = nameof(Engineer),
+                    EntityPublicId = engineer.PublicId,
+                    Description = $"Admin soft-deleted engineer '{engineer.FullName}'.",
+                    MetadataJson = JsonSerializer.Serialize(new { engineerPublicId = engineer.PublicId, email = engineer.Email })
+                }, cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
             }
-
-            await _context.SaveChangesAsync(cancellationToken);
-
-            await _auditLogService.CreateAsync(new CreateAuditLogRequest
+            catch
             {
-                ActionType = AuditActionType.EngineerInactivated, // generic delete
-                PerformedByUserId = adminUserId,
-                PerformedByEmail = adminEmail,
-                EntityName = nameof(Engineer),
-                EntityPublicId = engineer.PublicId,
-                Description = $"Admin soft-deleted engineer '{engineer.FullName}'.",
-                MetadataJson = JsonSerializer.Serialize(new { engineerPublicId = engineer.PublicId, email = engineer.Email })
-            }, cancellationToken);
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
     }
 }

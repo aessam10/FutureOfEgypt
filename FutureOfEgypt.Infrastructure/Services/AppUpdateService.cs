@@ -4,6 +4,7 @@ using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using FutureOfEgypt.Application.Features.AppUpdates;
+using FutureOfEgypt.Infrastructure.Extensions;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace FutureOfEgypt.Infrastructure.Services
@@ -392,13 +393,18 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (request.DevicePublicId.HasValue)
             {
                 var device = await _context.Devices
-                    .FirstOrDefaultAsync(x => x.PublicId == request.DevicePublicId.Value && !x.IsDeleted, cancellationToken);
+                    .FirstOrDefaultAsync(x => x.PublicId == request.DevicePublicId.Value 
+                                              && !x.IsDeleted 
+                                              && x.Status == DeviceStatus.Active, cancellationToken);
                 
                 if (device != null)
                 {
                     deviceId = device.Id;
                     var activeAssignment = await _context.EngineerDevices
-                        .FirstOrDefaultAsync(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted, cancellationToken);
+                        .Include(ed => ed.Engineer)
+                        .Include(ed => ed.Device)
+                        .FilterValidActive()
+                        .FirstOrDefaultAsync(ed => ed.DeviceId == device.Id, cancellationToken);
                     if (activeAssignment != null)
                     {
                         engineerId = activeAssignment.EngineerId;
@@ -493,10 +499,16 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var deviceIds = statuses.Where(s => s.DeviceId.HasValue).Select(s => s.DeviceId!.Value).Distinct().ToList();
 
-            var activeAssignments = await _context.EngineerDevices
+            var activeAssignmentsList = await _context.EngineerDevices
                 .Include(x => x.Engineer)
-                .Where(x => deviceIds.Contains(x.DeviceId) && x.IsActive && !x.IsDeleted && x.Engineer != null && !x.Engineer.IsDeleted)
-                .ToDictionaryAsync(x => x.DeviceId, x => x.Engineer!, cancellationToken);
+                .Include(x => x.Device)
+                .FilterValidActive()
+                .Where(x => deviceIds.Contains(x.DeviceId))
+                .ToListAsync(cancellationToken);
+
+            var activeAssignments = activeAssignmentsList
+                .GroupBy(x => x.DeviceId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.AssignedAtUtc).First().Engineer!);
 
             var latestLocations = await _context.DeviceLatestLocations
                 .Where(x => deviceIds.Contains(x.DeviceId) && !x.IsDeleted)

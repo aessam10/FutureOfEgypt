@@ -74,6 +74,12 @@ export function DeviceRequestsPage() {
       approveDeviceRequest(requestPublicId, { reviewNote }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['device-requests'] });
+      await queryClient.invalidateQueries({ queryKey: ['engineers'] });
+      await queryClient.invalidateQueries({ queryKey: ['devices'] });
+      await queryClient.invalidateQueries({ queryKey: ['active-assignments'] });
+      await queryClient.invalidateQueries({ queryKey: ['latest-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['hidden-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['deviceAppStatuses'] });
       setIsApproveDialogOpen(false);
       setSelectedRequest(null);
       setApproveOverrideNote('');

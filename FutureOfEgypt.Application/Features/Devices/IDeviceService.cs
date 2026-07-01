@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 
 namespace FutureOfEgypt.Application.Features.Devices
 {
@@ -19,6 +19,12 @@ namespace FutureOfEgypt.Application.Features.Devices
             string adminEmail,
             Guid devicePublicId,
             UpdateDeviceStatusRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task DeleteDeviceAsync(
+            Guid adminUserId,
+            string adminEmail,
+            Guid devicePublicId,
             CancellationToken cancellationToken = default);
     }
 }

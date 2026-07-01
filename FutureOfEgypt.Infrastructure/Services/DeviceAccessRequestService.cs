@@ -179,7 +179,13 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .AsNoTracking()
                 .Include(x => x.Engineer)
                 .Include(x => x.CreatedDevice)
-                .Where(x => !x.IsDeleted);
+                .Where(x => !x.IsDeleted 
+                            && x.Engineer != null 
+                            && !x.Engineer.IsDeleted
+                            && x.Engineer.Status == EngineerStatus.Active
+                            && (x.CreatedDevice == null 
+                                || (!x.CreatedDevice.IsDeleted 
+                                    && x.CreatedDevice.Status == DeviceStatus.Active)));
 
             if (forcePendingOnly)
             {
@@ -265,168 +271,179 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (wasRejected && string.IsNullOrWhiteSpace(request.ReviewNote))
                 throw new InvalidOperationException("An override note is required to approve a rejected request.");
 
-            if (accessRequest.Engineer is null)
+            if (accessRequest.Engineer is null || accessRequest.Engineer.IsDeleted)
                 throw new InvalidOperationException("Engineer does not exist.");
 
             if (accessRequest.Engineer.Status != EngineerStatus.Active)
                 throw new InvalidOperationException("Engineer is not active.");
 
-            var now = DateTime.UtcNow;
-
-            Device? device = null;
-
-            if (accessRequest.CreatedDeviceId.HasValue)
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                device = await _context.Devices
-                    .FirstOrDefaultAsync(x => x.Id == accessRequest.CreatedDeviceId.Value && !x.IsDeleted, cancellationToken);
-            }
-            else if (!string.IsNullOrWhiteSpace(accessRequest.InstallationId))
-            {
-                device = await _context.Devices
-                    .FirstOrDefaultAsync(x => x.InstallationId == accessRequest.InstallationId && !x.IsDeleted, cancellationToken);
-            }
+                var now = DateTime.UtcNow;
 
-            if (device is not null && device.Status is DeviceStatus.Blocked or DeviceStatus.Lost)
-                throw new InvalidOperationException("Blocked or lost devices cannot be approved.");
+                Device? device = null;
 
-            if (device is null)
-                throw new InvalidOperationException("Requested device no longer exists or is not registered.");
+                if (accessRequest.CreatedDeviceId.HasValue)
+                {
+                    device = await _context.Devices
+                        .FirstOrDefaultAsync(x => x.Id == accessRequest.CreatedDeviceId.Value && !x.IsDeleted, cancellationToken);
+                }
+                else if (!string.IsNullOrWhiteSpace(accessRequest.InstallationId))
+                {
+                    device = await _context.Devices
+                        .FirstOrDefaultAsync(x => x.InstallationId == accessRequest.InstallationId && !x.IsDeleted, cancellationToken);
+                }
 
-            if (string.IsNullOrWhiteSpace(device.DeviceName))
-            {
-                device.DeviceName = accessRequest.DeviceName;
-            }
-            
-            device.Imei = accessRequest.Imei;
+                if (device is not null && device.Status is DeviceStatus.Blocked or DeviceStatus.Lost or DeviceStatus.Inactive)
+                    throw new InvalidOperationException("Blocked, inactive or lost devices cannot be approved.");
 
-            if (!string.IsNullOrWhiteSpace(accessRequest.InstallationId))
-            {
-                device.InstallationId = accessRequest.InstallationId;
-            }
+                if (device is null)
+                    throw new InvalidOperationException("Requested device no longer exists or is not registered.");
 
-            device.Platform = accessRequest.Platform;
-            device.Status = DeviceStatus.Active;
-            device.UpdatedAt = now;
+                if (string.IsNullOrWhiteSpace(device.DeviceName))
+                {
+                    device.DeviceName = accessRequest.DeviceName;
+                }
+                
+                device.Imei = accessRequest.Imei;
 
-            var currentEngineerAssignments = await _context.EngineerDevices
-                .Where(x => x.EngineerId == accessRequest.EngineerId
-                            && x.IsActive
-                            && !x.IsDeleted)
-                .ToListAsync(cancellationToken);
+                if (!string.IsNullOrWhiteSpace(accessRequest.InstallationId))
+                {
+                    device.InstallationId = accessRequest.InstallationId;
+                }
 
-            foreach (var assignment in currentEngineerAssignments)
-            {
-                assignment.IsActive = false;
-                assignment.UnassignedAtUtc = now;
-                assignment.UpdatedAt = now;
-            }
+                device.Platform = accessRequest.Platform;
+                device.Status = DeviceStatus.Active;
+                device.UpdatedAt = now;
 
-            var currentDeviceAssignments = await _context.EngineerDevices
-                .Where(x => x.DeviceId == device.Id
-                            && x.IsActive
-                            && !x.IsDeleted)
-                .ToListAsync(cancellationToken);
+                var currentEngineerAssignments = await _context.EngineerDevices
+                    .Where(x => x.EngineerId == accessRequest.EngineerId
+                                && x.IsActive
+                                && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
 
-            foreach (var assignment in currentDeviceAssignments)
-            {
-                assignment.IsActive = false;
-                assignment.UnassignedAtUtc = now;
-                assignment.UpdatedAt = now;
-            }
+                foreach (var assignment in currentEngineerAssignments)
+                {
+                    assignment.IsActive = false;
+                    assignment.UnassignedAtUtc = now;
+                    assignment.UpdatedAt = now;
+                }
 
-            var newAssignment = new EngineerDevice
-            {
-                EngineerId = accessRequest.EngineerId,
-                DeviceId = device.Id,
-                AssignedAtUtc = now,
-                IsActive = true
-            };
+                var currentDeviceAssignments = await _context.EngineerDevices
+                    .Where(x => x.DeviceId == device.Id
+                                && x.IsActive
+                                && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
 
-            await _context.EngineerDevices.AddAsync(newAssignment, cancellationToken);
+                foreach (var assignment in currentDeviceAssignments)
+                {
+                    assignment.IsActive = false;
+                    assignment.UnassignedAtUtc = now;
+                    assignment.UpdatedAt = now;
+                }
 
-            // Cancel all other Pending requests for the same engineer (excluding the one being approved).
-            var engineerPendingRequests = await _context.DeviceAccessRequests
-                .Where(x =>
-                    x.EngineerId == accessRequest.EngineerId &&
-                    x.Id != accessRequest.Id &&
-                    x.Status == DeviceAccessRequestStatus.Pending &&
-                    !x.IsDeleted)
-                .ToListAsync(cancellationToken);
+                var newAssignment = new EngineerDevice
+                {
+                    EngineerId = accessRequest.EngineerId,
+                    DeviceId = device.Id,
+                    AssignedAtUtc = now,
+                    IsActive = true
+                };
 
-            foreach (var pendingRequest in engineerPendingRequests)
-            {
-                pendingRequest.Status = DeviceAccessRequestStatus.Cancelled;
-                pendingRequest.UpdatedAt = now;
-            }
+                await _context.EngineerDevices.AddAsync(newAssignment, cancellationToken);
 
-            // Cancel all other Pending requests for the same device (by InstallationId), excluding the approved one
-            // and any already cancelled above (different engineer).
-            if (!string.IsNullOrWhiteSpace(device.InstallationId))
-            {
-                var devicePendingRequests = await _context.DeviceAccessRequests
+                // Cancel all other Pending requests for the same engineer (excluding the one being approved).
+                var engineerPendingRequests = await _context.DeviceAccessRequests
                     .Where(x =>
-                        x.InstallationId == device.InstallationId &&
-                        x.EngineerId != accessRequest.EngineerId &&
+                        x.EngineerId == accessRequest.EngineerId &&
                         x.Id != accessRequest.Id &&
                         x.Status == DeviceAccessRequestStatus.Pending &&
                         !x.IsDeleted)
                     .ToListAsync(cancellationToken);
 
-                foreach (var pendingRequest in devicePendingRequests)
+                foreach (var pendingRequest in engineerPendingRequests)
                 {
                     pendingRequest.Status = DeviceAccessRequestStatus.Cancelled;
                     pendingRequest.UpdatedAt = now;
                 }
-            }
 
-            accessRequest.Status = DeviceAccessRequestStatus.Approved;
-            accessRequest.ReviewedAtUtc = now;
-            accessRequest.ReviewedByUserId = adminUserId;
-
-            if (wasRejected)
-            {
-                var oldNote = string.IsNullOrWhiteSpace(accessRequest.ReviewNote) ? "None" : accessRequest.ReviewNote;
-                accessRequest.ReviewNote = $"Rejected reason: {oldNote}\nOverride approval note: {request.ReviewNote}";
-            }
-            else
-            {
-                accessRequest.ReviewNote = request.ReviewNote;
-            }
-
-            accessRequest.CreatedDeviceId = device.Id;
-            accessRequest.UpdatedAt = now;
-            accessRequest.CreatedDevice = device;
-
-            await _context.SaveChangesAsync(cancellationToken);
-
-            var description = wasRejected
-                ? $"Admin approved device access request for engineer '{accessRequest.Engineer!.FullName}' after it was previously rejected."
-                : $"Admin approved device access request for engineer '{accessRequest.Engineer!.FullName}'.";
-
-            await _auditLogService.CreateAsync(
-                new CreateAuditLogRequest
+                // Cancel all other Pending requests for the same device (by InstallationId), excluding the approved one
+                // and any already cancelled above (different engineer).
+                if (!string.IsNullOrWhiteSpace(device.InstallationId))
                 {
-                    ActionType = AuditActionType.DeviceAccessRequestApproved,
-                    PerformedByUserId = adminUserId,
-                    PerformedByEmail = adminEmail,
-                    EntityName = nameof(DeviceAccessRequest),
-                    EntityPublicId = accessRequest.PublicId,
-                    Description = description,
-                    MetadataJson = JsonSerializer.Serialize(new
-                    {
-                        accessRequestPublicId = accessRequest.PublicId,
-                        engineerPublicId = accessRequest.Engineer.PublicId,
-                        engineerName = accessRequest.Engineer.FullName,
-                        devicePublicId = device.PublicId,
-                        deviceName = device.DeviceName,
-                        serialNumber = device.SerialNumber,
-                        installationId = device.InstallationId,
-                        reviewNote = request.ReviewNote
-                    })
-                },
-                cancellationToken);
+                    var devicePendingRequests = await _context.DeviceAccessRequests
+                        .Where(x =>
+                            x.InstallationId == device.InstallationId &&
+                            x.EngineerId != accessRequest.EngineerId &&
+                            x.Id != accessRequest.Id &&
+                            x.Status == DeviceAccessRequestStatus.Pending &&
+                            !x.IsDeleted)
+                        .ToListAsync(cancellationToken);
 
-            return Map(accessRequest, device);
+                    foreach (var pendingRequest in devicePendingRequests)
+                    {
+                        pendingRequest.Status = DeviceAccessRequestStatus.Cancelled;
+                        pendingRequest.UpdatedAt = now;
+                    }
+                }
+
+                accessRequest.Status = DeviceAccessRequestStatus.Approved;
+                accessRequest.ReviewedAtUtc = now;
+                accessRequest.ReviewedByUserId = adminUserId;
+
+                if (wasRejected)
+                {
+                    var oldNote = string.IsNullOrWhiteSpace(accessRequest.ReviewNote) ? "None" : accessRequest.ReviewNote;
+                    accessRequest.ReviewNote = $"Rejected reason: {oldNote}\nOverride approval note: {request.ReviewNote}";
+                }
+                else
+                {
+                    accessRequest.ReviewNote = request.ReviewNote;
+                }
+
+                accessRequest.CreatedDeviceId = device.Id;
+                accessRequest.UpdatedAt = now;
+                accessRequest.CreatedDevice = device;
+
+                await _context.SaveChangesAsync(cancellationToken);
+
+                var description = wasRejected
+                    ? $"Admin approved device access request for engineer '{accessRequest.Engineer!.FullName}' after it was previously rejected."
+                    : $"Admin approved device access request for engineer '{accessRequest.Engineer!.FullName}'.";
+
+                await _auditLogService.CreateAsync(
+                    new CreateAuditLogRequest
+                    {
+                        ActionType = AuditActionType.DeviceAccessRequestApproved,
+                        PerformedByUserId = adminUserId,
+                        PerformedByEmail = adminEmail,
+                        EntityName = nameof(DeviceAccessRequest),
+                        EntityPublicId = accessRequest.PublicId,
+                        Description = description,
+                        MetadataJson = JsonSerializer.Serialize(new
+                        {
+                            accessRequestPublicId = accessRequest.PublicId,
+                            engineerPublicId = accessRequest.Engineer.PublicId,
+                            engineerName = accessRequest.Engineer.FullName,
+                            devicePublicId = device.PublicId,
+                            deviceName = device.DeviceName,
+                            serialNumber = device.SerialNumber,
+                            installationId = device.InstallationId,
+                            reviewNote = request.ReviewNote
+                        })
+                    },
+                    cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                return Map(accessRequest, device);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
 
         public async Task<DeviceAccessRequestResponse> RejectAsync(

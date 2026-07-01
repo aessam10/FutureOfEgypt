@@ -36,7 +36,7 @@ import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { EmptyState } from '../components/common/EmptyState';
 import { DeviceStatusChip } from '../components/status/DeviceStatusChip';
-import { createDevice, getDevices, updateDeviceStatus } from '../api/devicesApi';
+import { createDevice, getDevices, updateDeviceStatus, deleteDevice } from '../api/devicesApi';
 import type { CreateDeviceRequest, DeviceResponse } from '../types/devices';
 
 const ACTIVE_STATUS = 1;
@@ -92,6 +92,23 @@ export function DevicesPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['devices'] });
       await queryClient.invalidateQueries({ queryKey: ['deviceAppStatuses'] });
+      setMenuAnchor(null);
+      setSelectedDevice(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (publicId: string) => deleteDevice(publicId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['devices'] });
+      await queryClient.invalidateQueries({ queryKey: ['engineers'] });
+      await queryClient.invalidateQueries({ queryKey: ['active-assignments'] });
+      await queryClient.invalidateQueries({ queryKey: ['latest-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['hidden-locations'] });
+      await queryClient.invalidateQueries({ queryKey: ['deviceAppStatuses'] });
+      await queryClient.invalidateQueries({ queryKey: ['device-requests'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      await queryClient.invalidateQueries({ queryKey: ['engineers-status'] });
       setMenuAnchor(null);
       setSelectedDevice(null);
     },
@@ -250,6 +267,18 @@ export function DevicesPage() {
           onClick={() => { if (selectedDevice) updateStatusMutation.mutate({ devicePublicId: selectedDevice.publicId, status: BLOCKED_STATUS }); }}
         >
           Mark as Blocked
+        </MenuItem>
+        <MenuItem
+          sx={{ color: 'error.main' }}
+          onClick={() => {
+            if (selectedDevice) {
+              if (window.confirm(`Are you sure you want to delete ${selectedDevice.deviceName}?`)) {
+                deleteMutation.mutate(selectedDevice.publicId);
+              }
+            }
+          }}
+        >
+          Delete
         </MenuItem>
       </Menu>
 

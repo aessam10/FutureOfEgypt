@@ -69,6 +69,23 @@ namespace FutureOfEgypt.Controllers
             return Ok(result);
         }
 
+        [HttpDelete("{devicePublicId:guid}")]
+        public async Task<IActionResult> Delete(
+            Guid devicePublicId,
+            CancellationToken cancellationToken)
+        {
+            var adminUserId = User.GetUserId();
+            var adminEmail = User.GetUserEmail();
+
+            await _deviceService.DeleteDeviceAsync(
+                adminUserId,
+                adminEmail,
+                devicePublicId,
+                cancellationToken);
+
+            return NoContent();
+        }
+
         [HttpPost("app-status")]
         [AllowAnonymous]
         public async Task<IActionResult> ReportAppStatus(

@@ -31,3 +31,7 @@ export async function updateDeviceStatus(
 ) {
   await axiosClient.patch(`/api/Devices/${devicePublicId}/status`, request);
 }
+
+export async function deleteDevice(devicePublicId: string) {
+  await axiosClient.delete(`/api/Devices/${devicePublicId}`);
+}

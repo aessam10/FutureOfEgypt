@@ -138,7 +138,12 @@ namespace FutureOfEgypt.Infrastructure.Services
                     LastSeenAtUtc = x.LastSeenAtUtc,
                     CreatedAt = x.CreatedAt,
                     AssignedEngineerName = _context.EngineerDevices
-                        .Where(ed => ed.DeviceId == x.Id && ed.IsActive && !ed.IsDeleted && !ed.Engineer!.IsDeleted)
+                        .Where(ed => ed.DeviceId == x.Id 
+                                     && ed.IsActive 
+                                     && !ed.IsDeleted 
+                                     && ed.Engineer != null 
+                                     && !ed.Engineer.IsDeleted
+                                     && ed.Engineer.Status == EngineerStatus.Active)
                         .Select(ed => ed.Engineer.FullName)
                         .FirstOrDefault()
                 })
@@ -185,7 +190,12 @@ namespace FutureOfEgypt.Infrastructure.Services
                     LastSeenAtUtc = device.LastSeenAtUtc,
                     CreatedAt = device.CreatedAt,
                     AssignedEngineerName = await _context.EngineerDevices
-                        .Where(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted && !ed.Engineer!.IsDeleted)
+                        .Where(ed => ed.DeviceId == device.Id 
+                                     && ed.IsActive 
+                                     && !ed.IsDeleted 
+                                     && ed.Engineer != null 
+                                     && !ed.Engineer.IsDeleted
+                                     && ed.Engineer.Status == EngineerStatus.Active)
                         .Select(ed => ed.Engineer.FullName)
                         .FirstOrDefaultAsync(cancellationToken)
                 };
@@ -253,10 +263,97 @@ namespace FutureOfEgypt.Infrastructure.Services
                 LastSeenAtUtc = device.LastSeenAtUtc,
                 CreatedAt = device.CreatedAt,
                 AssignedEngineerName = await _context.EngineerDevices
-                    .Where(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted && !ed.Engineer!.IsDeleted)
+                    .Where(ed => ed.DeviceId == device.Id 
+                                 && ed.IsActive 
+                                 && !ed.IsDeleted 
+                                 && ed.Engineer != null 
+                                 && !ed.Engineer.IsDeleted
+                                 && ed.Engineer.Status == EngineerStatus.Active)
                     .Select(ed => ed.Engineer.FullName)
                     .FirstOrDefaultAsync(cancellationToken)
             };
+        }
+
+        public async Task DeleteDeviceAsync(
+            Guid adminUserId,
+            string adminEmail,
+            Guid devicePublicId,
+            CancellationToken cancellationToken = default)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var device = await _context.Devices
+                    .FirstOrDefaultAsync(x => x.PublicId == devicePublicId && !x.IsDeleted, cancellationToken);
+                
+                if (device == null)
+                    throw new InvalidOperationException("Device does not exist.");
+
+                device.IsDeleted = true;
+                device.UpdatedAt = DateTime.UtcNow;
+
+                // Deactivate all active EngineerDevice rows for this Device
+                var activeAssignments = await _context.EngineerDevices
+                    .Where(ed => ed.DeviceId == device.Id && ed.IsActive && !ed.IsDeleted)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var assignment in activeAssignments)
+                {
+                    assignment.IsActive = false;
+                    assignment.UnassignedAtUtc = DateTime.UtcNow;
+                    assignment.UpdatedAt = DateTime.UtcNow;
+                }
+
+                // Deactivate pending access requests for this device
+                var pendingRequests = await _context.DeviceAccessRequests
+                    .Where(x => x.CreatedDeviceId == device.Id && x.Status == DeviceAccessRequestStatus.Pending && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var req in pendingRequests)
+                {
+                    req.Status = DeviceAccessRequestStatus.Cancelled;
+                    req.UpdatedAt = DateTime.UtcNow;
+                }
+
+                // Mark related DeviceLatestLocations offline
+                var latestLocations = await _context.DeviceLatestLocations
+                    .Where(x => x.DeviceId == device.Id && x.IsOnline && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
+                
+                foreach (var loc in latestLocations)
+                {
+                    loc.IsOnline = false;
+                    loc.UpdatedAt = DateTime.UtcNow;
+                    _context.EngineerStatusHistories.Add(new EngineerStatusHistory
+                    {
+                        EngineerId = loc.EngineerId,
+                        DeviceId = loc.DeviceId,
+                        IsOnline = false,
+                        Reason = "Device deleted",
+                        ChangedAtUtc = DateTime.UtcNow
+                    });
+                }
+
+                await _context.SaveChangesAsync(cancellationToken);
+
+                await _auditLogService.CreateAsync(new CreateAuditLogRequest
+                {
+                    ActionType = AuditActionType.DeviceInactivated,
+                    PerformedByUserId = adminUserId,
+                    PerformedByEmail = adminEmail,
+                    EntityName = nameof(Device),
+                    EntityPublicId = device.PublicId,
+                    Description = $"Admin soft-deleted device '{device.DeviceName}'.",
+                    MetadataJson = JsonSerializer.Serialize(new { devicePublicId = device.PublicId, deviceName = device.DeviceName })
+                }, cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
     }
 }

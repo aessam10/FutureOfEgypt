@@ -5,6 +5,7 @@ using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Domain.Enums;
 using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using FutureOfEgypt.Infrastructure.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace FutureOfEgypt.Infrastructure.Services
@@ -62,10 +63,42 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             // Step 4 — Active assignment check.
             var activeAssignment = await _context.EngineerDevices
-                .AsNoTracking()
+                .Include(x => x.Engineer)
+                .Include(x => x.Device)
                 .FirstOrDefaultAsync(
                     x => x.DeviceId == device.Id && x.IsActive && !x.IsDeleted,
                     cancellationToken);
+
+            if (activeAssignment is not null)
+            {
+                var isStale = activeAssignment.Engineer == null 
+                              || activeAssignment.Engineer.IsDeleted 
+                              || activeAssignment.Engineer.Status != EngineerStatus.Active
+                              || activeAssignment.Device == null
+                              || activeAssignment.Device.IsDeleted
+                              || activeAssignment.Device.Status != DeviceStatus.Active;
+
+                if (isStale)
+                {
+                    using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                    try
+                    {
+                        activeAssignment.IsActive = false;
+                        activeAssignment.UnassignedAtUtc = DateTime.UtcNow;
+                        activeAssignment.UpdatedAt = DateTime.UtcNow;
+                        _context.EngineerDevices.Update(activeAssignment);
+                        await _context.SaveChangesAsync(cancellationToken);
+                        await transaction.CommitAsync(cancellationToken);
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        throw;
+                    }
+                    
+                    activeAssignment = null; // treat as unassigned
+                }
+            }
 
             if (activeAssignment is not null)
             {
@@ -132,12 +165,10 @@ namespace FutureOfEgypt.Infrastructure.Services
                 return;
 
             var assignmentExists = await _context.EngineerDevices
+                .FilterValidActive()
                 .AnyAsync(
-                    x => x.EngineerId == engineer.Id
-                         && x.DeviceId == device.Id
-                         && x.IsActive
-                         && !x.IsDeleted,
-                     cancellationToken);
+                    x => x.EngineerId == engineer.Id && x.DeviceId == device.Id,
+                    cancellationToken);
 
             if (!assignmentExists)
                 return;
@@ -210,11 +241,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                 throw new InvalidOperationException("Device is not active.");
 
             var assignmentExists = await _context.EngineerDevices
+                .FilterValidActive()
                 .AnyAsync(
-                    x => x.EngineerId == engineer.Id
-                         && x.DeviceId == device.Id
-                         && x.IsActive
-                         && !x.IsDeleted,
+                    x => x.EngineerId == engineer.Id && x.DeviceId == device.Id,
                     cancellationToken);
 
             if (!assignmentExists)
@@ -452,11 +481,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                 return;
 
             var assignmentExists = await _context.EngineerDevices
+                .FilterValidActive()
                 .AnyAsync(
-                    x => x.EngineerId == engineer.Id
-                         && x.DeviceId == device.Id
-                         && x.IsActive
-                         && !x.IsDeleted,
+                    x => x.EngineerId == engineer.Id && x.DeviceId == device.Id,
                     cancellationToken);
 
             if (!assignmentExists)
@@ -521,11 +548,9 @@ namespace FutureOfEgypt.Infrastructure.Services
                 throw new InvalidOperationException("Device is not active.");
 
             var assignmentExists = await _context.EngineerDevices
+                .FilterValidActive()
                 .AnyAsync(
-                    x => x.EngineerId == engineer.Id
-                         && x.DeviceId == device.Id
-                         && x.IsActive
-                         && !x.IsDeleted,
+                    x => x.EngineerId == engineer.Id && x.DeviceId == device.Id,
                     cancellationToken);
 
             if (!assignmentExists)
@@ -764,7 +789,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      EngineerName = eng.FullName,
                                      EngineerPhoneNumber = eng.PhoneNumber,
                                      ProfilePhotoUrl = (u != null && u.ProfilePhotoPath != null) ? $"/api/profile/photo/{u.Id}" : null,
-                                     IsAuthorized = ed != null && ed.IsActive && !ed.IsDeleted,
+                                     IsAuthorized = ed != null && ed.IsActive && !ed.IsDeleted && eng.Status == EngineerStatus.Active && dev.Status == DeviceStatus.Active,
                                      DevicePublicId = dev.PublicId,
                                      DeviceName = dev.DeviceName,
                                      Latitude = loc.Latitude,
@@ -858,7 +883,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                                      EngineerName = eng.FullName,
                                      EngineerPhoneNumber = eng.PhoneNumber,
                                      ProfilePhotoUrl = (u != null && u.ProfilePhotoPath != null) ? $"/api/profile/photo/{u.Id}" : null,
-                                     IsAuthorized = ed != null && ed.IsActive && !ed.IsDeleted,
+                                     IsAuthorized = ed != null && ed.IsActive && !ed.IsDeleted && eng.Status == EngineerStatus.Active && dev.Status == DeviceStatus.Active,
                                      DevicePublicId = dev.PublicId,
                                      DeviceName = dev.DeviceName,
                                      Latitude = loc.Latitude,

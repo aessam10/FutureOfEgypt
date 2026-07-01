@@ -5,6 +5,7 @@ using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Domain.Enums;
 using FutureOfEgypt.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using FutureOfEgypt.Infrastructure.Extensions;
 using System.Text.Json;
 
 namespace FutureOfEgypt.Infrastructure.Services
@@ -33,16 +34,23 @@ namespace FutureOfEgypt.Infrastructure.Services
                     x => x.PublicId == request.EngineerPublicId && !x.IsDeleted,
                     cancellationToken);
 
-            if (engineer is null)
+            if (engineer is null || engineer.IsDeleted)
                 throw new InvalidOperationException("Engineer does not exist.");
+
+            if (engineer.Status != EngineerStatus.Active)
+                throw new InvalidOperationException("Engineer is not active.");
 
             var device = await _context.Devices
                 .FirstOrDefaultAsync(
                     x => x.PublicId == request.DevicePublicId && !x.IsDeleted,
                     cancellationToken);
 
-            if (device is null)
+            if (device is null || device.IsDeleted)
                 throw new InvalidOperationException("Device does not exist.");
+
+            if (device.Status != DeviceStatus.Active)
+                throw new InvalidOperationException("Device is not active.");
+
             var sameActiveAssignment = await _context.EngineerDevices.AsNoTracking().Include(x => x.Engineer).Include(x => x.Device)
                 .FirstOrDefaultAsync(x => x.EngineerId == engineer.Id&& x.DeviceId == device.Id&& x.IsActive && !x.IsDeleted, cancellationToken);
 
@@ -63,78 +71,119 @@ namespace FutureOfEgypt.Infrastructure.Services
                     UnassignedAtUtc = sameActiveAssignment.UnassignedAtUtc
                 };
             }
-            var now = DateTime.UtcNow;
 
-            var currentEngineerAssignments = await _context.EngineerDevices
-                .Where(x => x.EngineerId == engineer.Id
-                            && x.IsActive
-                            && !x.IsDeleted)
+            // Deactivate stale assignments for this engineer or device first
+            var staleAssignments = await _context.EngineerDevices
+                .Include(x => x.Engineer)
+                .Include(x => x.Device)
+                .Where(x => x.IsActive && !x.IsDeleted && (x.EngineerId == engineer.Id || x.DeviceId == device.Id))
                 .ToListAsync(cancellationToken);
 
-            foreach (var assignment in currentEngineerAssignments)
+            var staleToUpdate = staleAssignments.Where(x => 
+                x.Engineer == null 
+                || x.Engineer.IsDeleted 
+                || x.Engineer.Status != EngineerStatus.Active
+                || x.Device == null
+                || x.Device.IsDeleted
+                || x.Device.Status != DeviceStatus.Active
+            ).ToList();
+
+            if (staleToUpdate.Any())
             {
-                assignment.IsActive = false;
-                assignment.UnassignedAtUtc = now;
-                assignment.UpdatedAt = now;
+                foreach (var assignment in staleToUpdate)
+                {
+                    assignment.IsActive = false;
+                    assignment.UnassignedAtUtc = DateTime.UtcNow;
+                    assignment.UpdatedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync(cancellationToken);
             }
 
-            var currentDeviceAssignments = await _context.EngineerDevices
-                .Where(x => x.DeviceId == device.Id
-                            && x.IsActive
-                            && !x.IsDeleted)
-                .ToListAsync(cancellationToken);
-
-            foreach (var assignment in currentDeviceAssignments)
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                assignment.IsActive = false;
-                assignment.UnassignedAtUtc = now;
-                assignment.UpdatedAt = now;
+                var now = DateTime.UtcNow;
+
+                var currentEngineerAssignments = await _context.EngineerDevices
+                    .Where(x => x.EngineerId == engineer.Id
+                                && x.IsActive
+                                && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var assignment in currentEngineerAssignments)
+                {
+                    assignment.IsActive = false;
+                    assignment.UnassignedAtUtc = now;
+                    assignment.UpdatedAt = now;
+                }
+
+                var currentDeviceAssignments = await _context.EngineerDevices
+                    .Where(x => x.DeviceId == device.Id
+                                && x.IsActive
+                                && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var assignment in currentDeviceAssignments)
+                {
+                    assignment.IsActive = false;
+                    assignment.UnassignedAtUtc = now;
+                    assignment.UpdatedAt = now;
+                }
+
+                var newAssignment = new EngineerDevice
+                {
+                    EngineerId = engineer.Id,
+                    DeviceId = device.Id,
+                    AssignedAtUtc = now,
+                    IsActive = true
+                };
+
+                await _context.EngineerDevices.AddAsync(newAssignment, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                await _auditLogService.CreateAsync(
+                    new CreateAuditLogRequest
+                    {
+                        ActionType = AuditActionType.DeviceAssignedToEngineer,
+                        PerformedByUserId = adminUserId,
+                        PerformedByEmail = adminEmail,
+                        EntityName = nameof(EngineerDevice),
+                        EntityPublicId = newAssignment.PublicId,
+                        Description = $"Admin assigned device '{device.DeviceName}' to engineer '{engineer.FullName}'.",
+                        MetadataJson = JsonSerializer.Serialize(new
+                        {
+                            assignmentPublicId = newAssignment.PublicId,
+                            engineerPublicId = engineer.PublicId,
+                            engineerName = engineer.FullName,
+                            devicePublicId = device.PublicId,
+                            deviceName = device.DeviceName,
+                            serialNumber = device.SerialNumber
+                        })
+                    },
+                    cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                return new EngineerDeviceResponse
+                {
+                    PublicId = newAssignment.PublicId,
+
+                    EngineerPublicId = engineer.PublicId,
+                    EngineerName = engineer.FullName,
+
+                    DevicePublicId = device.PublicId,
+                    DeviceName = device.DeviceName,
+
+                    IsActive = newAssignment.IsActive,
+                    AssignedAtUtc = newAssignment.AssignedAtUtc,
+                    UnassignedAtUtc = newAssignment.UnassignedAtUtc
+                };
             }
-
-            var newAssignment = new EngineerDevice
+            catch
             {
-                EngineerId = engineer.Id,
-                DeviceId = device.Id,
-                AssignedAtUtc = now,
-                IsActive = true
-            };
-
-            await _context.EngineerDevices.AddAsync(newAssignment, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
-            await _auditLogService.CreateAsync(
-    new CreateAuditLogRequest
-    {
-        ActionType = AuditActionType.DeviceAssignedToEngineer,
-        PerformedByUserId = adminUserId,
-        PerformedByEmail = adminEmail,
-        EntityName = nameof(EngineerDevice),
-        EntityPublicId = newAssignment.PublicId,
-        Description = $"Admin assigned device '{device.DeviceName}' to engineer '{engineer.FullName}'.",
-        MetadataJson = JsonSerializer.Serialize(new
-        {
-            assignmentPublicId = newAssignment.PublicId,
-            engineerPublicId = engineer.PublicId,
-            engineerName = engineer.FullName,
-            devicePublicId = device.PublicId,
-            deviceName = device.DeviceName,
-            serialNumber = device.SerialNumber
-        })
-    },
-    cancellationToken);
-            return new EngineerDeviceResponse
-            {
-                PublicId = newAssignment.PublicId,
-
-                EngineerPublicId = engineer.PublicId,
-                EngineerName = engineer.FullName,
-
-                DevicePublicId = device.PublicId,
-                DeviceName = device.DeviceName,
-
-                IsActive = newAssignment.IsActive,
-                AssignedAtUtc = newAssignment.AssignedAtUtc,
-                UnassignedAtUtc = newAssignment.UnassignedAtUtc
-            };
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
 
         public async Task<PagedResponse<EngineerDeviceResponse>> GetAssignmentsAsync(
@@ -172,11 +221,24 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             if (forceActiveOnly)
             {
-                query = query.Where(x => x.IsActive);
+                query = query.FilterValidActive();
             }
             else if (request.IsActive.HasValue)
             {
-                query = query.Where(x => x.IsActive == request.IsActive.Value);
+                if (request.IsActive.Value)
+                {
+                    query = query.FilterValidActive();
+                }
+                else
+                {
+                    query = query.Where(x => !x.IsActive 
+                                             || x.Engineer == null
+                                             || x.Engineer.IsDeleted
+                                             || x.Engineer.Status != EngineerStatus.Active 
+                                             || x.Device == null
+                                             || x.Device.IsDeleted
+                                             || x.Device.Status != DeviceStatus.Active);
+                }
             }
 
             if (request.EngineerPublicId.HasValue)

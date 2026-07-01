@@ -37,7 +37,14 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             var activeAssignments = await _context.EngineerDevices
                 .CountAsync(
-                    x => x.IsActive && !x.IsDeleted,
+                    x => x.IsActive 
+                         && !x.IsDeleted
+                         && x.Engineer != null
+                         && !x.Engineer.IsDeleted
+                         && x.Engineer.Status == EngineerStatus.Active
+                         && x.Device != null
+                         && !x.Device.IsDeleted
+                         && x.Device.Status == DeviceStatus.Active,
                     cancellationToken);
 
             var pendingDeviceAccessRequests = await _context.DeviceAccessRequests
@@ -91,7 +98,15 @@ namespace FutureOfEgypt.Infrastructure.Services
             var activeAssignments = await _context.EngineerDevices
                 .AsNoTracking()
                 .Include(x => x.Device)
-                .Where(x => x.IsActive && !x.IsDeleted)
+                .Include(x => x.Engineer)
+                .Where(x => x.IsActive 
+                            && !x.IsDeleted
+                            && x.Engineer != null
+                            && !x.Engineer.IsDeleted
+                            && x.Engineer.Status == EngineerStatus.Active
+                            && x.Device != null
+                            && !x.Device.IsDeleted
+                            && x.Device.Status == DeviceStatus.Active)
                 .ToListAsync(cancellationToken);
 
             var latestLocations = await _context.DeviceLatestLocations

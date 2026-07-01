@@ -115,6 +115,9 @@ export function EngineersPage() {
       await queryClient.invalidateQueries({ queryKey: ['latest-locations'] });
       await queryClient.invalidateQueries({ queryKey: ['hidden-locations'] });
       await queryClient.invalidateQueries({ queryKey: ['deviceAppStatuses'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      await queryClient.invalidateQueries({ queryKey: ['engineers-status'] });
+      await queryClient.invalidateQueries({ queryKey: ['device-requests'] });
       setMenuAnchor(null);
       setSelectedEngineer(null);
     },
