@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Common.Models;
+using FutureOfEgypt.Application.Common.Models;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -12,6 +12,12 @@ namespace FutureOfEgypt.Application.Features.Chat
             int pageNumber,
             int pageSize,
             string? search,
+            bool archived,
+            CancellationToken cancellationToken = default);
+
+        Task<ChatConversationResponse> GetConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
             CancellationToken cancellationToken = default);
 
         Task<ChatConversationResponse> CreateDirectConversationAsync(
@@ -42,12 +48,33 @@ namespace FutureOfEgypt.Application.Features.Chat
             Guid conversationPublicId,
             CancellationToken cancellationToken = default);
 
+        Task<ChatConversationResponse> MuteConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
+            DateTime? mutedUntilUtc,
+            CancellationToken cancellationToken = default);
+
+        Task<ChatConversationResponse> UnmuteConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
+            CancellationToken cancellationToken = default);
+
+        Task<ChatConversationResponse> ArchiveConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
+            CancellationToken cancellationToken = default);
+
+        Task<ChatConversationResponse> UnarchiveConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
+            CancellationToken cancellationToken = default);
+
         Task<PagedResponse<ChatUserSearchResponse>> SearchUsersAsync(
-    Guid currentUserId,
-    string? search,
-    int pageNumber,
-    int pageSize,
-    CancellationToken cancellationToken = default);
+            Guid currentUserId,
+            string? search,
+            int pageNumber,
+            int pageSize,
+            CancellationToken cancellationToken = default);
 
         Task AddParticipantsAsync(
             Guid currentUserId,

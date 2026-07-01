@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../core/network/api_client.dart';
+import 'tracking_session_guard.dart';
 
 class DeviceHealthService {
   static Future<int?> reportHealth({
@@ -124,6 +124,17 @@ class DeviceHealthService {
     );
 
     debugPrint("[DeviceHealthService] Successfully reported health status. Response code: ${response.statusCode}");
+    
+    final isInvalid = TrackingSessionGuard.isInvalidSessionResponse(response.statusCode, response.body);
+    if (isInvalid) {
+      return response.statusCode;
+    }
+    
+    // Return a generic error code if it failed, but not because of session invalidity
+    if (response.statusCode >= 400 && response.statusCode < 500) {
+      return 500; 
+    }
+    
     return response.statusCode;
   }
 

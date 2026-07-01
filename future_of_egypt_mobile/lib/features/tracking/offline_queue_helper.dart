@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter/foundation.dart';
+import 'tracking_session_guard.dart';
+
 
 class OfflineLocationPoint {
   final String localId;
@@ -109,6 +111,12 @@ class OfflineQueueHelper {
   /// Returns [true] if saved, or [false] if rejected due to the 3-day limit.
   Future<bool> insertPoint(OfflineLocationPoint point) async {
     try {
+      final allowed = await TrackingSessionGuard.canTrackNow();
+      if (!allowed) {
+        debugPrint('[FOE_QUEUE] Rejecting insertPoint: not eligible to track.');
+        return false;
+      }
+
       final db = await database;
 
       // Check the 3-day limit
@@ -190,6 +198,16 @@ class OfflineQueueHelper {
     } catch (e) {
       debugPrint('[FOE_QUEUE] Error getting queue count: $e');
       return 0;
+    }
+  }
+
+  Future<void> clearQueue() async {
+    try {
+      final db = await database;
+      await db.delete('offline_locations');
+      debugPrint('[FOE_QUEUE] Queue cleared.');
+    } catch (e) {
+      debugPrint('[FOE_QUEUE] Error clearing queue: $e');
     }
   }
 }

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import '../../core/network/api_client.dart';
 import 'chat_models.dart';
 
@@ -9,8 +8,8 @@ class ChatService {
 
   ChatService({required this.token});
 
-  Future<List<ChatConversation>> getMyConversations() async {
-    final endpoint = 'Chat/conversations';
+  Future<List<ChatConversation>> getMyConversations({bool archived = false}) async {
+    final endpoint = 'Chat/conversations?archived=$archived';
     
     debugPrint('[FOE_CHAT_MOBILE] loading conversation');
     debugPrint('[FOE_CHAT_MOBILE] request url: ${ApiClient.baseUrl}/$endpoint');
@@ -102,6 +101,70 @@ class ChatService {
       return ChatConversation.fromJson(json);
     } else {
       throw Exception('Failed to create direct conversation');
+    }
+  }
+
+  Future<ChatConversation> getConversation(String conversationId) async {
+    final endpoint = 'Chat/conversations/$conversationId';
+    final response = await ApiClient.getWithToken(endpoint, token);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return ChatConversation.fromJson(json);
+    } else {
+      throw Exception('Failed to load conversation details');
+    }
+  }
+
+  Future<ChatConversation> muteConversation(String conversationId, {DateTime? mutedUntilUtc}) async {
+    final endpoint = 'Chat/conversations/$conversationId/mute';
+    final response = await ApiClient.postWithToken(
+      endpoint,
+      {'mutedUntilUtc': mutedUntilUtc?.toIso8601String()},
+      token,
+    );
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return ChatConversation.fromJson(json);
+    } else {
+      throw Exception('Failed to mute conversation');
+    }
+  }
+
+  Future<ChatConversation> unmuteConversation(String conversationId) async {
+    final endpoint = 'Chat/conversations/$conversationId/unmute';
+    final response = await ApiClient.postWithToken(endpoint, {}, token);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return ChatConversation.fromJson(json);
+    } else {
+      throw Exception('Failed to unmute conversation');
+    }
+  }
+
+  Future<ChatConversation> archiveConversation(String conversationId) async {
+    final endpoint = 'Chat/conversations/$conversationId/archive';
+    final response = await ApiClient.postWithToken(endpoint, {}, token);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return ChatConversation.fromJson(json);
+    } else {
+      throw Exception('Failed to archive conversation');
+    }
+  }
+
+  Future<ChatConversation> unarchiveConversation(String conversationId) async {
+    final endpoint = 'Chat/conversations/$conversationId/unarchive';
+    final response = await ApiClient.postWithToken(endpoint, {}, token);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return ChatConversation.fromJson(json);
+    } else {
+      throw Exception('Failed to unarchive conversation');
     }
   }
 }

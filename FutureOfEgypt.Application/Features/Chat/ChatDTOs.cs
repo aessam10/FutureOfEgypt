@@ -36,6 +36,14 @@ namespace FutureOfEgypt.Application.Features.Chat
         public ChatMessagePreviewResponse? LastMessage { get; set; }
 
         public List<ChatParticipantResponse> Participants { get; set; } = new();
+
+        public bool CanSendMessage { get; set; } = true;
+
+        public bool IsMuted { get; set; }
+
+        public DateTime? MutedUntilUtc { get; set; }
+
+        public bool IsArchived { get; set; }
     }
 
     public sealed class ChatParticipantResponse
@@ -49,6 +57,8 @@ namespace FutureOfEgypt.Application.Features.Chat
         public string? ProfileImageUrl { get; set; }
 
         public int Role { get; set; }
+
+        public bool IsAvailable { get; set; } = true;
     }
 
     public sealed class ChatMessageResponse
@@ -93,6 +103,8 @@ namespace FutureOfEgypt.Application.Features.Chat
         public string? Email { get; set; }
 
         public string? ProfileImageUrl { get; set; }
+
+        public bool IsAvailable { get; set; } = true;
     }
 
     public sealed class AddChatParticipantsRequest

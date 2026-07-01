@@ -6,6 +6,10 @@ class ChatConversation {
   final int unreadCount;
   final ChatMessagePreview? lastMessage;
   final List<ChatParticipant> participants;
+  final bool canSendMessage;
+  final bool isMuted;
+  final DateTime? mutedUntilUtc;
+  final bool isArchived;
 
   ChatConversation({
     required this.publicId,
@@ -15,6 +19,10 @@ class ChatConversation {
     required this.unreadCount,
     this.lastMessage,
     required this.participants,
+    required this.canSendMessage,
+    required this.isMuted,
+    this.mutedUntilUtc,
+    required this.isArchived,
   });
 
   factory ChatConversation.fromJson(Map<String, dynamic> json) {
@@ -26,6 +34,10 @@ class ChatConversation {
       unreadCount: json['unreadCount'] ?? 0,
       lastMessage: json['lastMessage'] != null ? ChatMessagePreview.fromJson(json['lastMessage']) : null,
       participants: (json['participants'] as List?)?.map((x) => ChatParticipant.fromJson(x)).toList() ?? [],
+      canSendMessage: json['canSendMessage'] ?? true,
+      isMuted: json['isMuted'] ?? false,
+      mutedUntilUtc: json['mutedUntilUtc'] != null ? DateTime.parse(json['mutedUntilUtc']).toLocal() : null,
+      isArchived: json['isArchived'] ?? false,
     );
   }
 }
@@ -36,6 +48,7 @@ class ChatParticipant {
   final String? email;
   final String? profileImageUrl;
   final int role;
+  final bool isAvailable;
 
   ChatParticipant({
     required this.userId,
@@ -43,6 +56,7 @@ class ChatParticipant {
     this.email,
     this.profileImageUrl,
     required this.role,
+    required this.isAvailable,
   });
 
   factory ChatParticipant.fromJson(Map<String, dynamic> json) {
@@ -52,6 +66,7 @@ class ChatParticipant {
       email: json['email'],
       profileImageUrl: json['profileImageUrl'],
       role: json['role'] ?? 0,
+      isAvailable: json['isAvailable'] ?? true,
     );
   }
 }
@@ -160,12 +175,14 @@ class ChatUserSearch {
   final String displayName;
   final String? email;
   final String? profileImageUrl;
+  final bool isAvailable;
 
   ChatUserSearch({
     required this.userId,
     required this.displayName,
     this.email,
     this.profileImageUrl,
+    this.isAvailable = true,
   });
 
   factory ChatUserSearch.fromJson(Map<String, dynamic> json) {
@@ -174,6 +191,7 @@ class ChatUserSearch {
       displayName: json['displayName'],
       email: json['email'],
       profileImageUrl: json['profileImageUrl'],
+      isAvailable: json['isAvailable'] ?? true,
     );
   }
 }

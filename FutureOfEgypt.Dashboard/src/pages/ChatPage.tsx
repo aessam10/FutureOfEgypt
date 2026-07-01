@@ -3,6 +3,8 @@ import { axiosClient } from '../api/axiosClient';
 import SearchIcon from '@mui/icons-material/Search';
 import SendIcon from '@mui/icons-material/Send';
 import CloseIcon from '@mui/icons-material/Close';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import {
   Badge,
   Box,
@@ -14,7 +16,11 @@ import {
   InputAdornment,
   List,
   ListItemButton,
+  Menu,
+  MenuItem,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,11 +31,16 @@ import { EmptyState } from '../components/common/EmptyState';
 import { AuthAvatar } from '../components/AuthAvatar';
 import {
   createDirectConversation,
+  getConversation,
   getConversationMessages,
   getMyConversations,
   markConversationAsRead,
   searchChatUsers,
   sendChatMessage,
+  muteConversation,
+  unmuteConversation,
+  archiveConversation,
+  unarchiveConversation,
 } from '../api/chatApi';
 import { createChatHubConnection } from '../signalr/chatHub';
 import { useAuth } from '../auth/AuthContext';
@@ -225,6 +236,53 @@ function ProfilePreviewModal({
   );
 }
 
+// ─── Header Menu Component ───────────────────────────────────────────────────
+function ConversationHeaderMenu({
+  conversation,
+  onMute,
+  onUnmute,
+  onArchive,
+  onUnarchive
+}: {
+  conversation: ChatConversationResponse;
+  onMute: () => void;
+  onUnmute: () => void;
+  onArchive: () => void;
+  onUnarchive: () => void;
+}) {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
+
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  return (
+    <>
+      <IconButton onClick={handleClick} size="small" sx={{ color: 'text.secondary' }}>
+        <MoreVertIcon />
+      </IconButton>
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleClose}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        <MenuItem onClick={() => { handleClose(); conversation.isMuted ? onUnmute() : onMute(); }}>
+          {conversation.isMuted ? 'Unmute Conversation' : 'Mute Conversation'}
+        </MenuItem>
+        <MenuItem onClick={() => { handleClose(); conversation.isArchived ? onUnarchive() : onArchive(); }}>
+          {conversation.isArchived ? 'Unarchive Conversation' : 'Archive Conversation'}
+        </MenuItem>
+      </Menu>
+    </>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 export function ChatPage() {
   const queryClient = useQueryClient();
@@ -232,6 +290,7 @@ export function ChatPage() {
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -255,8 +314,8 @@ export function ChatPage() {
     data: conversationsData,
     isLoading: isConversationsLoading,
   } = useQuery({
-    queryKey: ['chat-conversations', debouncedSearch],
-    queryFn: () => getMyConversations({ pageNumber: 1, pageSize: 50, search: debouncedSearch.trim() || undefined }),
+    queryKey: ['chat-conversations', debouncedSearch, showArchived],
+    queryFn: () => getMyConversations({ page: 1, limit: 50, search: debouncedSearch.trim() || undefined, archived: showArchived }),
   });
 
   const {
@@ -285,6 +344,15 @@ export function ChatPage() {
     enabled: Boolean(selectedConversationPublicId),
   });
 
+  const { data: latestConversationData } = useQuery({
+    queryKey: ['chat-conversation', selectedConversationPublicId],
+    queryFn: () => getConversation(selectedConversationPublicId!),
+    enabled: Boolean(selectedConversationPublicId),
+  });
+
+  // Use the fetched single conversation data if available to keep state fresh.
+  const activeConversation = latestConversationData || selectedConversation;
+
   // ── Mutations ──────────────────────────────────────────────────
   const markReadMutation = useMutation({
     mutationFn: (id: string) => markConversationAsRead(id),
@@ -310,7 +378,44 @@ export function ChatPage() {
     onSuccess: async (conversation) => {
       await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
       setSelectedConversation(conversation);
+      setShowArchived(false);
       setSearch(''); // clear search
+    },
+  });
+
+  const muteMutation = useMutation({
+    mutationFn: (id: string) => muteConversation(id, undefined),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      if (selectedConversationPublicId) {
+        await queryClient.invalidateQueries({ queryKey: ['chat-conversation', selectedConversationPublicId] });
+      }
+    },
+  });
+
+  const unmuteMutation = useMutation({
+    mutationFn: (id: string) => unmuteConversation(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      if (selectedConversationPublicId) {
+        await queryClient.invalidateQueries({ queryKey: ['chat-conversation', selectedConversationPublicId] });
+      }
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (id: string) => archiveConversation(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      setSelectedConversation(null);
+    },
+  });
+
+  const unarchiveMutation = useMutation({
+    mutationFn: (id: string) => unarchiveConversation(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      setSelectedConversation(null);
     },
   });
 
@@ -449,7 +554,28 @@ export function ChatPage() {
           role="navigation"
         >
           {/* Header */}
-          <Box sx={{ p: 2, pb: 1 }}>
+          <Box sx={{ p: 2, pb: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <ToggleButtonGroup
+              value={showArchived ? 'archived' : 'active'}
+              exclusive
+              onChange={(_, value) => {
+                if (value !== null) {
+                  setShowArchived(value === 'archived');
+                  setSelectedConversation(null);
+                }
+              }}
+              aria-label="conversation status"
+              size="small"
+              fullWidth
+            >
+              <ToggleButton value="active" aria-label="active conversations">
+                Active
+              </ToggleButton>
+              <ToggleButton value="archived" aria-label="archived conversations">
+                Archived
+              </ToggleButton>
+            </ToggleButtonGroup>
+
             <TextField
               fullWidth
               size="small"
@@ -523,6 +649,9 @@ export function ChatPage() {
                               color="primary"
                               sx={{ '& .MuiBadge-badge': { position: 'static', transform: 'none' } }}
                             />
+                          )}
+                          {conv.isMuted && (
+                            <VolumeOffIcon sx={{ ml: 1, fontSize: 16, color: 'text.disabled' }} />
                           )}
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
@@ -603,24 +732,36 @@ export function ChatPage() {
               {/* Active Header */}
               <Box sx={{ px: 3, py: 2, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 2, bgcolor: '#fff', boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)' }}>
                 <AuthAvatar 
-                  name={getConversationTitle(selectedConversation, user?.userId)} 
-                  url={getConversationAvatarUrl(selectedConversation, user?.userId)} 
+                  name={getConversationTitle(activeConversation!, user?.userId)} 
+                  url={getConversationAvatarUrl(activeConversation!, user?.userId)} 
                   size="xl"
                   onClick={(e: any) => {
                     e.stopPropagation();
-                    openImagePreview(getConversationTitle(selectedConversation, user?.userId), getConversationAvatarUrl(selectedConversation, user?.userId));
+                    openImagePreview(getConversationTitle(activeConversation!, user?.userId), getConversationAvatarUrl(activeConversation!, user?.userId));
                   }}
                 />
                 <Box 
-                  onClick={() => openPreview(getConversationTitle(selectedConversation, user?.userId), getConversationAvatarUrl(selectedConversation, user?.userId))}
-                  sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                  onClick={() => openPreview(getConversationTitle(activeConversation!, user?.userId), getConversationAvatarUrl(activeConversation!, user?.userId))}
+                  sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 }, flex: 1 }}
                 >
-                  <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f172a' }}>
-                    {getConversationTitle(selectedConversation, user?.userId)}
+                  <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f172a', display: 'flex', alignItems: 'center' }}>
+                    {getConversationTitle(activeConversation!, user?.userId)}
+                    {activeConversation!.isMuted && <VolumeOffIcon sx={{ ml: 1, fontSize: 18, color: 'text.disabled' }} />}
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#64748b' }}>
-                    {selectedConversation.type === 1 ? 'Direct chat' : `Group chat · ${selectedConversation.participants.length} members`}
+                    {activeConversation!.type === 1 ? 'Direct chat' : `Group chat · ${activeConversation!.participants.length} members`}
                   </Typography>
+                </Box>
+                
+                {/* Header Menu */}
+                <Box>
+                  <ConversationHeaderMenu
+                    conversation={activeConversation!}
+                    onMute={() => muteMutation.mutate(activeConversation!.publicId)}
+                    onUnmute={() => unmuteMutation.mutate(activeConversation!.publicId)}
+                    onArchive={() => archiveMutation.mutate(activeConversation!.publicId)}
+                    onUnarchive={() => unarchiveMutation.mutate(activeConversation!.publicId)}
+                  />
                 </Box>
               </Box>
 
@@ -634,7 +775,7 @@ export function ChatPage() {
 
                 {!isMessagesLoading && !isMessagesError && sortedMessages.map((message, idx) => {
                   const prevMsg = idx > 0 ? sortedMessages[idx - 1] : null;
-                  const showSenderName = !message.isMine && (!prevMsg || prevMsg.senderUserId !== message.senderUserId) && selectedConversation.type !== 1;
+                  const showSenderName = !message.isMine && (!prevMsg || prevMsg.senderUserId !== message.senderUserId) && activeConversation!.type !== 1;
                   const showAvatar = !message.isMine && (idx === sortedMessages.length - 1 || sortedMessages[idx + 1].senderUserId !== message.senderUserId);
 
                   return (
@@ -685,6 +826,15 @@ export function ChatPage() {
                 <div ref={messagesEndRef} />
               </Box>
 
+              {/* Notice */}
+              {!activeConversation!.canSendMessage && (
+                <Box sx={{ px: 3, py: 1.5, bgcolor: '#fff3cd', color: '#856404', textAlign: 'center', borderTop: '1px solid #ffeeba' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    This user is unavailable. You can no longer send messages.
+                  </Typography>
+                </Box>
+              )}
+
               {/* Message input */}
               <Box component="form" onSubmit={handleSendMessage} sx={{ p: 2, px: 3, display: 'flex', gap: 2, alignItems: 'center', bgcolor: '#fff', borderTop: '1px solid', borderColor: 'divider' }}>
                 <TextField
@@ -695,7 +845,7 @@ export function ChatPage() {
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={sendMessageMutation.isPending}
+                  disabled={sendMessageMutation.isPending || !activeConversation!.canSendMessage}
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 4,
@@ -706,7 +856,7 @@ export function ChatPage() {
                 />
                 <IconButton
                   type="submit"
-                  disabled={sendMessageMutation.isPending || !messageText.trim()}
+                  disabled={sendMessageMutation.isPending || !messageText.trim() || !activeConversation!.canSendMessage}
                   sx={{
                     bgcolor: messageText.trim() ? '#3b82f6' : '#e2e8f0',
                     color: '#fff',

@@ -6,6 +6,7 @@ import '../auth/login_page.dart';
 import '../auth/auth_service.dart';
 import '../device/device_access_service.dart';
 import '../tracking/tracking_config_service.dart';
+import '../tracking/tracking_session_guard.dart';
 import 'engineer_home.dart';
 
 /// Shown after the engineer has already submitted a device access request.
@@ -81,6 +82,7 @@ class _DevicePendingPageState extends State<DevicePendingPage> {
 
     _pollingTimer?.cancel();
     await TrackingConfigService.saveDevicePublicId(devicePublicId);
+    await TrackingSessionGuard.markGateApproved();
 
     if (!mounted) return;
 

@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import '../../core/network/api_client.dart';
 import '../tracking/background_service.dart';
 import '../tracking/tracking_config_service.dart';
+import '../tracking/tracking_session_guard.dart';
+import '../tracking/offline_queue_helper.dart';
 
 class AuthService {
   static Future<Map<String, dynamic>> login(
@@ -79,6 +81,9 @@ class AuthService {
       debugPrint('[AuthService] Error stopping tracking on sign out: $e');
     }
     await TrackingConfigService.clear();
+    await TrackingSessionGuard.markGateNotApproved('User signed out.');
+    await TrackingSessionGuard.clearBlockedSession();
+    await OfflineQueueHelper().clearQueue();
     ApiClient.setToken('');
   }
 }

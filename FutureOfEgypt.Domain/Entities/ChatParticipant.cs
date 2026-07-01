@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Common;
+using FutureOfEgypt.Domain.Common;
 using FutureOfEgypt.Domain.Enums;
 
 namespace FutureOfEgypt.Domain.Entities
@@ -18,6 +18,12 @@ namespace FutureOfEgypt.Domain.Entities
         public DateTime? LeftAtUtc { get; set; }
 
         public bool IsMuted { get; set; }
+
+        public DateTime? MutedUntilUtc { get; set; }
+
+        public bool IsArchived { get; set; } = false;
+
+        public DateTime? ArchivedAtUtc { get; set; }
 
         public int? LastReadMessageId { get; set; }
 

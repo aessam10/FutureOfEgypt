@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Features.Chat;
+using FutureOfEgypt.Application.Features.Chat;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -34,11 +34,12 @@ namespace FutureOfEgypt.Controllers
 
             return Ok(result);
         }
+
         [HttpPost("conversations/{conversationPublicId:guid}/participants")]
         public async Task<IActionResult> AddParticipants(
-    Guid conversationPublicId,
-    [FromBody] AddChatParticipantsRequest request,
-    CancellationToken cancellationToken = default)
+            Guid conversationPublicId,
+            [FromBody] AddChatParticipantsRequest request,
+            CancellationToken cancellationToken = default)
         {
             var currentUserId = GetCurrentUserId();
 
@@ -50,11 +51,12 @@ namespace FutureOfEgypt.Controllers
 
             return NoContent();
         }
+
         [HttpDelete("conversations/{conversationPublicId:guid}/participants/{targetUserId:guid}")]
         public async Task<IActionResult> RemoveParticipant(
-    Guid conversationPublicId,
-    Guid targetUserId,
-    CancellationToken cancellationToken = default)
+            Guid conversationPublicId,
+            Guid targetUserId,
+            CancellationToken cancellationToken = default)
         {
             var currentUserId = GetCurrentUserId();
 
@@ -68,19 +70,67 @@ namespace FutureOfEgypt.Controllers
         }
 
         [HttpGet("conversations")]
-        public async Task<IActionResult> GetMyConversations(
-            [FromQuery] int pageNumber = 1,
-            [FromQuery] int pageSize = 20,
+        public async Task<IActionResult> GetConversations(
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 20,
             [FromQuery] string? search = null,
+            [FromQuery] bool archived = false,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _chatService.GetMyConversationsAsync(GetCurrentUserId(), page, limit, search, archived, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpPost("conversations/{conversationPublicId}/mute")]
+        public async Task<IActionResult> MuteConversation(
+            [FromRoute] Guid conversationPublicId,
+            [FromBody] MuteConversationRequest? request,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _chatService.MuteConversationAsync(GetCurrentUserId(), conversationPublicId, request?.MutedUntilUtc, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpPost("conversations/{conversationPublicId}/unmute")]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ChatConversationResponse))]
+        public async Task<IActionResult> UnmuteConversation(
+            [FromRoute] Guid conversationPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _chatService.UnmuteConversationAsync(GetCurrentUserId(), conversationPublicId, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpPost("conversations/{conversationPublicId}/archive")]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ChatConversationResponse))]
+        public async Task<IActionResult> ArchiveConversation(
+            [FromRoute] Guid conversationPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _chatService.ArchiveConversationAsync(GetCurrentUserId(), conversationPublicId, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpPost("conversations/{conversationPublicId}/unarchive")]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ChatConversationResponse))]
+        public async Task<IActionResult> UnarchiveConversation(
+            [FromRoute] Guid conversationPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _chatService.UnarchiveConversationAsync(GetCurrentUserId(), conversationPublicId, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpGet("conversations/{conversationPublicId:guid}")]
+        public async Task<IActionResult> GetConversation(
+            Guid conversationPublicId,
             CancellationToken cancellationToken = default)
         {
             var currentUserId = GetCurrentUserId();
 
-            var result = await _chatService.GetMyConversationsAsync(
+            var result = await _chatService.GetConversationAsync(
                 currentUserId,
-                pageNumber,
-                pageSize,
-                search,
+                conversationPublicId,
                 cancellationToken);
 
             return Ok(result);
@@ -179,4 +229,6 @@ namespace FutureOfEgypt.Controllers
             return Guid.Parse(userIdValue);
         }
     }
+
+    public record MuteConversationRequest(DateTime? MutedUntilUtc);
 }

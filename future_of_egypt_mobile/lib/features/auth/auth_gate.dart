@@ -8,6 +8,8 @@ import '../device/device_validation_service.dart';
 import '../engineer/device_pending_page.dart';
 import '../engineer/engineer_home.dart';
 import '../tracking/tracking_config_service.dart';
+import '../tracking/tracking_session_guard.dart';
+import '../tracking/offline_queue_helper.dart';
 import 'login_page.dart';
 import 'auth_service.dart';
 
@@ -103,6 +105,7 @@ class _AuthGateState extends State<AuthGate> {
         case DeviceValidationStatus.valid:
           final devicePublicId = validation.devicePublicId ?? '';
           await TrackingConfigService.saveDevicePublicId(devicePublicId);
+          await TrackingSessionGuard.markGateApproved();
           if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
@@ -116,6 +119,9 @@ class _AuthGateState extends State<AuthGate> {
           break;
 
         case DeviceValidationStatus.pendingApproval:
+          await TrackingSessionGuard.markGateNotApproved('Device access request is pending.');
+          await OfflineQueueHelper().clearQueue();
+          if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => DevicePendingPage(

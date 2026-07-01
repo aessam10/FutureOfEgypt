@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Domain.Entities;
+using FutureOfEgypt.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -39,6 +39,8 @@ namespace FutureOfEgypt.Infrastructure.Persistence.Configurations
                 .HasFilter("\"IsDeleted\" = false");
 
             builder.HasIndex(x => new { x.UserId, x.LeftAtUtc });
+
+            builder.HasIndex(x => new { x.UserId, x.IsArchived });
         }
     }
 }

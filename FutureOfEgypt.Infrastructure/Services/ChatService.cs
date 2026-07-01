@@ -35,9 +35,16 @@ namespace FutureOfEgypt.Infrastructure.Services
             pageSize = pageSize <= 0 ? 20 : pageSize;
             pageSize = pageSize > 100 ? 100 : pageSize;
 
-            var query = _userManager.Users
+            var query = _context.Users
                 .AsNoTracking()
-                .Where(x => x.Id != currentUserId);
+                .Include(u => u.Engineer)
+                .Include(u => u.Manager)
+                .Include(u => u.Admin)
+                .Where(x => x.Id != currentUserId)
+                .Where(x => !x.IsDeleted && !x.IsSuspended)
+                .Where(x => (x.UserType == UserType.Engineer && x.Engineer != null && !x.Engineer.IsDeleted && x.Engineer.Status == EngineerStatus.Active) ||
+                            (x.UserType == UserType.Manager && x.Manager != null && !x.Manager.IsDeleted) ||
+                            (x.UserType == UserType.Admin && x.Admin != null && !x.Admin.IsDeleted));
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -68,7 +75,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                     Email = x.Email,
                     ProfileImageUrl = string.IsNullOrWhiteSpace(x.ProfilePhotoPath)
                         ? null
-                        : $"/api/profile/photo/{x.Id}"
+                        : $"/api/profile/photo/{x.Id}",
+                    IsAvailable = true
                 })
                 .ToListAsync(cancellationToken);
 
@@ -233,11 +241,25 @@ namespace FutureOfEgypt.Infrastructure.Services
                 cancellationToken);
         }
 
+        public async Task<ChatConversationResponse> GetConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            var conversation = await GetConversationForUserAsync(
+                currentUserId,
+                conversationPublicId,
+                cancellationToken);
+
+            return await MapConversationAsync(conversation, currentUserId, cancellationToken);
+        }
+
         public async Task<PagedResponse<ChatConversationResponse>> GetMyConversationsAsync(
             Guid currentUserId,
             int pageNumber,
             int pageSize,
             string? search,
+            bool archived,
             CancellationToken cancellationToken = default)
         {
             pageNumber = pageNumber <= 0 ? 1 : pageNumber;
@@ -251,7 +273,8 @@ namespace FutureOfEgypt.Infrastructure.Services
                 .Where(x => x.Participants.Any(p =>
                     p.UserId == currentUserId &&
                     !p.IsDeleted &&
-                    p.LeftAtUtc == null));
+                    p.LeftAtUtc == null &&
+                    p.IsArchived == archived));
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -299,6 +322,12 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             await EnsureUserExistsAsync(currentUserId, cancellationToken);
             await EnsureUserExistsAsync(request.TargetUserId, cancellationToken);
+
+            if (!await IsUserAvailableAsync(currentUserId, cancellationToken))
+                throw new InvalidOperationException("You are unavailable and cannot create conversations.");
+
+            if (!await IsUserAvailableAsync(request.TargetUserId, cancellationToken))
+                throw new InvalidOperationException("Target user is unavailable.");
 
             var existingConversation = await _context.ChatConversations
                 .Include(x => x.Participants)
@@ -464,10 +493,20 @@ namespace FutureOfEgypt.Infrastructure.Services
             if (messageText.Length > 4000)
                 throw new InvalidOperationException("Message text cannot exceed 4000 characters.");
 
+            if (!await IsUserAvailableAsync(currentUserId, cancellationToken))
+                throw new InvalidOperationException("You are unavailable and cannot send messages.");
+
             var conversation = await GetConversationForUserAsync(
                 currentUserId,
                 conversationPublicId,
                 cancellationToken);
+
+            if (conversation.Type == ChatConversationType.Direct)
+            {
+                var otherUserId = conversation.Participants.FirstOrDefault(p => p.UserId != currentUserId)?.UserId;
+                if (otherUserId.HasValue && !await IsUserAvailableAsync(otherUserId.Value, cancellationToken))
+                    throw new InvalidOperationException("Cannot send messages to an unavailable user.");
+            }
 
             var now = DateTime.UtcNow;
 
@@ -487,21 +526,36 @@ namespace FutureOfEgypt.Infrastructure.Services
 
             await _context.SaveChangesAsync(cancellationToken);
 
-            var senderParticipant = await _context.ChatParticipants
-                .FirstOrDefaultAsync(x =>
+            var allParticipants = await _context.ChatParticipants
+                .Where(x =>
                     x.ConversationId == conversation.Id &&
-                    x.UserId == currentUserId &&
                     !x.IsDeleted &&
-                    x.LeftAtUtc == null,
-                    cancellationToken);
+                    x.LeftAtUtc == null)
+                .ToListAsync(cancellationToken);
 
+            var senderParticipant = allParticipants.FirstOrDefault(x => x.UserId == currentUserId);
             if (senderParticipant is not null)
             {
                 senderParticipant.LastReadMessageId = message.Id;
-                senderParticipant.UpdatedAt = DateTime.UtcNow;
-
-                await _context.SaveChangesAsync(cancellationToken);
+                if (senderParticipant.IsArchived)
+                {
+                    senderParticipant.IsArchived = false;
+                    senderParticipant.ArchivedAtUtc = null;
+                }
+                senderParticipant.UpdatedAt = now;
             }
+
+            foreach (var participant in allParticipants.Where(x => x.UserId != currentUserId))
+            {
+                if (participant.IsArchived)
+                {
+                    participant.IsArchived = false;
+                    participant.ArchivedAtUtc = null;
+                    participant.UpdatedAt = now;
+                }
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
 
             var users = await GetUserDisplayMapAsync(
                 new List<Guid> { currentUserId },
@@ -587,6 +641,71 @@ namespace FutureOfEgypt.Infrastructure.Services
     currentUserId,
     lastMessageId,
     cancellationToken);
+        }
+
+        public async Task<ChatConversationResponse> MuteConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
+            DateTime? mutedUntilUtc,
+            CancellationToken cancellationToken = default)
+        {
+            var conversation = await GetConversationForUserAsync(currentUserId, conversationPublicId, cancellationToken);
+            var participant = conversation.Participants.First(x => x.UserId == currentUserId && !x.IsDeleted && x.LeftAtUtc == null);
+            
+            participant.IsMuted = true;
+            participant.MutedUntilUtc = mutedUntilUtc;
+            participant.UpdatedAt = DateTime.UtcNow;
+            
+            await _context.SaveChangesAsync(cancellationToken);
+            return await MapConversationAsync(conversation, currentUserId, cancellationToken);
+        }
+
+        public async Task<ChatConversationResponse> UnmuteConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            var conversation = await GetConversationForUserAsync(currentUserId, conversationPublicId, cancellationToken);
+            var participant = conversation.Participants.First(x => x.UserId == currentUserId && !x.IsDeleted && x.LeftAtUtc == null);
+            
+            participant.IsMuted = false;
+            participant.MutedUntilUtc = null;
+            participant.UpdatedAt = DateTime.UtcNow;
+            
+            await _context.SaveChangesAsync(cancellationToken);
+            return await MapConversationAsync(conversation, currentUserId, cancellationToken);
+        }
+
+        public async Task<ChatConversationResponse> ArchiveConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            var conversation = await GetConversationForUserAsync(currentUserId, conversationPublicId, cancellationToken);
+            var participant = conversation.Participants.First(x => x.UserId == currentUserId && !x.IsDeleted && x.LeftAtUtc == null);
+            
+            participant.IsArchived = true;
+            participant.ArchivedAtUtc = DateTime.UtcNow;
+            participant.UpdatedAt = DateTime.UtcNow;
+            
+            await _context.SaveChangesAsync(cancellationToken);
+            return await MapConversationAsync(conversation, currentUserId, cancellationToken);
+        }
+
+        public async Task<ChatConversationResponse> UnarchiveConversationAsync(
+            Guid currentUserId,
+            Guid conversationPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            var conversation = await GetConversationForUserAsync(currentUserId, conversationPublicId, cancellationToken);
+            var participant = conversation.Participants.First(x => x.UserId == currentUserId && !x.IsDeleted && x.LeftAtUtc == null);
+            
+            participant.IsArchived = false;
+            participant.ArchivedAtUtc = null;
+            participant.UpdatedAt = DateTime.UtcNow;
+            
+            await _context.SaveChangesAsync(cancellationToken);
+            return await MapConversationAsync(conversation, currentUserId, cancellationToken);
         }
 
         private async Task<ChatConversation> GetConversationForUserAsync(
@@ -689,6 +808,16 @@ namespace FutureOfEgypt.Infrastructure.Services
                 };
             }
 
+            var canSendMessage = true;
+            if (conversation.Type == ChatConversationType.Direct)
+            {
+                var otherParticipant = activeParticipants.FirstOrDefault(x => x.UserId != currentUserId);
+                if (otherParticipant != null && users.TryGetValue(otherParticipant.UserId, out var ui) && !ui.IsAvailable)
+                {
+                    canSendMessage = false;
+                }
+            }
+
             return new ChatConversationResponse
             {
                 PublicId = conversation.PublicId,
@@ -703,8 +832,13 @@ namespace FutureOfEgypt.Infrastructure.Services
                     DisplayName = GetDisplayName(users, participant.UserId),
                     Email = users.TryGetValue(participant.UserId, out var userInfo) ? userInfo.Email : null,
                     ProfileImageUrl = GetProfileImageUrl(users, participant.UserId),
-                    Role = (int)participant.Role
-                }).ToList()
+                    Role = (int)participant.Role,
+                    IsAvailable = users.TryGetValue(participant.UserId, out var ui) ? ui.IsAvailable : false
+                }).ToList(),
+                CanSendMessage = canSendMessage,
+                IsMuted = currentParticipant?.IsMuted ?? false,
+                MutedUntilUtc = currentParticipant?.MutedUntilUtc,
+                IsArchived = currentParticipant?.IsArchived ?? false
             };
         }
 
@@ -714,25 +848,43 @@ namespace FutureOfEgypt.Infrastructure.Services
         {
             var distinctIds = userIds.Distinct().ToList();
 
-            var users = await _userManager.Users
+            var usersData = await _context.Users
+                .AsNoTracking()
+                .Include(u => u.Engineer)
+                .Include(u => u.Manager)
+                .Include(u => u.Admin)
                 .Where(x => distinctIds.Contains(x.Id))
-                .Select(x => new UserDisplayInfo
+                .Select(x => new 
                 {
-                    UserId = x.Id,
-                    DisplayName =
-                        !string.IsNullOrWhiteSpace(x.FullName)
-                            ? x.FullName
-                            : !string.IsNullOrWhiteSpace(x.UserName)
-                                ? x.UserName
-                                : x.Email ?? x.Id.ToString(),
-                    Email = x.Email,
-                    ProfileImageUrl = string.IsNullOrWhiteSpace(x.ProfilePhotoPath)
-                        ? null
-                        : $"/api/profile/photo/{x.Id}"
+                    User = x,
+                    IsAvailable = !x.IsDeleted && !x.IsSuspended && (
+                        (x.UserType == UserType.Engineer && x.Engineer != null && !x.Engineer.IsDeleted && x.Engineer.Status == EngineerStatus.Active) ||
+                        (x.UserType == UserType.Manager && x.Manager != null && !x.Manager.IsDeleted) ||
+                        (x.UserType == UserType.Admin && x.Admin != null && !x.Admin.IsDeleted)
+                    )
                 })
                 .ToListAsync(cancellationToken);
 
-            return users.ToDictionary(x => x.UserId, x => x);
+            var dict = new Dictionary<Guid, UserDisplayInfo>();
+            foreach (var item in usersData)
+            {
+                var x = item.User;
+                bool isAvailable = item.IsAvailable;
+                
+                string originalName = !string.IsNullOrWhiteSpace(x.FullName)
+                    ? x.FullName
+                    : (!string.IsNullOrWhiteSpace(x.UserName) ? x.UserName : (x.Email ?? x.Id.ToString()));
+
+                dict[x.Id] = new UserDisplayInfo
+                {
+                    UserId = x.Id,
+                    IsAvailable = isAvailable,
+                    DisplayName = isAvailable ? originalName : "Unavailable User",
+                    Email = isAvailable ? x.Email : null,
+                    ProfileImageUrl = isAvailable ? (string.IsNullOrWhiteSpace(x.ProfilePhotoPath) ? null : $"/api/profile/photo/{x.Id}") : null
+                };
+            }
+            return dict;
         }
 
         private static string GetDisplayName(
@@ -762,6 +914,28 @@ namespace FutureOfEgypt.Infrastructure.Services
             public string? Email { get; set; }
 
             public string? ProfileImageUrl { get; set; }
+
+            public bool IsAvailable { get; set; }
+        }
+
+        private async Task<bool> IsUserAvailableAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            var user = await _context.Users
+                .Include(u => u.Engineer)
+                .Include(u => u.Manager)
+                .Include(u => u.Admin)
+                .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+                
+            if (user == null || user.IsDeleted || user.IsSuspended)
+                return false;
+
+            if (user.UserType == UserType.Engineer)
+                return user.Engineer != null && !user.Engineer.IsDeleted && user.Engineer.Status == EngineerStatus.Active;
+            if (user.UserType == UserType.Manager)
+                return user.Manager != null && !user.Manager.IsDeleted;
+            if (user.UserType == UserType.Admin)
+                return user.Admin != null && !user.Admin.IsDeleted;
+            return false;
         }
     }
 }

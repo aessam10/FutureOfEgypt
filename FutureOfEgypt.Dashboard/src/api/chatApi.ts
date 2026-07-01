@@ -11,9 +11,10 @@ import type {
 } from '../types/chat';
 
 export interface GetChatConversationsParams {
-  pageNumber: number;
-  pageSize: number;
+  page?: number;
+  limit?: number;
   search?: string;
+  archived?: boolean;
 }
 
 export interface GetChatMessagesParams {
@@ -35,6 +36,13 @@ export async function getMyConversations(params: GetChatConversationsParams) {
     },
   );
 
+  return response.data;
+}
+
+export async function getConversation(conversationPublicId: string) {
+  const response = await axiosClient.get<ChatConversationResponse>(
+    `/api/Chat/conversations/${conversationPublicId}`
+  );
   return response.data;
 }
 
@@ -114,4 +122,33 @@ export async function removeChatParticipant(
   await axiosClient.delete(
     `/api/Chat/conversations/${conversationPublicId}/participants/${targetUserId}`,
   );
+}
+
+export async function muteConversation(conversationPublicId: string, mutedUntilUtc?: string) {
+  const response = await axiosClient.post<ChatConversationResponse>(
+    `/api/Chat/conversations/${conversationPublicId}/mute`,
+    { mutedUntilUtc }
+  );
+  return response.data;
+}
+
+export async function unmuteConversation(conversationPublicId: string) {
+  const response = await axiosClient.post<ChatConversationResponse>(
+    `/api/Chat/conversations/${conversationPublicId}/unmute`
+  );
+  return response.data;
+}
+
+export async function archiveConversation(conversationPublicId: string) {
+  const response = await axiosClient.post<ChatConversationResponse>(
+    `/api/Chat/conversations/${conversationPublicId}/archive`
+  );
+  return response.data;
+}
+
+export async function unarchiveConversation(conversationPublicId: string) {
+  const response = await axiosClient.post<ChatConversationResponse>(
+    `/api/Chat/conversations/${conversationPublicId}/unarchive`
+  );
+  return response.data;
 }

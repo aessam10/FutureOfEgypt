@@ -2,9 +2,9 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 
 import '../../core/network/api_client.dart';
-import 'tracking_intervals.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'tracking_session_guard.dart';
 
 class LocationService {
   static final ValueNotifier<String?> backendReasonNotifier = ValueNotifier(null);
@@ -14,6 +14,11 @@ class LocationService {
     required String devicePublicId,
     required String installationId,
   }) async {
+    final eligible = await TrackingSessionGuard.canTrackNow();
+    if (!eligible) {
+      throw Exception("Tracking is not eligible under the current session guard.");
+    }
+
     final allowed = await _ensureLocationPermission();
 
     if (!allowed) {
@@ -45,6 +50,9 @@ class LocationService {
           backendReasonNotifier.value = null;
         }
       } catch (_) {}
+    } else if (TrackingSessionGuard.isInvalidSessionResponse(response.statusCode, response.body)) {
+      await TrackingSessionGuard.stopTrackingAndClearQueue(
+        'Immediate location upload rejected with status code: ${response.statusCode}, body: ${response.body}');
     }
   }
 

@@ -308,6 +308,17 @@ namespace FutureOfEgypt.Infrastructure.Services
                 {
                     user.IsDeleted = true;
                     user.IsSuspended = true;
+
+                    if (!string.IsNullOrEmpty(user.ProfilePhotoPath))
+                    {
+                        var oldPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), user.ProfilePhotoPath);
+                        if (System.IO.File.Exists(oldPath))
+                        {
+                            System.IO.File.Delete(oldPath);
+                        }
+                        user.ProfilePhotoPath = null;
+                    }
+
                     await _userManager.UpdateAsync(user);
                 }
 

@@ -4,6 +4,7 @@ export interface ChatParticipantResponse {
   email?: string | null;
   profileImageUrl?: string | null;
   role: number;
+  isAvailable: boolean;
 }
 
 export interface ChatMessagePreviewResponse {
@@ -23,6 +24,10 @@ export interface ChatConversationResponse {
   unreadCount: number;
   lastMessage?: ChatMessagePreviewResponse | null;
   participants: ChatParticipantResponse[];
+  canSendMessage: boolean;
+  isMuted: boolean;
+  mutedUntilUtc?: string | null;
+  isArchived: boolean;
 }
 
 export interface ChatMessageResponse {
@@ -65,6 +70,7 @@ export interface ChatUserSearchResponse {
   displayName: string;
   email?: string | null;
   profileImageUrl?: string | null;
+  isAvailable?: boolean;
 }
 
 export interface AddChatParticipantsRequest {

@@ -9,6 +9,8 @@ import '../device/device_validation_service.dart';
 import '../engineer/device_pending_page.dart';
 import '../engineer/engineer_home.dart';
 import '../tracking/tracking_config_service.dart';
+import '../tracking/tracking_session_guard.dart';
+import '../tracking/offline_queue_helper.dart';
 import 'auth_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -139,6 +141,7 @@ class _LoginPageState extends State<LoginPage> {
       case DeviceValidationStatus.valid:
         final devicePublicId = validation.devicePublicId ?? '';
         await TrackingConfigService.saveDevicePublicId(devicePublicId);
+        await TrackingSessionGuard.markGateApproved();
         if (!mounted) return;
         _navigateTo(EngineerHome(
           engineerId: engineerPublicId,
@@ -149,6 +152,8 @@ class _LoginPageState extends State<LoginPage> {
 
       // ── already waiting for approval ─────────────────────────────────────
       case DeviceValidationStatus.pendingApproval:
+        await TrackingSessionGuard.markGateNotApproved('Device access request is pending.');
+        await OfflineQueueHelper().clearQueue();
         _navigateTo(DevicePendingPage(
           engineerId: engineerPublicId,
           token: token,
@@ -157,6 +162,8 @@ class _LoginPageState extends State<LoginPage> {
 
       // ── device not yet assigned — ask if engineer wants to request ────────
       case DeviceValidationStatus.deviceNotAssigned:
+        await TrackingSessionGuard.markGateNotApproved('Device is not assigned.');
+        await OfflineQueueHelper().clearQueue();
         _showRequestDialog(
           token: token,
           engineerPublicId: engineerPublicId,

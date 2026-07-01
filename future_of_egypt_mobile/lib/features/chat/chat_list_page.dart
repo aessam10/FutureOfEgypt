@@ -24,6 +24,7 @@ class _ChatListPageState extends State<ChatListPage> {
   List<ChatUserSearch>? _searchedUsers;
   bool _isLoading = true;
   bool _isSearchingUsers = false;
+  bool _showArchived = false;
   String? _error;
   
   final TextEditingController _searchController = TextEditingController();
@@ -42,7 +43,7 @@ class _ChatListPageState extends State<ChatListPage> {
     });
 
     try {
-      final conversations = await _chatService.getMyConversations();
+      final conversations = await _chatService.getMyConversations(archived: _showArchived);
       setState(() {
         _conversations = conversations;
         _isLoading = false;
@@ -105,6 +106,7 @@ class _ChatListPageState extends State<ChatListPage> {
               conversationId: conv.publicId,
               title: title,
               avatarUrl: _getConversationAvatarUrl(conv),
+              canSendMessage: conv.canSendMessage,
             ),
           ),
         );
@@ -158,12 +160,43 @@ class _ChatListPageState extends State<ChatListPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: Theme.of(context).appBarTheme.backgroundColor ?? Theme.of(context).primaryColor,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (val) {
-                _searchPeople(val);
-                setState(() {});
-              },
+            child: Column(
+              children: [
+                if (!isSearching) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FilterChip(
+                        label: const Text('Active'),
+                        selected: !_showArchived,
+                        onSelected: (val) {
+                          if (val && _showArchived) {
+                            setState(() { _showArchived = false; });
+                            _loadConversations();
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      FilterChip(
+                        label: const Text('Archived'),
+                        selected: _showArchived,
+                        onSelected: (val) {
+                          if (val && !_showArchived) {
+                            setState(() { _showArchived = true; });
+                            _loadConversations();
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                TextField(
+                  controller: _searchController,
+                  onChanged: (val) {
+                    _searchPeople(val);
+                    setState(() {});
+                  },
               decoration: InputDecoration(
                 hintText: 'Search people or conversations...',
                 prefixIcon: const Icon(Icons.search, color: Colors.grey),
@@ -181,12 +214,13 @@ class _ChatListPageState extends State<ChatListPage> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
                 ),
               ),
             ),
-          ),
-          Expanded(
+          ],
+        ),
+      ),
+      Expanded(
             child: isSearching ? _buildSearchResults() : _buildConversationsList(),
           ),
         ],
@@ -289,16 +323,24 @@ class _ChatListPageState extends State<ChatListPage> {
                 color: hasUnread ? Colors.black87 : Colors.grey.shade600,
               ),
             ),
-            trailing: hasUnread
-                ? Container(
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (conv.isMuted)
+                  const Icon(Icons.volume_off, size: 16, color: Colors.grey),
+                if (hasUnread) ...[
+                  if (conv.isMuted) const SizedBox(width: 4),
+                  Container(
                     padding: const EdgeInsets.all(6),
                     decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
                     child: Text(
                       '${conv.unreadCount}',
                       style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
-                  )
-                : null,
+                  ),
+                ],
+              ],
+            ),
             onTap: () async {
               await Navigator.push(
                 context,
@@ -308,6 +350,7 @@ class _ChatListPageState extends State<ChatListPage> {
                     conversationId: conv.publicId,
                     title: title,
                     avatarUrl: avatarUrl,
+                    canSendMessage: conv.canSendMessage,
                   ),
                 ),
               );

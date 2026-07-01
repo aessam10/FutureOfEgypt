@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'chat_service.dart';
 import 'chat_models.dart';
@@ -10,6 +11,7 @@ class ChatRoomPage extends StatefulWidget {
   final String conversationId;
   final String title;
   final String? avatarUrl;
+  final bool canSendMessage;
 
   const ChatRoomPage({
     super.key,
@@ -17,6 +19,7 @@ class ChatRoomPage extends StatefulWidget {
     required this.conversationId,
     required this.title,
     this.avatarUrl,
+    this.canSendMessage = true,
   });
 
   @override
@@ -27,6 +30,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   late ChatService _chatService;
   late ChatSignalRClient _signalRClient;
   StreamSubscription? _msgSub;
+  String? _myUserId;
   
   final _messages = <ChatMessage>[];
   bool _isLoading = true;
@@ -35,10 +39,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   bool _isSending = false;
+  late bool _canSendMessage;
+  ChatConversation? _conversation;
 
   @override
   void initState() {
     super.initState();
+    _canSendMessage = widget.canSendMessage;
+    _myUserId = _getUserIdFromToken(widget.token);
     _chatService = ChatService(token: widget.token);
     _signalRClient = ChatSignalRClient(token: widget.token);
     
@@ -48,6 +56,18 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   Future<void> _initChat() async {
     await _loadMessages();
     
+    try {
+      final conv = await _chatService.getConversation(widget.conversationId);
+      if (mounted) {
+        setState(() {
+          _canSendMessage = conv.canSendMessage;
+          _conversation = conv;
+        });
+      }
+    } catch (_) {
+      debugPrint('Failed to refresh conversation state');
+    }
+
     await _signalRClient.connect();
     await _signalRClient.joinConversation(widget.conversationId);
     
@@ -55,6 +75,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       if (msg.conversationPublicId == widget.conversationId) {
         // Prevent duplicate if we already have it (from sending it ourselves)
         if (!_messages.any((m) => m.publicId == msg.publicId)) {
+          final isMine = _myUserId != null && msg.senderUserId == _myUserId;
           setState(() {
             _messages.add(ChatMessage(
               publicId: msg.publicId,
@@ -64,7 +85,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               type: msg.type,
               profileImageUrl: msg.profileImageUrl,
               sentAtUtc: msg.sentAtUtc,
-              isMine: false,
+              isMine: isMine,
             ));
           });
           _scrollToBottom();
@@ -127,6 +148,34 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
   }
 
+  Future<void> _muteConversation() async {
+    try {
+      final conv = await _chatService.muteConversation(widget.conversationId);
+      if (mounted) setState(() => _conversation = conv);
+    } catch (_) {}
+  }
+
+  Future<void> _unmuteConversation() async {
+    try {
+      final conv = await _chatService.unmuteConversation(widget.conversationId);
+      if (mounted) setState(() => _conversation = conv);
+    } catch (_) {}
+  }
+
+  Future<void> _archiveConversation() async {
+    try {
+      await _chatService.archiveConversation(widget.conversationId);
+      if (mounted) Navigator.pop(context);
+    } catch (_) {}
+  }
+
+  Future<void> _unarchiveConversation() async {
+    try {
+      final conv = await _chatService.unarchiveConversation(widget.conversationId);
+      if (mounted) setState(() => _conversation = conv);
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _msgSub?.cancel();
@@ -152,9 +201,45 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             ),
             const SizedBox(width: 12),
             Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            if (_conversation?.isMuted == true)
+              const Padding(
+                padding: EdgeInsets.only(left: 8.0),
+                child: Icon(Icons.volume_off, size: 18, color: Colors.grey),
+              ),
           ],
         ),
         elevation: 0.5,
+        actions: [
+          if (_conversation != null)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                switch (value) {
+                  case 'mute':
+                    _muteConversation();
+                    break;
+                  case 'unmute':
+                    _unmuteConversation();
+                    break;
+                  case 'archive':
+                    _archiveConversation();
+                    break;
+                  case 'unarchive':
+                    _unarchiveConversation();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                if (_conversation!.isMuted)
+                  const PopupMenuItem(value: 'unmute', child: Text('Unmute Conversation'))
+                else
+                  const PopupMenuItem(value: 'mute', child: Text('Mute Conversation')),
+                if (_conversation!.isArchived)
+                  const PopupMenuItem(value: 'unarchive', child: Text('Unarchive Conversation'))
+                else
+                  const PopupMenuItem(value: 'archive', child: Text('Archive Conversation')),
+              ],
+            ),
+        ],
       ),
       body: SafeArea(
         child: Column(
@@ -296,6 +381,22 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   }
 
   Widget _buildInputArea() {
+    if (!_canSendMessage) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        color: Colors.amber.shade100,
+        child: Text(
+          "This user is unavailable. You cannot send messages.",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.amber.shade900,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -355,5 +456,22 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final hour = local.hour.toString().padLeft(2, '0');
     final min = local.minute.toString().padLeft(2, '0');
     return '$hour:$min';
+  }
+
+  String? _getUserIdFromToken(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      final payload = parts[1];
+      final normalized = base64Url.normalize(payload);
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final map = jsonDecode(decoded);
+      return map['sub'] ?? 
+             map['nameid'] ?? 
+             map['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
+    } catch (e) {
+      debugPrint('Error parsing token for userId: $e');
+      return null;
+    }
   }
 }

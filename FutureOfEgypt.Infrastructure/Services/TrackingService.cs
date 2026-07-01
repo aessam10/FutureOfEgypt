@@ -153,16 +153,20 @@ namespace FutureOfEgypt.Infrastructure.Services
                     x => x.PublicId == engineerPublicId && !x.IsDeleted,
                     cancellationToken);
 
-            if (engineer is null || engineer.Status != EngineerStatus.Active)
-                return;
+            if (engineer is null)
+                throw new InvalidOperationException("Engineer does not exist.");
+            if (engineer.Status != EngineerStatus.Active)
+                throw new InvalidOperationException("Engineer is not active.");
 
             var device = await _context.Devices
                 .FirstOrDefaultAsync(
                     x => x.PublicId == request.DevicePublicId && !x.IsDeleted,
                     cancellationToken);
 
-            if (device is null || device.Status != DeviceStatus.Active)
-                return;
+            if (device is null)
+                throw new InvalidOperationException("Device does not exist.");
+            if (device.Status != DeviceStatus.Active)
+                throw new InvalidOperationException("Device is not active.");
 
             var assignmentExists = await _context.EngineerDevices
                 .FilterValidActive()
@@ -171,7 +175,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                     cancellationToken);
 
             if (!assignmentExists)
-                return;
+                throw new InvalidOperationException("Device is not assigned to this engineer.");
 
             var healthStatus = await _context.DeviceTrackingHealthStatuses
                 .FirstOrDefaultAsync(x => x.DeviceId == device.Id, cancellationToken);
@@ -469,16 +473,20 @@ namespace FutureOfEgypt.Infrastructure.Services
                     x => x.PublicId == engineerPublicId && !x.IsDeleted,
                     cancellationToken);
 
-            if (engineer is null || engineer.Status != EngineerStatus.Active)
-                return;
+            if (engineer is null)
+                throw new InvalidOperationException("Engineer does not exist.");
+            if (engineer.Status != EngineerStatus.Active)
+                throw new InvalidOperationException("Engineer is not active.");
 
             var device = await _context.Devices
                 .FirstOrDefaultAsync(
                     x => x.PublicId == request.DevicePublicId && !x.IsDeleted,
                     cancellationToken);
 
-            if (device is null || device.Status != DeviceStatus.Active)
-                return;
+            if (device is null)
+                throw new InvalidOperationException("Device does not exist.");
+            if (device.Status != DeviceStatus.Active)
+                throw new InvalidOperationException("Device is not active.");
 
             var assignmentExists = await _context.EngineerDevices
                 .FilterValidActive()
@@ -487,7 +495,7 @@ namespace FutureOfEgypt.Infrastructure.Services
                     cancellationToken);
 
             if (!assignmentExists)
-                return;
+                throw new InvalidOperationException("Device is not assigned to this engineer.");
 
             var recoveryEvent = new DeviceRecoveryEvent
             {

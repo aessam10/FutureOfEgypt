@@ -17,6 +17,7 @@ import 'tracking_config_service.dart';
 import 'device_health_service.dart';
 import 'package:uuid/uuid.dart';
 import 'offline_queue_helper.dart';
+import 'tracking_session_guard.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -391,6 +392,15 @@ Future<void> _runTick({
   required String devicePublicId,
   required String installationId,
 }) async {
+  final allowed = await TrackingSessionGuard.canTrackNow();
+  if (!allowed) {
+    print('[FOE_BACKGROUND] Tick skipped: not eligible to track. Halting background service.');
+    _backgroundTimer?.cancel();
+    _backgroundTimer = null;
+    service.stopSelf();
+    return;
+  }
+
   _backgroundTickCount++;
   final tickTime = DateTime.now().toUtc();
   debugPrint('[FOE_BACKGROUND] Tick #$_backgroundTickCount at ${tickTime.toIso8601String()}');
@@ -523,6 +533,10 @@ Future<void> _runTick({
           trackingIntervalMs: TrackingIntervals.locationUpdateInterval.inMilliseconds,
         ).timeout(const Duration(seconds: 15));
         print('[FOE_BACKGROUND] Health POST response code: $statusCode');
+        if (statusCode == 401 || statusCode == 403 || statusCode == 400) {
+          await TrackingSessionGuard.stopTrackingAndClearQueue(
+            'Health report rejected by server with status code: $statusCode');
+        }
       } catch (he) {
         print('[FOE_BACKGROUND] Health POST failed: $he');
       }
@@ -542,6 +556,14 @@ Future<void> _flushPendingLocationQueue(
   final queueHelper = OfflineQueueHelper();
   
   for (int i = 0; i < 3; i++) {
+    final allowed = await TrackingSessionGuard.canTrackNow();
+    if (!allowed) {
+      print('[FOE_BACKGROUND] Batch upload aborted: session is invalid.');
+      _backgroundTimer?.cancel();
+      _backgroundTimer = null;
+      break;
+    }
+
     final dayKeys = await queueHelper.getDistinctDayKeys();
     if (dayKeys.isEmpty) break;
 
@@ -604,6 +626,10 @@ Future<void> _flushPendingLocationQueue(
 
         final List<String> acceptedIds = pendingPoints.map((p) => p.localId).toList();
         await queueHelper.deletePoints(acceptedIds);
+      } else if (TrackingSessionGuard.isInvalidSessionResponse(response.statusCode, response.body)) {
+        await TrackingSessionGuard.stopTrackingAndClearQueue(
+          'Batch upload rejected by server with status code: ${response.statusCode}, body: ${response.body}');
+        break;
       } else {
         // Set network failure flag
         if (prefs != null) {
