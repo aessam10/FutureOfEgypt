@@ -12,6 +12,7 @@ import '../tracking/tracking_config_service.dart';
 import '../tracking/tracking_session_guard.dart';
 import '../tracking/offline_queue_helper.dart';
 import 'auth_service.dart';
+import 'package:future_of_egypt_mobile/features/auth/forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
   final String? initialMessage;
@@ -426,6 +427,16 @@ class _LoginPageState extends State<LoginPage> {
                         )
                       : const Text('Login'),
                 ),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ForgotPasswordPage()),
+                  );
+                },
+                child: const Text('Forgot password? / نسيت كلمة المرور؟', style: TextStyle(color: Colors.blueAccent)),
               ),
             ],
           ),

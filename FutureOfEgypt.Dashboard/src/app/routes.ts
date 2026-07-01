@@ -12,4 +12,6 @@ export const routes = {
   appUpdates: '/app-updates',
   profile: '/profile',
   managers: '/managers',
+  forgotPassword: '/forgot-password',
+  resetPassword: '/reset-password',
 };

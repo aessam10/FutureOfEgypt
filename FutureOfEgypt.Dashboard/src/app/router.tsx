@@ -16,6 +16,8 @@ import { EmailsPage } from '../pages/EmailsPage';
 import AppUpdatesPage from '../pages/AppUpdatesPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { ManagersPage } from '../pages/ManagersPage';
+import { ForgotPasswordPage } from '../pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '../pages/ResetPasswordPage';
 
 export const router = createBrowserRouter([
   {
@@ -25,6 +27,14 @@ export const router = createBrowserRouter([
   {
     path: routes.login,
     element: <LoginPage />,
+  },
+  {
+    path: routes.forgotPassword,
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: routes.resetPassword,
+    element: <ResetPasswordPage />,
   },
   {
     element: <ProtectedRoute />,

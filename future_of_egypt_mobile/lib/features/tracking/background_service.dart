@@ -471,7 +471,7 @@ Future<void> _runTick({
       }
 
       if (position != null && engineerPublicId != null) {
-        final recordedAt = position.timestamp?.toUtc() ?? DateTime.now().toUtc();
+        final recordedAt = position.timestamp.toUtc();
         final dayKey = recordedAt.toIso8601String().substring(0, 10);
 
         final point = OfflineLocationPoint(

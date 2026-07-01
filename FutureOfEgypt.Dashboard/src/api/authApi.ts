@@ -24,6 +24,16 @@ export interface RegisterManagerRequest {
   password?: string;
 }
 
+export async function forgotPassword(email: string) {
+  const response = await axiosClient.post('/api/Auth/forgot-password', { email });
+  return response.data;
+}
+
+export async function resetPassword(request: any) {
+  const response = await axiosClient.post('/api/Auth/reset-password', request);
+  return response.data;
+}
+
 export async function registerManager(request: RegisterManagerRequest) {
   const response = await axiosClient.post('/api/Auth/register-manager', request);
   return response.data;

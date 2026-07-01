@@ -38,6 +38,7 @@ class EngineerHome extends StatefulWidget {
 
 class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver {
   String _appVersion = 'Loading...';
+  int? _profilePhotoVersion;
   bool _isLoading = true;
 
   // Status checks
@@ -123,12 +124,131 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
 
       final response = await request.send();
       if (response.statusCode == 200) {
+        PaintingBinding.instance.imageCache.clear();
+        PaintingBinding.instance.imageCache.clearLiveImages();
+        _profilePhotoVersion = DateTime.now().millisecondsSinceEpoch;
         await _fetchProfile();
       }
     } catch (_) {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  String _getProfileImageUrl(String originalUrl) {
+    var url = ApiClient.resolveApiFileUrl(originalUrl);
+    if (_profilePhotoVersion != null) {
+      final separator = url.contains('?') ? '&' : '?';
+      url += '${separator}t=$_profilePhotoVersion';
+    }
+    return url;
+  }
+
+  void _showPhotoPreview() {
+    if (_profileData == null ||
+        _profileData!['profilePhotoUrl'] == null ||
+        _profileData!['profilePhotoUrl'].toString().isEmpty) {
+      return;
+    }
+    
+    final url = _getProfileImageUrl(_profileData!['profilePhotoUrl'].toString());
+    
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                color: Colors.black87,
+                child: InteractiveViewer(
+                  child: Image.network(
+                    url,
+                    headers: {'Authorization': 'Bearer ${widget.token}'},
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deletePhoto() async {
+    setState(() => _isLoading = true);
+    try {
+      final url = ApiClient.baseUrl.replaceFirst('/api', '/api/Profile/me/photo');
+      final response = await http.delete(
+        Uri.parse(url),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        PaintingBinding.instance.imageCache.clear();
+        PaintingBinding.instance.imageCache.clearLiveImages();
+        _profilePhotoVersion = null;
+        await _fetchProfile();
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _handleEditIconTap() {
+    final hasPhoto = _profileData != null && 
+                     _profileData!['profilePhotoUrl'] != null && 
+                     _profileData!['profilePhotoUrl'].toString().isNotEmpty;
+
+    if (!hasPhoto) {
+      _uploadPhoto();
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.blue),
+                title: const Text('Edit photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadPhoto();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Delete photo', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deletePhoto();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _loadDataAndCheckPermissions() async {
@@ -463,18 +583,18 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                GestureDetector(
-                                  onTap: _uploadPhoto,
-                                  child: Stack(
-                                    children: [
-                                      CircleAvatar(
+                                Stack(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: _showPhotoPreview,
+                                      child: CircleAvatar(
                                         radius: 44,
                                         backgroundColor: Colors.white24,
                                         backgroundImage: _profileData != null &&
                                                 _profileData!['profilePhotoUrl'] != null &&
                                                 _profileData!['profilePhotoUrl'].toString().isNotEmpty
                                             ? NetworkImage(
-                                                ApiClient.resolveApiFileUrl(_profileData!['profilePhotoUrl'].toString()),
+                                                _getProfileImageUrl(_profileData!['profilePhotoUrl'].toString()),
                                                 headers: {'Authorization': 'Bearer ${widget.token}'},
                                               )
                                             : null,
@@ -484,9 +604,12 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                                             ? const Icon(Icons.camera_alt, color: Colors.white, size: 28)
                                             : null,
                                       ),
-                                      Positioned(
-                                        bottom: 0,
-                                        right: 0,
+                                    ),
+                                    Positioned(
+                                      bottom: 0,
+                                      right: 0,
+                                      child: GestureDetector(
+                                        onTap: _handleEditIconTap,
                                         child: Container(
                                           padding: const EdgeInsets.all(4),
                                           decoration: const BoxDecoration(
@@ -496,8 +619,8 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                                           child: const Icon(Icons.edit, color: Colors.blue, size: 14),
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(

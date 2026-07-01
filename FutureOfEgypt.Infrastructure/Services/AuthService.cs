@@ -14,6 +14,8 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using FutureOfEgypt.Application.Features.Email;
 
 namespace FutureOfEgypt.Infrastructure.Services
 {
@@ -24,19 +26,25 @@ namespace FutureOfEgypt.Infrastructure.Services
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IAuditLogService _auditLogService;
+        private readonly IEmailSender _emailSender;
+        private readonly ILogger<AuthService> _logger;
 
         public AuthService(
             UserManager<ApplicationUser> userManager,
             RoleManager<ApplicationRole> roleManager,
             AppDbContext context,
             IConfiguration configuration,
-            IAuditLogService auditLogService)
+            IAuditLogService auditLogService,
+            IEmailSender emailSender,
+            ILogger<AuthService> logger)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _context = context;
             _configuration = configuration;
             _auditLogService = auditLogService;
+            _emailSender = emailSender;
+            _logger = logger;
         }
 
         public async Task<UserAccountResponse> RegisterAdminAsync(
@@ -911,6 +919,106 @@ namespace FutureOfEgypt.Infrastructure.Services
             {
                 var errors = string.Join(", ", roleResult.Errors.Select(x => x.Description));
                 throw new InvalidOperationException(errors);
+            }
+        }
+
+        public async Task ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(request.Email))
+                return; // Return silently
+
+            var email = request.Email.Trim().ToLowerInvariant();
+            var user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null || user.IsDeleted || user.IsSuspended)
+            {
+                // Do not reveal user status.
+                return;
+            }
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var encodedToken = Convert.ToBase64String(Encoding.UTF8.GetBytes(token))
+                .Replace('+', '-')
+                .Replace('/', '_')
+                .TrimEnd('=');
+
+            var baseUrl = _configuration["Auth:PasswordResetBaseUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                // Fallback for missing config
+                baseUrl = "http://localhost:5173/reset-password";
+            }
+
+            var resetUrl = $"{baseUrl}?email={Uri.EscapeDataString(user.Email!)}&token={encodedToken}";
+
+            var htmlMessage = $@"
+                <html>
+                <body>
+                    <h2>Hello {user.FullName},</h2>
+                    <p>We received a request to reset your password for FutureOfEgypt.</p>
+                    <p>Click the link below to set a new password:</p>
+                    <p><a href='{resetUrl}' style='display:inline-block;padding:10px 20px;color:white;background-color:#007bff;text-decoration:none;border-radius:5px;'>Reset Password</a></p>
+                    <p>If you did not request this, please ignore this email. This link will expire in 1 hour.</p>
+                    <br/>
+                    <p>Best regards,<br/>FutureOfEgypt Team</p>
+                </body>
+                </html>";
+
+            try
+            {
+                var companyEmail = _configuration["Smtp:FromEmail"] ?? "no-reply@future-of-egypt.com";
+                await _emailSender.SendAsync(
+                    fromEmail: companyEmail,
+                    toEmails: new List<string> { user.Email! },
+                    ccEmails: null,
+                    bccEmails: null,
+                    subject: "Reset your FutureOfEgypt password",
+                    body: htmlMessage,
+                    cancellationToken: cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send password reset email to SMTP server.");
+            }
+        }
+
+        public async Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Token) || string.IsNullOrWhiteSpace(request.NewPassword))
+            {
+                throw new InvalidOperationException("Invalid reset password request.");
+            }
+
+            var email = request.Email.Trim().ToLowerInvariant();
+            var user = await _userManager.FindByEmailAsync(email);
+
+            if (user == null || user.IsDeleted || user.IsSuspended)
+            {
+                throw new InvalidOperationException("Invalid reset password request.");
+            }
+
+            string decodedToken;
+            try
+            {
+                var base64 = request.Token.Replace('-', '+').Replace('_', '/');
+                switch (base64.Length % 4)
+                {
+                    case 2: base64 += "=="; break;
+                    case 3: base64 += "="; break;
+                }
+                decodedToken = Encoding.UTF8.GetString(Convert.FromBase64String(base64));
+            }
+            catch
+            {
+                throw new InvalidOperationException("Invalid reset password token.");
+            }
+
+            var resetResult = await _userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
+
+            if (!resetResult.Succeeded)
+            {
+                var errors = string.Join(", ", resetResult.Errors.Select(x => x.Description));
+                throw new InvalidOperationException($"Password reset failed: {errors}");
             }
         }
     }

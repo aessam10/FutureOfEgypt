@@ -28,6 +28,6 @@ global using FutureOfEgypt.Application.Common.Security;
 global using FutureOfEgypt.Application.Features.Chat;
 global using FutureOfEgypt.Application.Features.Email;
 global using FutureOfEgypt.Application.Features.Notifications;
-global using FutureOfEgypt.Application.Features.Email.FutureOfEgypt.Application.Features.Emails;
+global using FutureOfEgypt.Application.Features.Email;
 global using FutureOfEgypt.Infrastructure.Services.Email;
 

@@ -1,4 +1,4 @@
-﻿namespace FutureOfEgypt.Infrastructure.Services
+namespace FutureOfEgypt.Infrastructure.Services
 {
     public sealed class SmtpEmailSettings
     {
@@ -11,5 +11,9 @@
         public string UserName { get; set; } = string.Empty;
 
         public string Password { get; set; } = string.Empty;
+
+        public string FromEmail { get; set; } = string.Empty;
+
+        public string FromName { get; set; } = string.Empty;
     }
 }

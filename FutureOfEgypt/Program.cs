@@ -130,7 +130,7 @@ namespace FutureOfEgypt
             builder.Services.Configure<FutureOfEgypt.Application.Common.Models.LiveStatusOptions>(builder.Configuration.GetSection("LiveStatus"));
             builder.Services.Configure<FutureOfEgypt.Application.Common.Models.TrackingScheduleOptions>(builder.Configuration.GetSection("TrackingSchedule"));
             builder.Services.Configure<FutureOfEgypt.Options.ProfileImagesOptions>(builder.Configuration.GetSection(FutureOfEgypt.Options.ProfileImagesOptions.ProfileImages));
-            builder.Services.Configure<SmtpEmailSettings>(builder.Configuration.GetSection("SmtpEmail"));
+            builder.Services.Configure<SmtpEmailSettings>(builder.Configuration.GetSection("Smtp"));
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
             if (string.IsNullOrWhiteSpace(connectionString))
@@ -168,7 +168,15 @@ namespace FutureOfEgypt
             builder.Services.AddSingleton<IAppReleaseFileService, AppReleaseFileService>();
             builder.Services.AddScoped<FutureOfEgypt.Application.Features.Managers.IManagersService, ManagersService>();
             builder.Services.AddMemoryCache();
-            builder.Services.AddIdentity<ApplicationUser, ApplicationRole>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
+            builder.Services.AddIdentity<ApplicationUser, ApplicationRole>()
+                .AddEntityFrameworkStores<AppDbContext>()
+                .AddDefaultTokenProviders();
+                
+            builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
+            {
+                options.TokenLifespan = TimeSpan.FromHours(1);
+            });
+            
             var jwtKey = builder.Configuration["Jwt:Key"];
 
             if (string.IsNullOrWhiteSpace(jwtKey))

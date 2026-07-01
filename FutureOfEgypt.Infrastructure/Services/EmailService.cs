@@ -1,5 +1,4 @@
-﻿using FutureOfEgypt.Application.Features.Email;
-using FutureOfEgypt.Application.Features.Email.FutureOfEgypt.Application.Features.Emails;
+using FutureOfEgypt.Application.Features.Email;
 using FutureOfEgypt.Domain.Entities;
 using FutureOfEgypt.Domain.Enums;
 using FutureOfEgypt.Infrastructure.Identity;

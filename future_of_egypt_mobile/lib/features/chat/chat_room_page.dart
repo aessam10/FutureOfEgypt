@@ -73,9 +73,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     
     _msgSub = _signalRClient.onMessageReceived.listen((msg) {
       if (msg.conversationPublicId == widget.conversationId) {
-        // Prevent duplicate if we already have it (from sending it ourselves)
-        if (!_messages.any((m) => m.publicId == msg.publicId)) {
-          final isMine = _myUserId != null && msg.senderUserId == _myUserId;
+        if (!_messages.any((m) => m.publicId.trim().toLowerCase() == msg.publicId.trim().toLowerCase())) {
+          final isMine = _isMyMessage(msg.senderUserId);
           setState(() {
             _messages.add(ChatMessage(
               publicId: msg.publicId,
@@ -87,6 +86,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               sentAtUtc: msg.sentAtUtc,
               isMine: isMine,
             ));
+            _sortMessagesOldestToNewest();
           });
           _scrollToBottom();
           _chatService.markAsRead(widget.conversationId).catchError((_) {});
@@ -108,6 +108,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       setState(() {
         _messages.clear();
         _messages.addAll(msgs);
+        _sortMessagesOldestToNewest();
         _isLoading = false;
       });
       _scrollToBottom();
@@ -129,6 +130,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         );
       }
     });
+  }
+
+  bool _isMyMessage(String? senderId) {
+    if (_myUserId == null || senderId == null) return false;
+    return _myUserId!.trim().toLowerCase() == senderId.trim().toLowerCase();
+  }
+
+  void _sortMessagesOldestToNewest() {
+    _messages.sort((a, b) => a.sentAtUtc.compareTo(b.sentAtUtc));
   }
 
   Future<void> _sendMessage() async {
@@ -285,7 +295,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       itemCount: _messages.length,
       itemBuilder: (context, index) {
         final msg = _messages[index];
-        final isMine = msg.isMine;
+        final isMine = _myUserId != null ? _isMyMessage(msg.senderUserId) : msg.isMine;
         
         final prevMsg = index > 0 ? _messages[index - 1] : null;
         final nextMsg = index < _messages.length - 1 ? _messages[index + 1] : null;

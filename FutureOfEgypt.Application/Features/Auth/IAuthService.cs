@@ -40,5 +40,13 @@ namespace FutureOfEgypt.Application.Features.Auth
             string performedByEmail,
             RegisterEngineerCompleteRequest request,
             CancellationToken cancellationToken = default);
+
+        Task ForgotPasswordAsync(
+            ForgotPasswordRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task ResetPasswordAsync(
+            ResetPasswordRequest request,
+            CancellationToken cancellationToken = default);
     }
 }

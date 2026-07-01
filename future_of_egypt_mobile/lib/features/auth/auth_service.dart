@@ -86,4 +86,16 @@ class AuthService {
     await OfflineQueueHelper().clearQueue();
     ApiClient.setToken('');
   }
+
+  static Future<void> forgotPassword(String email) async {
+    final response = await ApiClient.post(
+      "Auth/forgot-password",
+      {"email": email},
+      includeAuth: false,
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception("Failed to send password reset link: ${response.statusCode}\n${response.body}");
+    }
+  }
 }

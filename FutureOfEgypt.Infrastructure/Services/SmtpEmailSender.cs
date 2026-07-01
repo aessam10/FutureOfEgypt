@@ -1,4 +1,4 @@
-﻿using FutureOfEgypt.Application.Features.Email.FutureOfEgypt.Application.Features.Emails;
+using FutureOfEgypt.Application.Features.Email;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Mail;

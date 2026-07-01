@@ -143,20 +143,40 @@ namespace FutureOfEgypt.Controllers
 
             return Ok(result);
         }
-        [AllowAnonymous]
+        [Authorize]
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout(
-            [FromBody] LogoutRequest request,
+        public async Task<IActionResult> Logout([FromBody] LogoutRequest request, CancellationToken cancellationToken)
+        {
+            await _authService.LogoutAsync(request, cancellationToken);
+            return Ok(new { message = "Logged out successfully" });
+        }
+
+        [AllowAnonymous]
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword(
+            [FromBody] ForgotPasswordRequest request,
             CancellationToken cancellationToken)
         {
-            await _authService.LogoutAsync(
-                request,
-                cancellationToken);
+            await _authService.ForgotPasswordAsync(request, cancellationToken);
+            // Always return this exact string to prevent email enumeration
+            return Ok(new { message = "If this email exists, a password reset link has been sent." });
+        }
 
-            return Ok(new
+        [AllowAnonymous]
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword(
+            [FromBody] ResetPasswordRequest request,
+            CancellationToken cancellationToken)
+        {
+            try
             {
-                message = "Logged out successfully."
-            });
+                await _authService.ResetPasswordAsync(request, cancellationToken);
+                return Ok(new { message = "Password has been reset successfully." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

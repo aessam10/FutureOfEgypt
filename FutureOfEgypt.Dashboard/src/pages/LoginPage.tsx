@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -419,10 +419,9 @@ export function LoginPage() {
             aria-label={isLoading ? 'Signing in...' : 'Sign in'}
             sx={{
               mt: 2,
-              py: 1.8,
-              fontSize: '1.05rem',
-              fontWeight: 700,
-              borderRadius: '14px',
+              py: 1.5,
+              fontWeight: 'bold',
+              fontSize: '1rem',
               backgroundColor: isDark ? '#D4AF37' : undefined,
               color: isDark ? '#000' : undefined,
               animation: isDark ? `${goldPulse} 6s ease-in-out infinite` : 'none',
@@ -438,6 +437,18 @@ export function LoginPage() {
           >
             {isLoading ? <CircularProgress size={26} color="inherit" /> : 'Sign In'}
           </Button>
+
+          <Box sx={{ mt: 2, textAlign: 'center' }}>
+            <Button
+              component={Link}
+              to={routes.forgotPassword}
+              variant="text"
+              size="small"
+              sx={{ color: isDark ? 'rgba(212,175,55,0.8)' : 'text.secondary' }}
+            >
+              Forgot password?
+            </Button>
+          </Box>
         </Box>
       </Paper>
     </Box>
