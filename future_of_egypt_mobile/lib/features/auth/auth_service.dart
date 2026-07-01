@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 import '../../core/network/api_client.dart';
+import '../tracking/background_service.dart';
+import '../tracking/tracking_config_service.dart';
 
 class AuthService {
   static Future<Map<String, dynamic>> login(
@@ -13,6 +16,7 @@ class AuthService {
         "email": email,
         "password": password,
       },
+      includeAuth: false,
     );
 
     final body = response.body;
@@ -46,6 +50,7 @@ class AuthService {
         "token": token,
         "refreshToken": refreshToken,
       },
+      includeAuth: false,
     );
 
     final body = response.body;
@@ -65,5 +70,15 @@ class AuthService {
     }
 
     return decoded;
+  }
+
+  static Future<void> signOut() async {
+    try {
+      await BackgroundTrackingService.stopTracking();
+    } catch (e) {
+      debugPrint('[AuthService] Error stopping tracking on sign out: $e');
+    }
+    await TrackingConfigService.clear();
+    ApiClient.setToken('');
   }
 }

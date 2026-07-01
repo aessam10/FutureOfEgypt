@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import '../auth/login_page.dart';
-import '../../core/network/api_client.dart';
-import '../tracking/tracking_config_service.dart';
+import '../auth/auth_service.dart';
 
 class AdminBlockPage extends StatelessWidget {
   const AdminBlockPage({super.key});
 
   Future<void> _signOut(BuildContext context) async {
-    await TrackingConfigService.clear();
-    ApiClient.setToken('');
+    await AuthService.signOut();
     if (!context.mounted) return;
     Navigator.pushReplacement(
       context,

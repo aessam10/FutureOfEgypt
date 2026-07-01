@@ -48,6 +48,15 @@ namespace FutureOfEgypt.Controllers
                 profilePhotoUrl = $"/api/profile/photo/{user.Id}";
             }
 
+            Guid? engineerPublicId = null;
+            if (user.EngineerId.HasValue)
+            {
+                engineerPublicId = await _dbContext.Engineers
+                    .Where(x => x.Id == user.EngineerId.Value && !x.IsDeleted)
+                    .Select(x => (Guid?)x.PublicId)
+                    .FirstOrDefaultAsync();
+            }
+
             return Ok(new
             {
                 user.Id,
@@ -55,7 +64,8 @@ namespace FutureOfEgypt.Controllers
                 user.Email,
                 user.PhoneNumber,
                 Role = roles.FirstOrDefault() ?? "Unknown",
-                ProfilePhotoUrl = profilePhotoUrl
+                ProfilePhotoUrl = profilePhotoUrl,
+                EngineerPublicId = engineerPublicId
             });
         }
 
@@ -107,6 +117,15 @@ namespace FutureOfEgypt.Controllers
                 profilePhotoUrl = $"/api/profile/photo/{user.Id}?v={user.ConcurrencyStamp}";
             }
 
+            Guid? engineerPublicId = null;
+            if (user.EngineerId.HasValue)
+            {
+                engineerPublicId = await _dbContext.Engineers
+                    .Where(x => x.Id == user.EngineerId.Value && !x.IsDeleted)
+                    .Select(x => (Guid?)x.PublicId)
+                    .FirstOrDefaultAsync();
+            }
+
             return Ok(new
             {
                 user.Id,
@@ -114,7 +133,8 @@ namespace FutureOfEgypt.Controllers
                 user.Email,
                 user.PhoneNumber,
                 Role = roles.FirstOrDefault() ?? "Unknown",
-                ProfilePhotoUrl = profilePhotoUrl
+                ProfilePhotoUrl = profilePhotoUrl,
+                EngineerPublicId = engineerPublicId
             });
         }
 

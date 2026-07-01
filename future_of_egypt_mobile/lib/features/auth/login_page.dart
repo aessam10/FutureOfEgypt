@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -38,6 +39,10 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
+      final oldTrackingData = await TrackingConfigService.getTrackingData();
+      final storedEngineerPublicIdBeforeOverwrite = oldTrackingData['engineerPublicId'] as String? ?? '';
+
+      await AuthService.signOut();
       final result = await AuthService.login(
         emailController.text.trim(),
         passwordController.text,
@@ -54,6 +59,12 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       ApiClient.setToken(token);
+
+      if (kDebugMode) {
+        debugPrint('[LOGIN_DEBUG] Logged-in email: ${emailController.text.trim()}');
+        debugPrint('[LOGIN_DEBUG] Fresh engineerPublicId from login: $engineerPublicId');
+        debugPrint('[LOGIN_DEBUG] Stored engineerPublicId before overwrite: $storedEngineerPublicIdBeforeOverwrite');
+      }
 
       // save base login data (devicePublicId left empty until validation completes)
       await TrackingConfigService.saveLoginData(
@@ -98,6 +109,10 @@ class _LoginPageState extends State<LoginPage> {
   }) async {
     final installationId = await TrackingConfigService.getInstallationId();
 
+    if (kDebugMode) {
+      debugPrint('[LOGIN_DEBUG] Calling device gate. installationId: $installationId');
+    }
+
     DeviceValidationResult validation;
     try {
       validation = await DeviceValidationService.validate(
@@ -110,6 +125,11 @@ class _LoginPageState extends State<LoginPage> {
         errorMessage = 'Could not validate device. Please try again.';
       });
       return;
+    }
+
+    if (kDebugMode) {
+      debugPrint('[LOGIN_DEBUG] Gate response status: ${validation.status}');
+      debugPrint('[LOGIN_DEBUG] DevicePublicId returned: ${validation.devicePublicId}');
     }
 
     if (!mounted) return;
@@ -317,8 +337,7 @@ class _LoginPageState extends State<LoginPage> {
 
   /// Clears the session and returns to the login screen.
   Future<void> _signOut() async {
-    await TrackingConfigService.clear();
-    ApiClient.setToken('');
+    await AuthService.signOut();
     if (!mounted) return;
     Navigator.pushReplacement(
       context,

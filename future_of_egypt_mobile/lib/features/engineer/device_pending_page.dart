@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/network/api_client.dart';
 import '../auth/login_page.dart';
+import '../auth/auth_service.dart';
 import '../device/device_access_service.dart';
 import '../tracking/tracking_config_service.dart';
 import 'engineer_home.dart';
@@ -127,8 +127,7 @@ class _DevicePendingPageState extends State<DevicePendingPage> {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () async {
-                      await TrackingConfigService.clear();
-                      ApiClient.setToken('');
+                      await AuthService.signOut();
                       if (!mounted) return;
                       Navigator.pushReplacement(
                         context,

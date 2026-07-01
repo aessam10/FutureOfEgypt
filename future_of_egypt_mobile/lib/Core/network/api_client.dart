@@ -10,6 +10,7 @@ import 'package:future_of_egypt_mobile/features/tracking/tracking_config_service
 import 'package:future_of_egypt_mobile/features/app_update/app_update_models.dart';
 import 'package:future_of_egypt_mobile/features/app_update/forced_update_page.dart';
 import 'package:future_of_egypt_mobile/features/auth/login_page.dart';
+import 'package:future_of_egypt_mobile/features/auth/auth_service.dart';
 import 'package:future_of_egypt_mobile/main.dart';
 
 class ApiClient {
@@ -89,8 +90,8 @@ class ApiClient {
     token = t;
   }
 
-  static Map<String, String> _headers({String? bearerToken}) {
-    final activeToken = bearerToken ?? token;
+  static Map<String, String> _headers({String? bearerToken, bool includeAuth = true}) {
+    final activeToken = includeAuth ? (bearerToken ?? token) : null;
 
     debugPrint('[FOE_API_CLIENT] app version headers attached: true');
     debugPrint('[FOE_API_CLIENT] versionCode: $_appVersionCode');
@@ -290,8 +291,7 @@ class ApiClient {
   }
 
   static Future<void> _forceLogout() async {
-    await TrackingConfigService.clear();
-    setToken('');
+    await AuthService.signOut();
 
     final context = navigatorKey.currentContext;
 
@@ -309,11 +309,12 @@ class ApiClient {
 
   static Future<http.Response> post(
     String endpoint,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, {
+    bool includeAuth = true,
+  }) async {
     final response = await http.post(
       Uri.parse("$baseUrl/$endpoint"),
-      headers: _headers(),
+      headers: _headers(includeAuth: includeAuth),
       body: jsonEncode(body),
     );
 
@@ -362,10 +363,13 @@ class ApiClient {
     return response;
   }
 
-  static Future<http.Response> get(String endpoint) async {
+  static Future<http.Response> get(
+    String endpoint, {
+    bool includeAuth = true,
+  }) async {
     final response = await http.get(
       Uri.parse("$baseUrl/$endpoint"),
-      headers: _headers(),
+      headers: _headers(includeAuth: includeAuth),
     );
 
     await _handleResponse(response);

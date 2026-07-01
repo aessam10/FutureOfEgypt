@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { axiosClient } from '../api/axiosClient';
 import SearchIcon from '@mui/icons-material/Search';
 import SendIcon from '@mui/icons-material/Send';
 import CloseIcon from '@mui/icons-material/Close';
@@ -88,6 +89,111 @@ function convertRealtimeToMessage(
   };
 }
 
+// ─── Image Preview Modal ─────────────────────────────────────────────────────
+function ImagePreviewModal({
+  open,
+  onClose,
+  url,
+  name
+}: {
+  open: boolean;
+  onClose: () => void;
+  url?: string | null;
+  name: string;
+}) {
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let isMounted = true;
+
+    async function fetchImage() {
+      if (!url) return;
+      try {
+        const response = await axiosClient.get(url, { responseType: 'blob' });
+        if (!isMounted) return;
+        const blob = response.data;
+        objectUrl = URL.createObjectURL(blob);
+        setImgSrc(objectUrl);
+      } catch (err) {
+        console.error('Failed to load full image preview:', err);
+      }
+    }
+
+    if (open && url) {
+      fetchImage();
+    } else {
+      setImgSrc(null);
+    }
+
+    return () => {
+      isMounted = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [open, url]);
+
+  if (!url || !imgSrc) return null;
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      slotProps={{
+        backdrop: {
+          style: {
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          },
+        },
+      }}
+      sx={{
+        '& .MuiDialog-paper': {
+          backgroundColor: 'transparent',
+          boxShadow: 'none',
+          overflow: 'hidden',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+      }}
+    >
+      <Box sx={{ position: 'relative', display: 'inline-block' }}>
+        <IconButton
+          onClick={onClose}
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            color: '#fff',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            '&:hover': {
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            },
+            zIndex: 10,
+          }}
+          size="small"
+        >
+          <CloseIcon />
+        </IconButton>
+        <img
+          src={imgSrc}
+          alt={name}
+          style={{
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            objectFit: 'contain',
+            borderRadius: '4px',
+            display: 'block',
+          }}
+        />
+      </Box>
+    </Dialog>
+  );
+}
+
 // ─── Profile Preview Modal ───────────────────────────────────────────────────
 function ProfilePreviewModal({
   open,
@@ -139,6 +245,7 @@ export function ChatPage() {
   const [messageText, setMessageText] = useState('');
   
   const [previewProfile, setPreviewProfile] = useState<{name: string, role?: string, url?: string | null} | null>(null);
+  const [imagePreview, setImagePreview] = useState<{name: string, url: string | null} | null>(null);
 
   // Scroll ref for auto-scroll to bottom
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -295,6 +402,11 @@ export function ChatPage() {
     setPreviewProfile({ name, url, role: roleStr });
   }
 
+  function openImagePreview(name: string, url: string | null | undefined) {
+    if (!url) return;
+    setImagePreview({ name, url });
+  }
+
   function getRoleName(roleNum: number) {
     if (roleNum === 1) return 'Owner';
     if (roleNum === 2) return 'Admin';
@@ -396,7 +508,7 @@ export function ChatPage() {
                         size="lg" 
                         onClick={(e: any) => {
                           e.stopPropagation();
-                          openPreview(title, avatarUrl);
+                          openImagePreview(title, avatarUrl);
                         }}
                       />
 
@@ -453,7 +565,7 @@ export function ChatPage() {
                       size="md" 
                       onClick={(e: any) => {
                         e.stopPropagation();
-                        openPreview(u.displayName, u.profileImageUrl);
+                        openImagePreview(u.displayName, u.profileImageUrl);
                       }}
                     />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -494,9 +606,15 @@ export function ChatPage() {
                   name={getConversationTitle(selectedConversation, user?.userId)} 
                   url={getConversationAvatarUrl(selectedConversation, user?.userId)} 
                   size="xl"
-                  onClick={() => openPreview(getConversationTitle(selectedConversation, user?.userId), getConversationAvatarUrl(selectedConversation, user?.userId))}
+                  onClick={(e: any) => {
+                    e.stopPropagation();
+                    openImagePreview(getConversationTitle(selectedConversation, user?.userId), getConversationAvatarUrl(selectedConversation, user?.userId));
+                  }}
                 />
-                <Box>
+                <Box 
+                  onClick={() => openPreview(getConversationTitle(selectedConversation, user?.userId), getConversationAvatarUrl(selectedConversation, user?.userId))}
+                  sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                >
                   <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f172a' }}>
                     {getConversationTitle(selectedConversation, user?.userId)}
                   </Typography>
@@ -535,7 +653,10 @@ export function ChatPage() {
                                 name={message.senderName} 
                                 url={message.profileImageUrl} 
                                 size="sm" 
-                                onClick={() => openPreview(message.senderName, message.profileImageUrl)}
+                                onClick={(e: any) => {
+                                  e.stopPropagation();
+                                  openImagePreview(message.senderName, message.profileImageUrl);
+                                }}
                               />
                             )}
                           </Box>
@@ -609,6 +730,15 @@ export function ChatPage() {
           name={previewProfile.name} 
           role={previewProfile.role} 
           url={previewProfile.url} 
+        />
+      )}
+
+      {imagePreview && (
+        <ImagePreviewModal
+          open={!!imagePreview}
+          onClose={() => setImagePreview(null)}
+          name={imagePreview.name}
+          url={imagePreview.url}
         />
       )}
     </>
