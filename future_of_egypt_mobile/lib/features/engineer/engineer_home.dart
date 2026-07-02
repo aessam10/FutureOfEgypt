@@ -48,9 +48,13 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
   bool _hasBackgroundPermission = false;
   bool _hasNotificationPermission = false;
   bool _isAuthorized = true; // They passed the gate if they are here
-  bool _isSendingLocation = false;
 
   Map<String, dynamic>? _profileData;
+
+  bool get _hasProfilePhoto => 
+      _profileData != null && 
+      _profileData!['profilePhotoUrl'] != null && 
+      _profileData!['profilePhotoUrl'].toString().isNotEmpty;
 
   @override
   void initState() {
@@ -145,9 +149,7 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
   }
 
   void _showPhotoPreview() {
-    if (_profileData == null ||
-        _profileData!['profilePhotoUrl'] == null ||
-        _profileData!['profilePhotoUrl'].toString().isEmpty) {
+    if (!_hasProfilePhoto) {
       return;
     }
     
@@ -209,11 +211,7 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
   }
 
   void _handleEditIconTap() {
-    final hasPhoto = _profileData != null && 
-                     _profileData!['profilePhotoUrl'] != null && 
-                     _profileData!['profilePhotoUrl'].toString().isNotEmpty;
-
-    if (!hasPhoto) {
+    if (!_hasProfilePhoto) {
       _uploadPhoto();
       return;
     }
@@ -415,69 +413,6 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
     }
   }
 
-  Future<void> _sendCurrentLocation() async {
-    debugPrint('[FOE_BACKGROUND] manual send pressed');
-    setState(() => _isSendingLocation = true);
-    try {
-      if (!_hasLocationPermission) {
-        await DeviceHealthService.reportHealth(
-          token: widget.token,
-          engineerPublicId: widget.engineerId,
-          devicePublicId: widget.deviceId,
-          fallbackReason: 'LocationPermissionDenied',
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permission required')),
-          );
-        }
-        return;
-      }
-      if (!_hasLocationService) {
-        await DeviceHealthService.reportHealth(
-          token: widget.token,
-          engineerPublicId: widget.engineerId,
-          devicePublicId: widget.deviceId,
-          fallbackReason: 'LocationServiceDisabled',
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location service required (GPS is off)')),
-          );
-        }
-        return;
-      }
-      
-      final installationId = await TrackingConfigService.getInstallationId();
-
-      await LocationService.sendLocationOnce(
-        token: widget.token,
-        devicePublicId: widget.deviceId,
-        installationId: installationId,
-      );
-
-      if (mounted) {
-        if (LocationService.backendReasonNotifier.value != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed: ${LocationService.backendReasonNotifier.value}')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location sent successfully')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSendingLocation = false);
-    }
-  }
-
   List<String> _getMissingRequirements() {
     final missing = <String>[];
     if (!_hasInternet) missing.add('Server connection required');
@@ -521,7 +456,7 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
     if (confirm == true) {
       setState(() => _isLoading = true);
       try {
-        await AuthService.signOut();
+        await AuthService.signOut(reportLoggedOut: true);
         if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -586,21 +521,17 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                                 Stack(
                                   children: [
                                     GestureDetector(
-                                      onTap: _showPhotoPreview,
+                                      onTap: _hasProfilePhoto ? _showPhotoPreview : _uploadPhoto,
                                       child: CircleAvatar(
                                         radius: 44,
                                         backgroundColor: Colors.white24,
-                                        backgroundImage: _profileData != null &&
-                                                _profileData!['profilePhotoUrl'] != null &&
-                                                _profileData!['profilePhotoUrl'].toString().isNotEmpty
+                                        backgroundImage: _hasProfilePhoto
                                             ? NetworkImage(
                                                 _getProfileImageUrl(_profileData!['profilePhotoUrl'].toString()),
                                                 headers: {'Authorization': 'Bearer ${widget.token}'},
                                               )
                                             : null,
-                                        child: _profileData == null ||
-                                                _profileData!['profilePhotoUrl'] == null ||
-                                                _profileData!['profilePhotoUrl'].toString().isEmpty
+                                        child: !_hasProfilePhoto
                                             ? const Icon(Icons.camera_alt, color: Colors.white, size: 28)
                                             : null,
                                       ),
@@ -634,6 +565,9 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                                           fontWeight: FontWeight.bold,
                                           color: Colors.white,
                                         ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        softWrap: false,
                                       ),
                                       const SizedBox(height: 6),
                                       if (_profileData?['phoneNumber'] != null)
@@ -641,9 +575,14 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                                           children: [
                                             const Icon(Icons.phone, color: Colors.white70, size: 14),
                                             const SizedBox(width: 6),
-                                            Text(
-                                              _profileData!['phoneNumber'],
-                                              style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                            Flexible(
+                                              child: Text(
+                                                _profileData!['phoneNumber'],
+                                                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                softWrap: false,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -653,9 +592,14 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                                           children: [
                                             const Icon(Icons.email, color: Colors.white70, size: 14),
                                             const SizedBox(width: 6),
-                                            Text(
-                                              _profileData!['email'],
-                                              style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                            Flexible(
+                                              child: Text(
+                                                _profileData!['email'],
+                                                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                softWrap: false,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -667,11 +611,15 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                             const SizedBox(height: 18),
                             const Divider(color: Colors.white24, height: 1),
                             const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 12,
+                              runSpacing: 12,
                               children: [
                                 // Status Badge
                                 Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Container(
                                       width: 10,
@@ -702,6 +650,7 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                                 
                                 // Authorization Badge
                                 Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
                                       _isAuthorized ? Icons.verified : Icons.error_outline,
@@ -742,6 +691,7 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
                                           Icons.chat_bubble_outline,
@@ -828,30 +778,6 @@ class _EngineerHomeState extends State<EngineerHome> with WidgetsBindingObserver
                               ),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: _isSendingLocation
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : const Icon(Icons.my_location),
-                        label: Text(_isSendingLocation ? 'Sending Location...' : 'Send Location Now'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.blueAccent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 2,
-                        ),
-                        onPressed: _isSendingLocation ? null : _sendCurrentLocation,
                       ),
                     ),
                     const SizedBox(height: 48),

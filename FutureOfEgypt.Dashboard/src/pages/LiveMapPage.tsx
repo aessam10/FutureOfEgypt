@@ -127,6 +127,10 @@ function getDashboardStatus(location: LatestLocationResponse): { label: string, 
     return { label: 'Blocked — Device revoked', color: '#ef4444', isBlocked: true };
   }
 
+  if (reason === 'LoggedOut') {
+    return { label: 'Logged out', color: '#94a3b8', isBlocked: false };
+  }
+
   if (isServiceStalled(location)) {
     return { label: 'Offline — App stopped or permission may have changed', color: '#94a3b8', isBlocked: false };
   }

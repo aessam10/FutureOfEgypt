@@ -6,6 +6,7 @@ import '../tracking/background_service.dart';
 import '../tracking/tracking_config_service.dart';
 import '../tracking/tracking_session_guard.dart';
 import '../tracking/offline_queue_helper.dart';
+import '../tracking/device_health_service.dart';
 
 class AuthService {
   static Future<Map<String, dynamic>> login(
@@ -74,7 +75,27 @@ class AuthService {
     return decoded;
   }
 
-  static Future<void> signOut() async {
+  static Future<void> signOut({bool reportLoggedOut = false}) async {
+    try {
+      if (reportLoggedOut) {
+        final config = await TrackingConfigService.getTrackingData();
+        final token = config['token'] as String? ?? '';
+        final engineerId = config['engineerPublicId'] as String? ?? '';
+        final deviceId = config['devicePublicId'] as String? ?? '';
+
+        if (token.isNotEmpty && engineerId.isNotEmpty && deviceId.isNotEmpty) {
+          await DeviceHealthService.reportHealth(
+            token: token,
+            engineerPublicId: engineerId,
+            devicePublicId: deviceId,
+            fallbackReason: 'LoggedOut',
+          ).timeout(const Duration(seconds: 5));
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthService] Error reporting LoggedOut on sign out: $e');
+    }
+
     try {
       await BackgroundTrackingService.stopTracking();
     } catch (e) {

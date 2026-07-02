@@ -129,7 +129,7 @@ class _DevicePendingPageState extends State<DevicePendingPage> {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () async {
-                      await AuthService.signOut();
+                      await AuthService.signOut(reportLoggedOut: true);
                       if (!mounted) return;
                       Navigator.pushReplacement(
                         context,

@@ -6,7 +6,7 @@ class AdminBlockPage extends StatelessWidget {
   const AdminBlockPage({super.key});
 
   Future<void> _signOut(BuildContext context) async {
-    await AuthService.signOut();
+    await AuthService.signOut(reportLoggedOut: true);
     if (!context.mounted) return;
     Navigator.pushReplacement(
       context,
